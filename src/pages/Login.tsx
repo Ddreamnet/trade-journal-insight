@@ -1,37 +1,66 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { BarChart3, Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
-interface LoginProps {
-  onLogin: () => void;
-}
-
-export default function Login({ onLogin }: LoginProps) {
+export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
+  
+  const { signIn, signUp } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate authentication (will be replaced with Supabase)
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      if (isLogin) {
+        const { error } = await signIn(email, password);
+        if (error) {
+          toast({
+            title: 'Giriş başarısız',
+            description: error.message === 'Invalid login credentials' 
+              ? 'E-posta veya şifre hatalı'
+              : error.message,
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Giriş başarılı!',
+            description: 'Ana sayfaya yönlendiriliyorsunuz...',
+          });
+        }
+      } else {
+        const { error } = await signUp(email, password, name);
+        if (error) {
+          toast({
+            title: 'Kayıt başarısız',
+            description: error.message,
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Kayıt başarılı!',
+            description: 'Hesabınız oluşturuldu. Giriş yapabilirsiniz.',
+          });
+          setIsLogin(true);
+        }
+      }
+    } catch (err) {
       toast({
-        title: isLogin ? 'Giriş başarılı!' : 'Kayıt başarılı!',
-        description: 'Ana sayfaya yönlendiriliyorsunuz...',
+        title: 'Hata',
+        description: 'Beklenmeyen bir hata oluştu.',
+        variant: 'destructive',
       });
-      onLogin();
-      navigate('/');
-    }, 1000);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -117,6 +146,7 @@ export default function Login({ onLogin }: LoginProps) {
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-11 pr-11 h-12"
                 required
+                minLength={6}
               />
               <button
                 type="button"
@@ -130,17 +160,6 @@ export default function Login({ onLogin }: LoginProps) {
                 )}
               </button>
             </div>
-
-            {isLogin && (
-              <div className="text-right">
-                <button
-                  type="button"
-                  className="text-sm text-primary hover:underline"
-                >
-                  Şifremi unuttum
-                </button>
-              </div>
-            )}
 
             <Button
               type="submit"

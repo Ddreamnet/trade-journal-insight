@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 interface CloseTradeModalProps {
   trade: Trade;
   onClose: () => void;
-  onConfirm: (exitPrice: number, progressPercent: number, result: 'success' | 'failure') => void;
+  onConfirm: (exitPrice: number) => void;
 }
 
 export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalProps) {
@@ -29,8 +29,8 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
   }, [exitPrice, trade]);
 
   const handleConfirm = () => {
-    if (progressPercent === null || result === null) return;
-    onConfirm(parseFloat(exitPrice), progressPercent, result);
+    if (progressPercent === null) return;
+    onConfirm(parseFloat(exitPrice));
   };
 
   return (

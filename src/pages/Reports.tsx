@@ -1,18 +1,17 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { TrendingUp, Trophy, Target, BarChart3 } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { WinRateChart } from '@/components/reports/WinRateChart';
 import { TimeRangeSelector } from '@/components/reports/TimeRangeSelector';
 import { BenchmarkSelector } from '@/components/reports/BenchmarkSelector';
 import { TimeRange, BENCHMARKS } from '@/types/trade';
+import { useTrades } from '@/hooks/useTrades';
 
-interface ReportsProps {
-  onLogout: () => void;
-}
-
-export default function Reports({ onLogout }: ReportsProps) {
+export default function Reports() {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('1m');
   const [selectedBenchmarks, setSelectedBenchmarks] = useState<string[]>([]);
+  
+  const { closedTrades, isLoading } = useTrades();
 
   const toggleBenchmark = (benchmarkId: string) => {
     setSelectedBenchmarks((prev) =>
@@ -22,16 +21,41 @@ export default function Reports({ onLogout }: ReportsProps) {
     );
   };
 
-  // Mock stats (will be calculated from real data later)
-  const stats = {
-    totalTrades: 47,
-    winRate: 63.8,
-    avgRR: 2.4,
-    bestStreak: 7,
-  };
+  // Calculate stats from real data
+  const stats = useMemo(() => {
+    const totalTrades = closedTrades.length;
+    const successfulTrades = closedTrades.filter((t) => t.is_successful).length;
+    const winRate = totalTrades > 0 ? (successfulTrades / totalTrades) * 100 : 0;
+    
+    const rrValues = closedTrades
+      .filter((t) => t.rr_ratio !== null)
+      .map((t) => t.rr_ratio as number);
+    const avgRR = rrValues.length > 0 
+      ? rrValues.reduce((a, b) => a + b, 0) / rrValues.length 
+      : 0;
+
+    // Calculate best streak
+    let bestStreak = 0;
+    let currentStreak = 0;
+    for (const trade of closedTrades) {
+      if (trade.is_successful) {
+        currentStreak++;
+        bestStreak = Math.max(bestStreak, currentStreak);
+      } else {
+        currentStreak = 0;
+      }
+    }
+
+    return {
+      totalTrades,
+      winRate: winRate.toFixed(1),
+      avgRR: avgRR.toFixed(1),
+      bestStreak,
+    };
+  }, [closedTrades]);
 
   return (
-    <MainLayout onLogout={onLogout}>
+    <MainLayout>
       {/* Page Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground mb-2">Raporlarım</h1>
@@ -48,7 +72,7 @@ export default function Reports({ onLogout }: ReportsProps) {
             <span className="text-xs text-muted-foreground">Toplam İşlem</span>
           </div>
           <div className="text-2xl font-bold text-foreground font-mono">
-            {stats.totalTrades}
+            {isLoading ? '-' : stats.totalTrades}
           </div>
         </div>
 
@@ -58,7 +82,7 @@ export default function Reports({ onLogout }: ReportsProps) {
             <span className="text-xs text-muted-foreground">Win Rate</span>
           </div>
           <div className="text-2xl font-bold text-profit font-mono">
-            %{stats.winRate}
+            {isLoading ? '-' : `%${stats.winRate}`}
           </div>
         </div>
 
@@ -68,7 +92,7 @@ export default function Reports({ onLogout }: ReportsProps) {
             <span className="text-xs text-muted-foreground">Ort. RR</span>
           </div>
           <div className="text-2xl font-bold text-foreground font-mono">
-            {stats.avgRR}
+            {isLoading ? '-' : stats.avgRR}
           </div>
         </div>
 
@@ -78,7 +102,7 @@ export default function Reports({ onLogout }: ReportsProps) {
             <span className="text-xs text-muted-foreground">En İyi Seri</span>
           </div>
           <div className="text-2xl font-bold text-foreground font-mono">
-            {stats.bestStreak}
+            {isLoading ? '-' : stats.bestStreak}
           </div>
         </div>
       </div>

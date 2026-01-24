@@ -39,24 +39,25 @@ export const TRADE_REASONS: TradeReasonOption[] = [
   { id: 'takas_toplu', label: 'Takas Toplu' },
 ];
 
+// Trade interface aligned with database schema
 export interface Trade {
   id: string;
-  stock_id: string;
+  user_id: string;
   stock_symbol: string;
   stock_name: string;
-  trade_type: TradeType;
+  trade_type: 'buy' | 'sell';
   entry_price: number;
   target_price: number;
   stop_price: number;
-  exit_price?: number;
-  rr_ratio: number;
-  reasons: TradeReason[];
+  reasons: string[];
+  rr_ratio: number | null;
   status: 'active' | 'closed';
-  result?: 'success' | 'failure';
-  progress_percent?: number;
+  exit_price: number | null;
+  progress_percent: number | null;
+  is_successful: boolean | null;
   created_at: string;
-  closed_at?: string;
-  current_price?: number;
+  updated_at: string;
+  closed_at: string | null;
 }
 
 export interface BenchmarkData {

@@ -3,16 +3,15 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { BarChart3, Home, LogOut, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from '@/hooks/use-toast';
 
-interface HeaderProps {
-  onLogout?: () => void;
-}
-
-export function Header({ onLogout }: HeaderProps) {
+export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { signOut } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -23,9 +22,17 @@ export function Header({ onLogout }: HeaderProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleLogout = () => {
-    onLogout?.();
-    navigate('/login');
+  const handleLogout = async () => {
+    const { error } = await signOut();
+    if (error) {
+      toast({
+        title: 'Çıkış yapılamadı',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } else {
+      navigate('/login');
+    }
   };
 
   const navItems = [
