@@ -3,7 +3,7 @@ import { useBistPrices } from '@/hooks/useBistPrices';
 import { cn } from '@/lib/utils';
 
 export function TickerTape() {
-  const { getTickerStocks, isLoading, isError, isFetching } = useBistPrices();
+  const { getTickerStocks, isLoading, isUsingFallback, isFetching } = useBistPrices();
   
   const tickerStocks = getTickerStocks(25);
   
@@ -20,25 +20,14 @@ export function TickerTape() {
     );
   }
 
-  if (stocks.length === 0) {
-    return (
-      <div className="w-full bg-background-secondary border-b border-border overflow-hidden">
-        <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
-          <AlertCircle className="w-4 h-4" />
-          Hisse verileri alınamadı
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="w-full bg-background-secondary border-b border-border overflow-hidden">
       <div className="relative">
-        {/* Error indicator */}
-        {isError && !isLoading && (
+        {/* Fallback indicator */}
+        {isUsingFallback && (
           <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20 flex items-center gap-1 text-xs text-amber-500">
             <AlertCircle className="w-3 h-3" />
-            <span>Veri güncellenemedi</span>
+            <span>Piyasa kapalı</span>
           </div>
         )}
         
