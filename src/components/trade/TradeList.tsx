@@ -32,16 +32,23 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
 
   if (isLoading) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="p-3 rounded-lg bg-card border border-border">
-            <div className="flex items-center gap-3">
-              <Skeleton className="w-8 h-8 rounded-md flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <Skeleton className="h-4 w-16 mb-1" />
-                <Skeleton className="h-3 w-24" />
+          <div key={i} className="p-4 rounded-xl bg-card border border-border">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <Skeleton className="w-10 h-10 rounded-lg" />
+                <div>
+                  <Skeleton className="h-4 w-20 mb-1" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
               </div>
-              <Skeleton className="h-5 w-12 rounded-full" />
+              <Skeleton className="h-6 w-16 rounded-full" />
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {[1, 2, 3, 4].map((j) => (
+                <Skeleton key={j} className="h-14 rounded-lg" />
+              ))}
             </div>
           </div>
         ))}
@@ -51,7 +58,7 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
 
   if (trades.length === 0) {
     return (
-      <div className="text-center py-8 text-muted-foreground text-sm">
+      <div className="text-center py-12 text-muted-foreground">
         {type === 'active' ? 'Aktif işlem bulunmuyor' : 'Kapalı işlem bulunmuyor'}
       </div>
     );
@@ -59,110 +66,132 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
 
   return (
     <>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {trades.map((trade) => (
           <div
             key={trade.id}
             className={cn(
-              'p-3 rounded-lg bg-card border border-border transition-all',
+              'p-4 rounded-xl bg-card border border-border transition-all',
               highlightedTradeId === trade.id && 'highlight-new'
             )}
           >
-            {/* Compact Header Row */}
-            <div className="flex items-center gap-2 mb-2">
-              <div
-                className={cn(
-                  'w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0',
-                  trade.trade_type === 'buy' ? 'bg-profit/20' : 'bg-loss/20'
-                )}
-              >
-                {trade.trade_type === 'buy' ? (
-                  <TrendingUp className="w-4 h-4 text-profit" />
-                ) : (
-                  <TrendingDown className="w-4 h-4 text-loss" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm text-foreground">{trade.stock_symbol}</span>
-                  <span className="text-xs text-muted-foreground truncate">{trade.stock_name}</span>
-                </div>
-              </div>
-              <div
-                className={cn(
-                  'text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0',
-                  trade.trade_type === 'buy'
-                    ? 'bg-profit/20 text-profit'
-                    : 'bg-loss/20 text-loss'
-                )}
-              >
-                {trade.trade_type === 'buy' ? 'AL' : 'SAT'}
-              </div>
-              <div
-                className={cn(
-                  'text-xs font-mono font-semibold px-1.5 py-0.5 rounded flex-shrink-0',
-                  (trade.rr_ratio ?? 0) >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
-                )}
-              >
-                {(trade.rr_ratio ?? 0).toFixed(1)}RR
-              </div>
-            </div>
-
-            {/* Compact Price Row */}
-            <div className="flex items-center gap-1 text-[11px] mb-2">
-              <div className="flex items-center gap-1 px-2 py-1 rounded bg-secondary">
-                <span className="text-muted-foreground">E:</span>
-                <span className="font-mono text-foreground">₺{trade.entry_price.toFixed(2)}</span>
-              </div>
-              <div className="flex items-center gap-1 px-2 py-1 rounded bg-secondary">
-                <span className="text-muted-foreground">T:</span>
-                <span className="font-mono text-foreground">₺{trade.target_price.toFixed(2)}</span>
-              </div>
-              <div className="flex items-center gap-1 px-2 py-1 rounded bg-secondary">
-                <span className="text-muted-foreground">S:</span>
-                <span className="font-mono text-foreground">₺{trade.stop_price.toFixed(2)}</span>
-              </div>
-              
-              {/* Closed trade: Exit price */}
-              {type === 'closed' && trade.exit_price && (
-                <div className="flex items-center gap-1 px-2 py-1 rounded bg-secondary">
-                  <span className="text-muted-foreground">X:</span>
-                  <span className="font-mono text-foreground">₺{trade.exit_price.toFixed(2)}</span>
-                </div>
-              )}
-              
-              {/* Closed trade: Result badge */}
-              {type === 'closed' && (
+            {/* Header */}
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3">
                 <div
                   className={cn(
-                    'ml-auto px-2 py-1 rounded text-[10px] font-medium',
-                    trade.is_successful ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
+                    'w-10 h-10 rounded-lg flex items-center justify-center',
+                    trade.trade_type === 'buy' ? 'bg-profit/20' : 'bg-loss/20'
                   )}
                 >
-                  {trade.is_successful ? '✅ Başarılı' : '❌ Başarısız'}
+                  {trade.trade_type === 'buy' ? (
+                    <TrendingUp className="w-5 h-5 text-profit" />
+                  ) : (
+                    <TrendingDown className="w-5 h-5 text-loss" />
+                  )}
                 </div>
-              )}
+                <div>
+                  <div className="font-semibold text-foreground">{trade.stock_symbol}</div>
+                  <div className="text-sm text-muted-foreground">{trade.stock_name}</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div
+                  className={cn(
+                    'text-xs font-medium px-2 py-1 rounded-full inline-block',
+                    trade.trade_type === 'buy'
+                      ? 'bg-profit/20 text-profit'
+                      : 'bg-loss/20 text-loss'
+                  )}
+                >
+                  {trade.trade_type === 'buy' ? 'ALIŞ' : 'SATIŞ'}
+                </div>
+              </div>
             </div>
 
-            {/* Reasons - single line, truncated */}
-            <div className="flex items-center gap-2">
-              <div className="flex-1 min-w-0 text-[10px] text-muted-foreground truncate">
-                {getReasonLabels(trade.reasons)}
+            {/* Price Grid */}
+            <div className="grid grid-cols-4 gap-2 mb-3">
+              <div className="p-2 rounded-lg bg-secondary text-center">
+                <div className="text-xs text-muted-foreground">Entry</div>
+                <div className="font-mono text-sm text-foreground">
+                  ₺{trade.entry_price.toFixed(2)}
+                </div>
               </div>
-              
-              {/* Actions */}
-              {type === 'active' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-6 text-xs px-2 flex-shrink-0"
-                  onClick={() => setClosingTrade(trade)}
+              <div className="p-2 rounded-lg bg-secondary text-center">
+                <div className="text-xs text-muted-foreground">Target</div>
+                <div className="font-mono text-sm text-foreground">
+                  ₺{trade.target_price.toFixed(2)}
+                </div>
+              </div>
+              <div className="p-2 rounded-lg bg-secondary text-center">
+                <div className="text-xs text-muted-foreground">Stop</div>
+                <div className="font-mono text-sm text-foreground">
+                  ₺{trade.stop_price.toFixed(2)}
+                </div>
+              </div>
+              <div
+                className={cn(
+                  'p-2 rounded-lg text-center',
+                  (trade.rr_ratio ?? 0) >= 3 ? 'bg-profit/20' : 'bg-loss/20'
+                )}
+              >
+                <div className="text-xs text-muted-foreground">RR</div>
+                <div
+                  className={cn(
+                    'font-mono text-sm font-semibold',
+                    (trade.rr_ratio ?? 0) >= 3 ? 'text-profit' : 'text-loss'
+                  )}
                 >
-                  <X className="w-3 h-3 mr-1" />
-                  Kapat
-                </Button>
-              )}
+                  {(trade.rr_ratio ?? 0).toFixed(2)}
+                </div>
+              </div>
             </div>
+
+            {/* Closed trade extra info */}
+            {type === 'closed' && trade.exit_price && (
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="p-2 rounded-lg bg-secondary text-center">
+                  <div className="text-xs text-muted-foreground">Exit</div>
+                  <div className="font-mono text-sm text-foreground">
+                    ₺{trade.exit_price.toFixed(2)}
+                  </div>
+                </div>
+                <div
+                  className={cn(
+                    'p-2 rounded-lg text-center',
+                    trade.is_successful ? 'bg-profit/20' : 'bg-loss/20'
+                  )}
+                >
+                  <div className="text-xs text-muted-foreground">Sonuç</div>
+                  <div
+                    className={cn(
+                      'text-sm font-semibold',
+                      trade.is_successful ? 'text-profit' : 'text-loss'
+                    )}
+                  >
+                    {trade.is_successful ? '✅ Başarılı' : '❌ Başarısız'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Reasons */}
+            <div className="text-xs text-muted-foreground mb-3">
+              <span className="font-medium">Sebepler:</span> {getReasonLabels(trade.reasons)}
+            </div>
+
+            {/* Actions */}
+            {type === 'active' && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setClosingTrade(trade)}
+              >
+                <X className="w-4 h-4 mr-2" />
+                İşlemi Kapat
+              </Button>
+            )}
           </div>
         ))}
       </div>
