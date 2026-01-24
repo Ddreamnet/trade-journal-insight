@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { BarChart3, Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
+import logo from '@/assets/logo.png';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
@@ -74,14 +75,13 @@ export default function Login() {
       <div className="relative w-full max-w-md">
         <div className="glass-card rounded-2xl p-8 shadow-2xl">
           {/* Logo */}
-          <div className="flex items-center justify-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-              <BarChart3 className="w-7 h-7 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Trade Günlüğü</h1>
-              <p className="text-sm text-muted-foreground">İşlemlerinizi takip edin</p>
-            </div>
+          <div className="flex flex-col items-center mb-8">
+            <img 
+              src={logo} 
+              alt="Trade Günlüğü" 
+              className="h-14 w-auto mb-2"
+            />
+            <p className="text-sm text-muted-foreground">İşlemlerinizi takip edin</p>
           </div>
 
           {/* Toggle */}
