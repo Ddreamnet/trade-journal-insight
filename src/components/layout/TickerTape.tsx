@@ -1,9 +1,11 @@
-import { TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock } from 'lucide-react';
 import { useBistPrices } from '@/hooks/useBistPrices';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { tr } from 'date-fns/locale';
 
 export function TickerTape() {
-  const { getTickerStocks, isLoading, isError, isFetching } = useBistPrices();
+  const { getTickerStocks, isLoading, isFetching, isUsingCachedData, cacheTimestamp } = useBistPrices();
   
   const tickerStocks = getTickerStocks(25);
   
@@ -24,21 +26,26 @@ export function TickerTape() {
     return (
       <div className="w-full bg-background-secondary border-b border-border overflow-hidden">
         <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
-          <AlertCircle className="w-4 h-4" />
-          Hisse verileri alınamadı
+          <Clock className="w-4 h-4" />
+          Henüz veri yok - piyasa açıldığında güncellenecek
         </div>
       </div>
     );
   }
 
+  // Format cache timestamp
+  const cacheInfo = cacheTimestamp 
+    ? format(cacheTimestamp, "d MMM HH:mm", { locale: tr })
+    : null;
+
   return (
     <div className="w-full bg-background-secondary border-b border-border overflow-hidden">
       <div className="relative">
-        {/* Error indicator */}
-        {isError && !isLoading && (
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20 flex items-center gap-1 text-xs text-amber-500">
-            <AlertCircle className="w-3 h-3" />
-            <span>Veri güncellenemedi</span>
+        {/* Cache indicator - shows when using cached data */}
+        {isUsingCachedData && cacheInfo && (
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20 flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="w-3 h-3" />
+            <span>Son veri: {cacheInfo}</span>
           </div>
         )}
         

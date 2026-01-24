@@ -1,10 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchBist100Prices } from '@/services/bistApi';
+import { fetchBist100Prices, getCachedPrices } from '@/services/bistApi';
 import type { BistStock } from '@/types/stock';
 
 const REFETCH_INTERVAL = 30 * 1000; // 30 seconds
 
 export function useBistPrices() {
+  // Get initial data from cache for instant display
+  const initialCache = getCachedPrices();
+
   const query = useQuery<BistStock[], Error>({
     queryKey: ['bist-prices'],
     queryFn: fetchBist100Prices,
@@ -12,7 +15,13 @@ export function useBistPrices() {
     staleTime: REFETCH_INTERVAL,
     retry: 2,
     retryDelay: 5000,
+    // Use cached data as initial/placeholder data
+    initialData: initialCache.stocks.length > 0 ? initialCache.stocks : undefined,
   });
+
+  // Determine if showing cached data
+  const isUsingCachedData = initialCache.stocks.length > 0 && 
+    (query.isError || (query.data?.length === 0));
 
   // Helper to get a single stock by symbol
   const getStockBySymbol = (symbol: string): BistStock | undefined => {
@@ -46,6 +55,8 @@ export function useBistPrices() {
     isError: query.isError,
     error: query.error,
     isFetching: query.isFetching,
+    isUsingCachedData,
+    cacheTimestamp: initialCache.timestamp,
     lastUpdated: query.dataUpdatedAt ? new Date(query.dataUpdatedAt) : null,
     getStockBySymbol,
     getLastPrice,
