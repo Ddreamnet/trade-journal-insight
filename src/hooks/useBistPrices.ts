@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchBist100Prices, getCachedPrices } from '@/services/bistApi';
+import { fetchBist100Prices, getCachedPrices, RateLimitError } from '@/services/bistApi';
 import type { BistStock } from '@/types/stock';
 
-const REFETCH_INTERVAL = 30 * 1000; // 30 seconds
+const REFETCH_INTERVAL = 60 * 1000; // 60 seconds - avoid rate limits
 
 export function useBistPrices() {
   // Get initial data from cache for instant display
@@ -13,8 +13,12 @@ export function useBistPrices() {
     queryFn: fetchBist100Prices,
     refetchInterval: REFETCH_INTERVAL,
     staleTime: REFETCH_INTERVAL,
-    retry: 2,
-    retryDelay: 5000,
+    // Don't retry on rate limit errors
+    retry: (failureCount, error) => {
+      if (error instanceof RateLimitError) return false;
+      return failureCount < 2;
+    },
+    retryDelay: 10000,
     // Use cached data as initial/placeholder data
     initialData: initialCache.stocks.length > 0 ? initialCache.stocks : undefined,
   });

@@ -22,8 +22,6 @@ serve(async (req) => {
       );
     }
 
-    console.log('BIST API connected');
-
     const url = "https://bist100-stock-data-15-minutes-late-live.p.rapidapi.com/bist100/prices";
     
     const response = await fetch(url, {
@@ -33,6 +31,15 @@ serve(async (req) => {
         'x-rapidapi-key': rapidApiKey,
       },
     });
+
+    // Handle rate limit specifically
+    if (response.status === 429) {
+      console.error('BIST API rate limited (429)');
+      return new Response(
+        JSON.stringify({ error: 'rate_limited', retryAfter: 60 }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     if (!response.ok) {
       console.error(`BIST API error: ${response.status}`);
@@ -44,11 +51,7 @@ serve(async (req) => {
 
     const data = await response.json();
     
-    // Debug log - response schema (remove in production)
-    console.log('BIST API Response Schema:', JSON.stringify(Object.keys(data), null, 2));
-    if (Array.isArray(data) && data.length > 0) {
-      console.log('First item schema:', JSON.stringify(Object.keys(data[0]), null, 2));
-    }
+    console.log('BIST API connected - data received');
 
     return new Response(
       JSON.stringify(data),
