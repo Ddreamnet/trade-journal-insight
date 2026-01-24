@@ -192,10 +192,11 @@
     background: linear-gradient(270deg, hsl(var(--background)) 0%, transparent 100%);
   }
 
-  /* Liquid Background for Main Pages */
+  /* Liquid Background for Main Pages - Silver/Gray flowing effect */
   .liquid-bg {
     position: relative;
-    background: hsl(var(--background));
+    background: linear-gradient(180deg, hsl(0 0% 6%) 0%, hsl(0 0% 8%) 50%, hsl(0 0% 5%) 100%);
+    overflow: hidden;
   }
 
   .liquid-bg::before {
@@ -207,10 +208,60 @@
     bottom: 0;
     pointer-events: none;
     background: 
-      radial-gradient(ellipse 80% 50% at 20% 20%, hsla(217, 91%, 60%, 0.08) 0%, transparent 50%),
-      radial-gradient(ellipse 60% 40% at 80% 80%, hsla(142, 71%, 45%, 0.05) 0%, transparent 50%),
-      radial-gradient(ellipse 50% 60% at 50% 50%, hsla(0, 0%, 100%, 0.02) 0%, transparent 40%);
+      /* Large silver blob top-left */
+      radial-gradient(ellipse 100% 80% at 0% 0%, hsla(0, 0%, 70%, 0.15) 0%, transparent 50%),
+      /* Dark gray wave center-right */
+      radial-gradient(ellipse 90% 70% at 100% 40%, hsla(0, 0%, 40%, 0.2) 0%, transparent 45%),
+      /* Silver glow bottom */
+      radial-gradient(ellipse 120% 60% at 50% 100%, hsla(0, 0%, 60%, 0.12) 0%, transparent 50%),
+      /* Floating silver accent */
+      radial-gradient(ellipse 60% 50% at 30% 60%, hsla(0, 0%, 80%, 0.08) 0%, transparent 40%),
+      /* Deep gray depth top-right */
+      radial-gradient(ellipse 80% 90% at 90% 10%, hsla(0, 0%, 25%, 0.25) 0%, transparent 50%);
     z-index: 0;
+    animation: liquid-flow 25s ease-in-out infinite alternate;
+  }
+
+  .liquid-bg::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    background: 
+      /* Silver shimmer overlay */
+      radial-gradient(ellipse 70% 40% at 20% 30%, hsla(0, 0%, 90%, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse 50% 60% at 80% 70%, hsla(0, 0%, 75%, 0.05) 0%, transparent 45%);
+    z-index: 0;
+    animation: liquid-shimmer 18s ease-in-out infinite alternate-reverse;
+  }
+
+  @keyframes liquid-flow {
+    0% {
+      transform: scale(1) translateY(0);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.02) translateY(-10px);
+      opacity: 0.95;
+    }
+    100% {
+      transform: scale(1) translateY(5px);
+      opacity: 1;
+    }
+  }
+
+  @keyframes liquid-shimmer {
+    0% {
+      opacity: 0.6;
+      transform: translateX(0);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(20px);
+    }
   }
 
   .liquid-bg > * {
@@ -218,11 +269,11 @@
     z-index: 1;
   }
 
-  /* Login Wow Background */
+  /* Login Wow Background - Elegant Gray Tones */
   .login-bg {
     position: relative;
     background: 
-      linear-gradient(135deg, hsl(0 0% 4%) 0%, hsl(0 0% 8%) 50%, hsl(0 0% 5%) 100%);
+      linear-gradient(135deg, hsl(0 0% 3%) 0%, hsl(0 0% 7%) 40%, hsl(0 0% 4%) 100%);
     overflow: hidden;
   }
 
@@ -234,10 +285,14 @@
     width: 200%;
     height: 200%;
     background: 
-      radial-gradient(circle at 30% 20%, hsla(217, 91%, 60%, 0.15) 0%, transparent 40%),
-      radial-gradient(circle at 70% 80%, hsla(280, 70%, 50%, 0.12) 0%, transparent 35%),
-      radial-gradient(circle at 80% 30%, hsla(142, 71%, 45%, 0.08) 0%, transparent 30%),
-      radial-gradient(circle at 20% 70%, hsla(217, 91%, 60%, 0.1) 0%, transparent 35%);
+      /* Silver glow top-left */
+      radial-gradient(circle at 25% 15%, hsla(0, 0%, 85%, 0.18) 0%, transparent 40%),
+      /* Charcoal wave bottom-right */
+      radial-gradient(circle at 75% 85%, hsla(0, 0%, 35%, 0.25) 0%, transparent 40%),
+      /* Light gray accent top-right */
+      radial-gradient(circle at 85% 25%, hsla(0, 0%, 65%, 0.12) 0%, transparent 35%),
+      /* Dark silver bottom-left */
+      radial-gradient(circle at 15% 75%, hsla(0, 0%, 50%, 0.15) 0%, transparent 40%);
     animation: login-aurora 20s ease-in-out infinite alternate;
     pointer-events: none;
   }
@@ -247,8 +302,10 @@
     position: absolute;
     inset: 0;
     background: 
-      radial-gradient(ellipse 100% 100% at 50% 0%, hsla(217, 91%, 60%, 0.1) 0%, transparent 60%),
-      radial-gradient(ellipse 80% 60% at 50% 100%, hsla(280, 70%, 50%, 0.08) 0%, transparent 50%);
+      /* Bright silver top glow */
+      radial-gradient(ellipse 100% 80% at 50% 0%, hsla(0, 0%, 90%, 0.12) 0%, transparent 55%),
+      /* Subtle gray bottom */
+      radial-gradient(ellipse 90% 50% at 50% 100%, hsla(0, 0%, 45%, 0.1) 0%, transparent 50%);
     pointer-events: none;
   }
 
@@ -258,48 +315,48 @@
       opacity: 1;
     }
     50% {
-      transform: rotate(3deg) scale(1.05);
-      opacity: 0.9;
+      transform: rotate(2deg) scale(1.03);
+      opacity: 0.92;
     }
     100% {
-      transform: rotate(-2deg) scale(1);
+      transform: rotate(-1deg) scale(1);
       opacity: 1;
     }
   }
 
-  /* Floating orbs for extra depth */
+  /* Floating orbs - Gray tones */
   .login-orb {
     position: absolute;
     border-radius: 50%;
-    filter: blur(60px);
+    filter: blur(80px);
     pointer-events: none;
     animation: float-orb 15s ease-in-out infinite;
   }
 
   .login-orb-1 {
-    width: 400px;
-    height: 400px;
-    top: 10%;
-    left: 10%;
-    background: hsla(217, 91%, 60%, 0.2);
+    width: 450px;
+    height: 450px;
+    top: 5%;
+    left: 5%;
+    background: hsla(0, 0%, 80%, 0.2);
     animation-delay: 0s;
   }
 
   .login-orb-2 {
-    width: 300px;
-    height: 300px;
-    bottom: 20%;
-    right: 10%;
-    background: hsla(280, 70%, 50%, 0.15);
+    width: 350px;
+    height: 350px;
+    bottom: 15%;
+    right: 5%;
+    background: hsla(0, 0%, 45%, 0.25);
     animation-delay: -5s;
   }
 
   .login-orb-3 {
-    width: 250px;
-    height: 250px;
-    top: 60%;
-    left: 60%;
-    background: hsla(142, 71%, 45%, 0.1);
+    width: 280px;
+    height: 280px;
+    top: 55%;
+    left: 55%;
+    background: hsla(0, 0%, 60%, 0.18);
     animation-delay: -10s;
   }
 
