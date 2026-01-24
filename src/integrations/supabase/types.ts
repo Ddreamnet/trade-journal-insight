@@ -14,16 +14,93 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      trades: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          entry_price: number
+          exit_price: number | null
+          id: string
+          is_successful: boolean | null
+          progress_percent: number | null
+          reasons: string[] | null
+          rr_ratio: number | null
+          status: Database["public"]["Enums"]["trade_status"]
+          stock_name: string
+          stock_symbol: string
+          stop_price: number
+          target_price: number
+          trade_type: Database["public"]["Enums"]["trade_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          entry_price: number
+          exit_price?: number | null
+          id?: string
+          is_successful?: boolean | null
+          progress_percent?: number | null
+          reasons?: string[] | null
+          rr_ratio?: number | null
+          status?: Database["public"]["Enums"]["trade_status"]
+          stock_name: string
+          stock_symbol: string
+          stop_price: number
+          target_price: number
+          trade_type: Database["public"]["Enums"]["trade_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          entry_price?: number
+          exit_price?: number | null
+          id?: string
+          is_successful?: boolean | null
+          progress_percent?: number | null
+          reasons?: string[] | null
+          rr_ratio?: number | null
+          status?: Database["public"]["Enums"]["trade_status"]
+          stock_name?: string
+          stock_symbol?: string
+          stop_price?: number
+          target_price?: number
+          trade_type?: Database["public"]["Enums"]["trade_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      calculate_progress_percent: {
+        Args: {
+          p_entry_price: number
+          p_exit_price: number
+          p_target_price: number
+          p_trade_type: Database["public"]["Enums"]["trade_type"]
+        }
+        Returns: number
+      }
+      calculate_rr_ratio: {
+        Args: {
+          p_entry_price: number
+          p_stop_price: number
+          p_target_price: number
+          p_trade_type: Database["public"]["Enums"]["trade_type"]
+        }
+        Returns: number
+      }
     }
     Enums: {
-      [_ in never]: never
+      trade_status: "active" | "closed"
+      trade_type: "buy" | "sell"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +227,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      trade_status: ["active", "closed"],
+      trade_type: ["buy", "sell"],
+    },
   },
 } as const

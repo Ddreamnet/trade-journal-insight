@@ -3,16 +3,25 @@ import { X, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Stock, TradeType, TradeReason, TRADE_REASONS, Trade } from '@/types/trade';
+import { Stock, TradeType, TradeReason, TRADE_REASONS } from '@/types/trade';
 import { cn } from '@/lib/utils';
 
 interface TradeFormProps {
   stock: Stock;
   onClose: () => void;
-  onSave: (trade: Omit<Trade, 'id' | 'created_at' | 'current_price'>) => void;
+  onSave: (trade: {
+    stock_symbol: string;
+    stock_name: string;
+    trade_type: 'buy' | 'sell';
+    entry_price: number;
+    target_price: number;
+    stop_price: number;
+    reasons: string[];
+  }) => void;
+  isSubmitting?: boolean;
 }
 
-export function TradeForm({ stock, onClose, onSave }: TradeFormProps) {
+export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: TradeFormProps) {
   const [tradeType, setTradeType] = useState<TradeType | null>(null);
   const [reasons, setReasons] = useState<TradeReason[]>([]);
   const [entryPrice, setEntryPrice] = useState(stock.currentPrice.toString());
@@ -44,16 +53,13 @@ export function TradeForm({ stock, onClose, onSave }: TradeFormProps) {
     if (reasons.length === 0) return;
 
     onSave({
-      stock_id: stock.id,
       stock_symbol: stock.symbol,
       stock_name: stock.name,
       trade_type: tradeType,
       entry_price: parseFloat(entryPrice),
       target_price: parseFloat(targetPrice),
       stop_price: parseFloat(stopPrice),
-      rr_ratio: rrRatio || 0,
       reasons,
-      status: 'active',
     });
   };
 
@@ -261,9 +267,9 @@ export function TradeForm({ stock, onClose, onSave }: TradeFormProps) {
             variant={tradeType === 'sell' ? 'sell' : 'buy'}
             className="flex-1"
             onClick={handleSave}
-            disabled={!isValid}
+            disabled={!isValid || isSubmitting}
           >
-            Kaydet
+            {isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
           </Button>
         </div>
       </div>

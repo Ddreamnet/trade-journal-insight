@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -6,84 +6,48 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { StockSelector } from '@/components/trade/StockSelector';
 import { TradeForm } from '@/components/trade/TradeForm';
 import { TradeList } from '@/components/trade/TradeList';
-import { Stock, Trade } from '@/types/trade';
-import { toast } from '@/hooks/use-toast';
+import { Stock } from '@/types/trade';
+import { useTrades } from '@/hooks/useTrades';
 
-interface IndexProps {
-  onLogout: () => void;
-}
-
-export default function Index({ onLogout }: IndexProps) {
+export default function Index() {
   const [isStockSelectorOpen, setIsStockSelectorOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
-  const [trades, setTrades] = useState<Trade[]>([]);
   const [highlightedTradeId, setHighlightedTradeId] = useState<string | null>(null);
 
-  const activeTrades = trades.filter((t) => t.status === 'active');
-  const closedTrades = trades.filter((t) => t.status === 'closed');
+  const { activeTrades, closedTrades, createTrade, closeTrade, isLoading } = useTrades();
 
   const handleStockSelect = (stock: Stock) => {
     setSelectedStock(stock);
   };
 
-  const handleSaveTrade = useCallback(
-    (tradeData: Omit<Trade, 'id' | 'created_at' | 'current_price'>) => {
-      const newTrade: Trade = {
-        ...tradeData,
-        id: crypto.randomUUID(),
-        created_at: new Date().toISOString(),
-        current_price: tradeData.entry_price,
-      };
+  const handleSaveTrade = async (tradeData: {
+    stock_symbol: string;
+    stock_name: string;
+    trade_type: 'buy' | 'sell';
+    entry_price: number;
+    target_price: number;
+    stop_price: number;
+    reasons: string[];
+  }) => {
+    const result = await createTrade.mutateAsync(tradeData);
+    setSelectedStock(null);
+    setHighlightedTradeId(result.id);
+    
+    // Remove highlight after animation
+    setTimeout(() => {
+      setHighlightedTradeId(null);
+    }, 2000);
+  };
 
-      setTrades((prev) => [newTrade, ...prev]);
-      setSelectedStock(null);
-      setHighlightedTradeId(newTrade.id);
-
-      toast({
-        title: 'İşlem kaydedildi!',
-        description: `${tradeData.stock_symbol} ${tradeData.trade_type === 'buy' ? 'alış' : 'satış'} işlemi eklendi.`,
-      });
-
-      // Remove highlight after animation
-      setTimeout(() => {
-        setHighlightedTradeId(null);
-      }, 2000);
-    },
-    []
-  );
-
-  const handleCloseTrade = useCallback(
-    (
-      tradeId: string,
-      exitPrice: number,
-      progressPercent: number,
-      result: 'success' | 'failure'
-    ) => {
-      setTrades((prev) =>
-        prev.map((trade) =>
-          trade.id === tradeId
-            ? {
-                ...trade,
-                status: 'closed' as const,
-                exit_price: exitPrice,
-                progress_percent: progressPercent,
-                result,
-                closed_at: new Date().toISOString(),
-              }
-            : trade
-        )
-      );
-
-      toast({
-        title: result === 'success' ? '✅ Başarılı işlem!' : '❌ Başarısız işlem',
-        description: `İşlem %${progressPercent.toFixed(1)} ilerleme ile kapatıldı.`,
-      });
-    },
-    []
-  );
+  const handleCloseTrade = async (
+    tradeId: string,
+    exitPrice: number
+  ) => {
+    await closeTrade.mutateAsync({ tradeId, exitPrice });
+  };
 
   return (
-    <MainLayout onLogout={onLogout}>
+    <MainLayout>
       {/* New Trade Button */}
       <div className="mb-6">
         <Button
@@ -123,11 +87,16 @@ export default function Index({ onLogout }: IndexProps) {
             type="active"
             onCloseTrade={handleCloseTrade}
             highlightedTradeId={highlightedTradeId}
+            isLoading={isLoading}
           />
         </TabsContent>
 
         <TabsContent value="closed" className="mt-0">
-          <TradeList trades={closedTrades} type="closed" />
+          <TradeList 
+            trades={closedTrades} 
+            type="closed" 
+            isLoading={isLoading}
+          />
         </TabsContent>
       </Tabs>
 
@@ -144,6 +113,7 @@ export default function Index({ onLogout }: IndexProps) {
           stock={selectedStock}
           onClose={() => setSelectedStock(null)}
           onSave={handleSaveTrade}
+          isSubmitting={createTrade.isPending}
         />
       )}
     </MainLayout>

@@ -4,20 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Trade, TRADE_REASONS } from '@/types/trade';
 import { CloseTradeModal } from './CloseTradeModal';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface TradeListProps {
   trades: Trade[];
   type: 'active' | 'closed';
-  onCloseTrade?: (tradeId: string, exitPrice: number, progressPercent: number, result: 'success' | 'failure') => void;
+  onCloseTrade?: (tradeId: string, exitPrice: number) => void;
   highlightedTradeId?: string | null;
+  isLoading?: boolean;
 }
 
-export function TradeList({ trades, type, onCloseTrade, highlightedTradeId }: TradeListProps) {
+export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLoading = false }: TradeListProps) {
   const [closingTrade, setClosingTrade] = useState<Trade | null>(null);
 
-  const handleCloseConfirm = (exitPrice: number, progressPercent: number, result: 'success' | 'failure') => {
+  const handleCloseConfirm = (exitPrice: number) => {
     if (closingTrade && onCloseTrade) {
-      onCloseTrade(closingTrade.id, exitPrice, progressPercent, result);
+      onCloseTrade(closingTrade.id, exitPrice);
       setClosingTrade(null);
     }
   };
@@ -27,6 +29,32 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId }: Tr
       .map((id) => TRADE_REASONS.find((r) => r.id === id)?.label || id)
       .join(', ');
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="p-4 rounded-xl bg-card border border-border">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <Skeleton className="w-10 h-10 rounded-lg" />
+                <div>
+                  <Skeleton className="h-4 w-20 mb-1" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+              </div>
+              <Skeleton className="h-6 w-16 rounded-full" />
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {[1, 2, 3, 4].map((j) => (
+                <Skeleton key={j} className="h-14 rounded-lg" />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   if (trades.length === 0) {
     return (
@@ -104,17 +132,17 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId }: Tr
               <div
                 className={cn(
                   'p-2 rounded-lg text-center',
-                  trade.rr_ratio >= 3 ? 'bg-profit/20' : 'bg-loss/20'
+                  (trade.rr_ratio ?? 0) >= 3 ? 'bg-profit/20' : 'bg-loss/20'
                 )}
               >
                 <div className="text-xs text-muted-foreground">RR</div>
                 <div
                   className={cn(
                     'font-mono text-sm font-semibold',
-                    trade.rr_ratio >= 3 ? 'text-profit' : 'text-loss'
+                    (trade.rr_ratio ?? 0) >= 3 ? 'text-profit' : 'text-loss'
                   )}
                 >
-                  {trade.rr_ratio.toFixed(2)}
+                  {(trade.rr_ratio ?? 0).toFixed(2)}
                 </div>
               </div>
             </div>
@@ -131,17 +159,17 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId }: Tr
                 <div
                   className={cn(
                     'p-2 rounded-lg text-center',
-                    trade.result === 'success' ? 'bg-profit/20' : 'bg-loss/20'
+                    trade.is_successful ? 'bg-profit/20' : 'bg-loss/20'
                   )}
                 >
                   <div className="text-xs text-muted-foreground">Sonuç</div>
                   <div
                     className={cn(
                       'text-sm font-semibold',
-                      trade.result === 'success' ? 'text-profit' : 'text-loss'
+                      trade.is_successful ? 'text-profit' : 'text-loss'
                     )}
                   >
-                    {trade.result === 'success' ? '✅ Başarılı' : '❌ Başarısız'}
+                    {trade.is_successful ? '✅ Başarılı' : '❌ Başarısız'}
                   </div>
                 </div>
               </div>
