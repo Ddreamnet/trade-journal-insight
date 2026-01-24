@@ -33,11 +33,20 @@ serve(async (req) => {
     });
 
     // Handle rate limit specifically
+    // NOTE: We return 200 here (with an explicit payload) so the frontend can
+    // gracefully fall back to cached data without surfacing a runtime error UI.
     if (response.status === 429) {
       console.error('BIST API rate limited (429)');
       return new Response(
-        JSON.stringify({ error: 'rate_limited', retryAfter: 60 }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ ok: false, error: 'rate_limited', retryAfter: 60 }),
+        {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+            'X-Rate-Limited': 'true',
+          },
+        }
       );
     }
 
