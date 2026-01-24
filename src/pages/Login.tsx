@@ -162,7 +162,8 @@ export default function Login() {
 
             <Button
               type="submit"
-              className="w-full h-12 text-base"
+              size="lg"
+              className="w-full"
               disabled={isLoading}
             >
               {isLoading
