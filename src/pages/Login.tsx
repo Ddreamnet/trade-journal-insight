@@ -79,7 +79,7 @@ export default function Login() {
             <img 
               src={logo} 
               alt="Trade Günlüğü" 
-              className="h-14 w-auto mb-2"
+              className="h-20 w-auto mb-2"
             />
             <p className="text-sm text-muted-foreground">İşlemlerinizi takip edin</p>
           </div>
