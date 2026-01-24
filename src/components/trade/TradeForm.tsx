@@ -27,18 +27,27 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
   const [entryPrice, setEntryPrice] = useState(stock.currentPrice.toString());
   const [targetPrice, setTargetPrice] = useState('');
   const [stopPrice, setStopPrice] = useState('');
+  const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
+
+  const parsedEntry = parseFloat(entryPrice);
+  const parsedTarget = parseFloat(targetPrice);
+  const parsedStop = parseFloat(stopPrice);
+
+  // Validation checks
+  const hasEntryStopError = !isNaN(parsedEntry) && !isNaN(parsedStop) && parsedEntry === parsedStop;
+  const hasNegativeEntry = !isNaN(parsedEntry) && parsedEntry <= 0;
+  const hasNegativeTarget = !isNaN(parsedTarget) && parsedTarget <= 0;
+  const hasNegativeStop = !isNaN(parsedStop) && parsedStop <= 0;
+  const hasAnyNegativeError = hasNegativeEntry || hasNegativeTarget || hasNegativeStop;
 
   const rrRatio = useMemo(() => {
-    const entry = parseFloat(entryPrice);
-    const target = parseFloat(targetPrice);
-    const stop = parseFloat(stopPrice);
+    if (isNaN(parsedEntry) || isNaN(parsedTarget) || isNaN(parsedStop)) return null;
+    if (parsedEntry === parsedStop) return null;
+    if (parsedEntry <= 0 || parsedTarget <= 0 || parsedStop <= 0) return null;
 
-    if (isNaN(entry) || isNaN(target) || isNaN(stop)) return null;
-    if (entry === stop) return null;
-
-    const rr = (target - entry) / (entry - stop);
+    const rr = (parsedTarget - parsedEntry) / (parsedEntry - parsedStop);
     return Math.abs(rr);
-  }, [entryPrice, targetPrice, stopPrice]);
+  }, [parsedEntry, parsedTarget, parsedStop]);
 
   const toggleReason = (reasonId: TradeReason) => {
     setReasons((prev) =>
@@ -48,19 +57,26 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
     );
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (isSubmittingLocal || isSubmitting) return; // Double-click protection
     if (!tradeType || !entryPrice || !targetPrice || !stopPrice) return;
     if (reasons.length === 0) return;
+    if (hasEntryStopError || hasAnyNegativeError) return;
 
-    onSave({
-      stock_symbol: stock.symbol,
-      stock_name: stock.name,
-      trade_type: tradeType,
-      entry_price: parseFloat(entryPrice),
-      target_price: parseFloat(targetPrice),
-      stop_price: parseFloat(stopPrice),
-      reasons,
-    });
+    setIsSubmittingLocal(true);
+    try {
+      await onSave({
+        stock_symbol: stock.symbol,
+        stock_name: stock.name,
+        trade_type: tradeType,
+        entry_price: parsedEntry,
+        target_price: parsedTarget,
+        stop_price: parsedStop,
+        reasons,
+      });
+    } finally {
+      setIsSubmittingLocal(false);
+    }
   };
 
   const isValid =
@@ -69,7 +85,9 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
     targetPrice &&
     stopPrice &&
     reasons.length > 0 &&
-    rrRatio !== null;
+    rrRatio !== null &&
+    !hasEntryStopError &&
+    !hasAnyNegativeError;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
@@ -189,11 +207,15 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                   <Input
                     type="number"
                     step="0.01"
+                    min="0.01"
                     placeholder="0.00"
                     value={entryPrice}
                     onChange={(e) => setEntryPrice(e.target.value)}
-                    className="font-mono"
+                    className={cn('font-mono', hasNegativeEntry && 'border-loss focus-visible:ring-loss')}
                   />
+                  {hasNegativeEntry && (
+                    <p className="text-xs text-loss mt-1">⚠️ Fiyat sıfırdan büyük olmalı</p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-2 block">
@@ -202,11 +224,15 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                   <Input
                     type="number"
                     step="0.01"
+                    min="0.01"
                     placeholder="0.00"
                     value={targetPrice}
                     onChange={(e) => setTargetPrice(e.target.value)}
-                    className="font-mono"
+                    className={cn('font-mono', hasNegativeTarget && 'border-loss focus-visible:ring-loss')}
                   />
+                  {hasNegativeTarget && (
+                    <p className="text-xs text-loss mt-1">⚠️ Fiyat sıfırdan büyük olmalı</p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-2 block">
@@ -215,11 +241,18 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                   <Input
                     type="number"
                     step="0.01"
+                    min="0.01"
                     placeholder="0.00"
                     value={stopPrice}
                     onChange={(e) => setStopPrice(e.target.value)}
-                    className="font-mono"
+                    className={cn('font-mono', (hasNegativeStop || hasEntryStopError) && 'border-loss focus-visible:ring-loss')}
                   />
+                  {hasNegativeStop && (
+                    <p className="text-xs text-loss mt-1">⚠️ Fiyat sıfırdan büyük olmalı</p>
+                  )}
+                  {hasEntryStopError && !hasNegativeStop && (
+                    <p className="text-xs text-loss mt-1">⚠️ Stop fiyatı Entry fiyatından farklı olmalı</p>
+                  )}
                 </div>
 
                 {/* RR Display */}
@@ -267,9 +300,9 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
             variant={tradeType === 'sell' ? 'sell' : 'buy'}
             className="flex-1"
             onClick={handleSave}
-            disabled={!isValid || isSubmitting}
+            disabled={!isValid || isSubmitting || isSubmittingLocal}
           >
-            {isSubmitting ? 'Kaydediliyor...' : 'Kaydet'}
+            {(isSubmitting || isSubmittingLocal) ? 'Kaydediliyor...' : 'Kaydet'}
           </Button>
         </div>
       </div>
