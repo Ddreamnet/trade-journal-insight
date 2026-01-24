@@ -118,8 +118,9 @@ export async function fetchBist100Prices(): Promise<BistStock[]> {
 
   const data = body as any;
 
-  // Handle rate limit specifically - don't retry
-  if (status === 429 && data?.error === 'rate_limited') {
+  // Edge function may return 200 with a rate_limited payload (to avoid surfacing
+  // runtime errors in the UI layer). Treat it the same.
+  if (data?.error === 'rate_limited') {
     console.warn('BIST API rate limited - using cached data');
     const cached = loadFromCache();
     if (cached.stocks.length > 0) {
