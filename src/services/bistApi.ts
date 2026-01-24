@@ -78,28 +78,65 @@ export class RateLimitError extends Error {
   }
 }
 
+type FunctionJson = Record<string, unknown> | unknown[] | null;
+
+async function invokeBistPricesRaw(): Promise<{ status: number; body: FunctionJson }>{
+  // We intentionally avoid supabase.functions.invoke here because it throws a
+  // FunctionsHttpError on non-2xx and hides the JSON body (we need it for 429).
+  const supabaseUrl = (supabase as unknown as { supabaseUrl?: string }).supabaseUrl;
+  const supabaseKey = (supabase as unknown as { supabaseKey?: string }).supabaseKey;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase client missing supabaseUrl/supabaseKey');
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/bist-prices`, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseKey,
+      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const text = await res.text();
+  let body: FunctionJson = null;
+  try {
+    body = text ? (JSON.parse(text) as FunctionJson) : null;
+  } catch {
+    body = { error: text };
+  }
+
+  return { status: res.status, body };
+}
+
 export async function fetchBist100Prices(): Promise<BistStock[]> {
-  const { data, error } = await supabase.functions.invoke('bist-prices');
+  const { status, body } = await invokeBistPricesRaw();
+
+  const data = body as any;
 
   // Handle rate limit specifically - don't retry
-  if (data?.error === 'rate_limited') {
+  if (status === 429 && data?.error === 'rate_limited') {
     console.warn('BIST API rate limited - using cached data');
     const cached = loadFromCache();
     if (cached.stocks.length > 0) {
       return cached.stocks;
     }
-    throw new RateLimitError(data.retryAfter || 60);
+    throw new RateLimitError(typeof data?.retryAfter === 'number' ? data.retryAfter : 60);
   }
 
-  if (error) {
-    console.error('BIST API fetch error:', error);
+  if (status < 200 || status >= 300) {
+    console.error('BIST API fetch error:', { status, body: data });
     // Return cached data on error
     const cached = loadFromCache();
     if (cached.stocks.length > 0) {
       console.log('Returning cached data due to API error');
       return cached.stocks;
     }
-    throw new Error(error.message || 'Failed to fetch BIST prices');
+    throw new Error((data && typeof data.error === 'string' && data.error) || `Failed to fetch BIST prices (${status})`);
   }
 
   if (!data) {
