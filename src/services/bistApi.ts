@@ -70,8 +70,26 @@ export function getCachedPrices(): { stocks: BistStock[]; timestamp: Date | null
   return loadFromCache();
 }
 
+// Custom error for rate limiting
+export class RateLimitError extends Error {
+  constructor(public retryAfter: number = 60) {
+    super('Rate limited');
+    this.name = 'RateLimitError';
+  }
+}
+
 export async function fetchBist100Prices(): Promise<BistStock[]> {
   const { data, error } = await supabase.functions.invoke('bist-prices');
+
+  // Handle rate limit specifically - don't retry
+  if (data?.error === 'rate_limited') {
+    console.warn('BIST API rate limited - using cached data');
+    const cached = loadFromCache();
+    if (cached.stocks.length > 0) {
+      return cached.stocks;
+    }
+    throw new RateLimitError(data.retryAfter || 60);
+  }
 
   if (error) {
     console.error('BIST API fetch error:', error);
