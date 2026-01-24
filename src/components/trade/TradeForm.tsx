@@ -1,0 +1,272 @@
+import { useState, useMemo } from 'react';
+import { X, TrendingUp, TrendingDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Stock, TradeType, TradeReason, TRADE_REASONS, Trade } from '@/types/trade';
+import { cn } from '@/lib/utils';
+
+interface TradeFormProps {
+  stock: Stock;
+  onClose: () => void;
+  onSave: (trade: Omit<Trade, 'id' | 'created_at' | 'current_price'>) => void;
+}
+
+export function TradeForm({ stock, onClose, onSave }: TradeFormProps) {
+  const [tradeType, setTradeType] = useState<TradeType | null>(null);
+  const [reasons, setReasons] = useState<TradeReason[]>([]);
+  const [entryPrice, setEntryPrice] = useState(stock.currentPrice.toString());
+  const [targetPrice, setTargetPrice] = useState('');
+  const [stopPrice, setStopPrice] = useState('');
+
+  const rrRatio = useMemo(() => {
+    const entry = parseFloat(entryPrice);
+    const target = parseFloat(targetPrice);
+    const stop = parseFloat(stopPrice);
+
+    if (isNaN(entry) || isNaN(target) || isNaN(stop)) return null;
+    if (entry === stop) return null;
+
+    const rr = (target - entry) / (entry - stop);
+    return Math.abs(rr);
+  }, [entryPrice, targetPrice, stopPrice]);
+
+  const toggleReason = (reasonId: TradeReason) => {
+    setReasons((prev) =>
+      prev.includes(reasonId)
+        ? prev.filter((r) => r !== reasonId)
+        : [...prev, reasonId]
+    );
+  };
+
+  const handleSave = () => {
+    if (!tradeType || !entryPrice || !targetPrice || !stopPrice) return;
+    if (reasons.length === 0) return;
+
+    onSave({
+      stock_id: stock.id,
+      stock_symbol: stock.symbol,
+      stock_name: stock.name,
+      trade_type: tradeType,
+      entry_price: parseFloat(entryPrice),
+      target_price: parseFloat(targetPrice),
+      stop_price: parseFloat(stopPrice),
+      rr_ratio: rrRatio || 0,
+      reasons,
+      status: 'active',
+    });
+  };
+
+  const isValid =
+    tradeType &&
+    entryPrice &&
+    targetPrice &&
+    stopPrice &&
+    reasons.length > 0 &&
+    rrRatio !== null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div className="relative w-full max-w-lg max-h-[90vh] bg-background-secondary border border-border rounded-t-2xl sm:rounded-2xl overflow-hidden animate-slide-in-right sm:animate-fade-in">
+        {/* Header */}
+        <div className="sticky top-0 bg-background-secondary border-b border-border p-4 z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <span className="text-xs font-bold text-primary">
+                  {stock.symbol.slice(0, 2)}
+                </span>
+              </div>
+              <div>
+                <div className="font-semibold text-foreground">{stock.symbol}</div>
+                <div className="text-sm text-muted-foreground">{stock.name}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-right">
+                <div className="font-mono text-foreground">
+                  ₺{stock.currentPrice.toFixed(2)}
+                </div>
+                <div
+                  className={cn(
+                    'flex items-center justify-end gap-1 text-sm',
+                    stock.change >= 0 ? 'text-profit' : 'text-loss'
+                  )}
+                >
+                  {stock.change >= 0 ? (
+                    <TrendingUp className="w-3 h-3" />
+                  ) : (
+                    <TrendingDown className="w-3 h-3" />
+                  )}
+                  <span>
+                    {stock.change >= 0 ? '+' : ''}
+                    {stock.changePercent.toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="overflow-y-auto max-h-[70vh] p-4 space-y-6">
+          {/* Trade Type Selection */}
+          <div>
+            <label className="text-sm font-medium text-muted-foreground mb-2 block">
+              İşlem Türü
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant={tradeType === 'buy' ? 'buy' : 'outline'}
+                className="h-12"
+                onClick={() => setTradeType('buy')}
+              >
+                <TrendingUp className="w-5 h-5 mr-2" />
+                AL
+              </Button>
+              <Button
+                variant={tradeType === 'sell' ? 'sell' : 'outline'}
+                className="h-12"
+                onClick={() => setTradeType('sell')}
+              >
+                <TrendingDown className="w-5 h-5 mr-2" />
+                SAT
+              </Button>
+            </div>
+          </div>
+
+          {/* Show rest only if trade type selected */}
+          {tradeType && (
+            <>
+              {/* Trade Reasons */}
+              <div>
+                <label className="text-sm font-medium text-muted-foreground mb-3 block">
+                  İşlem Sebepleri
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {TRADE_REASONS.map((reason) => (
+                    <label
+                      key={reason.id}
+                      className={cn(
+                        'flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all',
+                        reasons.includes(reason.id)
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-muted-foreground/50'
+                      )}
+                    >
+                      <Checkbox
+                        checked={reasons.includes(reason.id)}
+                        onCheckedChange={() => toggleReason(reason.id)}
+                      />
+                      <span className="text-sm text-foreground">{reason.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Price Inputs */}
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                    Alış Fiyatı (Entry)
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={entryPrice}
+                    onChange={(e) => setEntryPrice(e.target.value)}
+                    className="font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                    Hedef Fiyatı (Target)
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={targetPrice}
+                    onChange={(e) => setTargetPrice(e.target.value)}
+                    className="font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                    Stop Fiyatı (Stop)
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={stopPrice}
+                    onChange={(e) => setStopPrice(e.target.value)}
+                    className="font-mono"
+                  />
+                </div>
+
+                {/* RR Display */}
+                {rrRatio !== null && (
+                  <div
+                    className={cn(
+                      'p-4 rounded-lg border text-center',
+                      rrRatio >= 3
+                        ? 'border-profit/50 bg-profit/10'
+                        : 'border-loss/50 bg-loss/10'
+                    )}
+                  >
+                    <div className="text-sm text-muted-foreground mb-1">
+                      Risk/Reward Oranı
+                    </div>
+                    <div
+                      className={cn(
+                        'text-2xl font-bold font-mono',
+                        rrRatio >= 3 ? 'text-profit' : 'text-loss'
+                      )}
+                    >
+                      {rrRatio.toFixed(2)} RR
+                    </div>
+                    <div
+                      className={cn(
+                        'text-xs mt-1',
+                        rrRatio >= 3 ? 'text-profit' : 'text-loss'
+                      )}
+                    >
+                      {rrRatio >= 3 ? '✅ İyi oran' : '⚠️ Düşük oran'}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-background-secondary border-t border-border p-4 flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={onClose}>
+            İptal
+          </Button>
+          <Button
+            variant={tradeType === 'sell' ? 'sell' : 'buy'}
+            className="flex-1"
+            onClick={handleSave}
+            disabled={!isValid}
+          >
+            Kaydet
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
