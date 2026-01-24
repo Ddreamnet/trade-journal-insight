@@ -191,6 +191,129 @@
   .gradient-fade-right {
     background: linear-gradient(270deg, hsl(var(--background)) 0%, transparent 100%);
   }
+
+  /* Liquid Background for Main Pages */
+  .liquid-bg {
+    position: relative;
+    background: hsl(var(--background));
+  }
+
+  .liquid-bg::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    background: 
+      radial-gradient(ellipse 80% 50% at 20% 20%, hsla(217, 91%, 60%, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, hsla(142, 71%, 45%, 0.05) 0%, transparent 50%),
+      radial-gradient(ellipse 50% 60% at 50% 50%, hsla(0, 0%, 100%, 0.02) 0%, transparent 40%);
+    z-index: 0;
+  }
+
+  .liquid-bg > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Login Wow Background */
+  .login-bg {
+    position: relative;
+    background: 
+      linear-gradient(135deg, hsl(0 0% 4%) 0%, hsl(0 0% 8%) 50%, hsl(0 0% 5%) 100%);
+    overflow: hidden;
+  }
+
+  .login-bg::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: 
+      radial-gradient(circle at 30% 20%, hsla(217, 91%, 60%, 0.15) 0%, transparent 40%),
+      radial-gradient(circle at 70% 80%, hsla(280, 70%, 50%, 0.12) 0%, transparent 35%),
+      radial-gradient(circle at 80% 30%, hsla(142, 71%, 45%, 0.08) 0%, transparent 30%),
+      radial-gradient(circle at 20% 70%, hsla(217, 91%, 60%, 0.1) 0%, transparent 35%);
+    animation: login-aurora 20s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+
+  .login-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: 
+      radial-gradient(ellipse 100% 100% at 50% 0%, hsla(217, 91%, 60%, 0.1) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 60% at 50% 100%, hsla(280, 70%, 50%, 0.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  @keyframes login-aurora {
+    0% {
+      transform: rotate(0deg) scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: rotate(3deg) scale(1.05);
+      opacity: 0.9;
+    }
+    100% {
+      transform: rotate(-2deg) scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* Floating orbs for extra depth */
+  .login-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    pointer-events: none;
+    animation: float-orb 15s ease-in-out infinite;
+  }
+
+  .login-orb-1 {
+    width: 400px;
+    height: 400px;
+    top: 10%;
+    left: 10%;
+    background: hsla(217, 91%, 60%, 0.2);
+    animation-delay: 0s;
+  }
+
+  .login-orb-2 {
+    width: 300px;
+    height: 300px;
+    bottom: 20%;
+    right: 10%;
+    background: hsla(280, 70%, 50%, 0.15);
+    animation-delay: -5s;
+  }
+
+  .login-orb-3 {
+    width: 250px;
+    height: 250px;
+    top: 60%;
+    left: 60%;
+    background: hsla(142, 71%, 45%, 0.1);
+    animation-delay: -10s;
+  }
+
+  @keyframes float-orb {
+    0%, 100% {
+      transform: translate(0, 0) scale(1);
+    }
+    33% {
+      transform: translate(30px, -30px) scale(1.1);
+    }
+    66% {
+      transform: translate(-20px, 20px) scale(0.95);
+    }
+  }
 }
 
 @layer utilities {
