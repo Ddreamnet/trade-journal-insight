@@ -57,7 +57,7 @@ export function Header() {
             <img 
               src={logo} 
               alt="Trade Günlüğü" 
-              className="h-8 w-auto"
+              className="h-12 w-auto"
             />
           </Link>
 
