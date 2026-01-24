@@ -4,8 +4,40 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { WinRateChart } from '@/components/reports/WinRateChart';
 import { TimeRangeSelector } from '@/components/reports/TimeRangeSelector';
 import { BenchmarkSelector } from '@/components/reports/BenchmarkSelector';
-import { TimeRange, BENCHMARKS } from '@/types/trade';
+import { TimeRange, BENCHMARKS, Trade } from '@/types/trade';
 import { useTrades } from '@/hooks/useTrades';
+import { subDays, subMonths, subYears, parseISO, isAfter } from 'date-fns';
+
+// Filter trades by time range
+function filterTradesByTimeRange(trades: Trade[], timeRange: TimeRange): Trade[] {
+  const now = new Date();
+  let cutoffDate: Date;
+
+  switch (timeRange) {
+    case '1w':
+      cutoffDate = subDays(now, 7);
+      break;
+    case '1m':
+      cutoffDate = subMonths(now, 1);
+      break;
+    case '3m':
+      cutoffDate = subMonths(now, 3);
+      break;
+    case '6m':
+      cutoffDate = subMonths(now, 6);
+      break;
+    case '1y':
+      cutoffDate = subYears(now, 1);
+      break;
+    default:
+      cutoffDate = subMonths(now, 1);
+  }
+
+  return trades.filter((trade) => {
+    const closedAt = trade.closed_at ? parseISO(trade.closed_at) : null;
+    return closedAt && isAfter(closedAt, cutoffDate);
+  });
+}
 
 export default function Reports() {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('1m');
@@ -21,13 +53,18 @@ export default function Reports() {
     );
   };
 
-  // Calculate stats from real data
+  // Filter closed trades by selected time range
+  const filteredTrades = useMemo(() => {
+    return filterTradesByTimeRange(closedTrades, selectedTimeRange);
+  }, [closedTrades, selectedTimeRange]);
+
+  // Calculate stats from filtered data
   const stats = useMemo(() => {
-    const totalTrades = closedTrades.length;
-    const successfulTrades = closedTrades.filter((t) => t.is_successful).length;
+    const totalTrades = filteredTrades.length;
+    const successfulTrades = filteredTrades.filter((t) => t.is_successful).length;
     const winRate = totalTrades > 0 ? (successfulTrades / totalTrades) * 100 : 0;
     
-    const rrValues = closedTrades
+    const rrValues = filteredTrades
       .filter((t) => t.rr_ratio !== null)
       .map((t) => t.rr_ratio as number);
     const avgRR = rrValues.length > 0 
@@ -37,7 +74,7 @@ export default function Reports() {
     // Calculate best streak
     let bestStreak = 0;
     let currentStreak = 0;
-    for (const trade of closedTrades) {
+    for (const trade of filteredTrades) {
       if (trade.is_successful) {
         currentStreak++;
         bestStreak = Math.max(bestStreak, currentStreak);
@@ -52,7 +89,7 @@ export default function Reports() {
       avgRR: avgRR.toFixed(1),
       bestStreak,
     };
-  }, [closedTrades]);
+  }, [filteredTrades]);
 
   return (
     <MainLayout>
@@ -123,6 +160,7 @@ export default function Reports() {
           timeRange={selectedTimeRange}
           selectedBenchmarks={selectedBenchmarks}
           benchmarks={BENCHMARKS}
+          filteredTrades={filteredTrades}
         />
       </div>
 
