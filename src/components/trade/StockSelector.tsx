@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
-import { Search, TrendingUp, TrendingDown, X } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, X, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Stock } from '@/types/trade';
-import { MOCK_STOCKS } from '@/data/mockStocks';
+import { useBistPrices } from '@/hooks/useBistPrices';
 import { cn } from '@/lib/utils';
 
 interface StockSelectorProps {
@@ -14,16 +14,28 @@ interface StockSelectorProps {
 
 export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const { stocks, isLoading, isError } = useBistPrices();
 
+  // Convert BIST stocks to Stock type and filter
   const filteredStocks = useMemo(() => {
-    if (!searchQuery) return MOCK_STOCKS;
+    const convertedStocks: Stock[] = stocks.map((s, idx) => ({
+      id: `bist-${idx}-${s.symbol}`,
+      symbol: s.symbol,
+      name: s.name,
+      currentPrice: s.lastPrice,
+      change: s.change,
+      changePercent: s.changePercent,
+    }));
+
+    if (!searchQuery) return convertedStocks;
+    
     const query = searchQuery.toLowerCase();
-    return MOCK_STOCKS.filter(
+    return convertedStocks.filter(
       (stock) =>
         stock.symbol.toLowerCase().includes(query) ||
         stock.name.toLowerCase().includes(query)
     );
-  }, [searchQuery]);
+  }, [stocks, searchQuery]);
 
   const handleSelect = (stock: Stock) => {
     onSelect(stock);
@@ -65,7 +77,16 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
 
         {/* Stock List */}
         <div className="overflow-y-auto max-h-[60vh] p-2">
-          {filteredStocks.length === 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Hisseler yükleniyor...</span>
+            </div>
+          ) : isError && stocks.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Hisse verileri alınamadı. Lütfen tekrar deneyin.
+            </div>
+          ) : filteredStocks.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               Hisse bulunamadı
             </div>
