@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { X, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { NumberInput } from '@/components/ui/number-input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StockLogo } from '@/components/ui/stock-logo';
 import { Stock, TradeType, TradeReason, TRADE_REASONS } from '@/types/trade';
@@ -205,8 +205,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                   <label className="text-sm font-medium text-muted-foreground mb-2 block">
                     Alış Fiyatı (Entry)
                   </label>
-                  <Input
-                    type="number"
+                  <NumberInput
                     step="0.01"
                     min="0.01"
                     placeholder="0.00"
@@ -222,8 +221,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                   <label className="text-sm font-medium text-muted-foreground mb-2 block">
                     Hedef Fiyatı (Target)
                   </label>
-                  <Input
-                    type="number"
+                  <NumberInput
                     step="0.01"
                     min="0.01"
                     placeholder="0.00"
@@ -239,8 +237,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                   <label className="text-sm font-medium text-muted-foreground mb-2 block">
                     Stop Fiyatı (Stop)
                   </label>
-                  <Input
-                    type="number"
+                  <NumberInput
                     step="0.01"
                     min="0.01"
                     placeholder="0.00"
