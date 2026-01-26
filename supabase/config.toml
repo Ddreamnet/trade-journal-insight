@@ -1,4 +1,1 @@
 project_id = "pjqbpkblutbdpfzzwxmr"
-
-[functions.bist-prices]
-verify_jwt = false
