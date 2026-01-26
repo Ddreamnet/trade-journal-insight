@@ -1,3 +1,5 @@
+import { MarketAsset } from './market';
+
 export interface Stock {
   id: string;
   symbol: string;
@@ -61,7 +63,7 @@ export interface Trade {
 }
 
 export interface BenchmarkData {
-  id: string;
+  id: MarketAsset;
   name: string;
   symbol: string;
   color: string;
@@ -72,7 +74,7 @@ export const BENCHMARKS: BenchmarkData[] = [
   { id: 'usd', name: 'Dolar', symbol: 'USD', color: '#85BB65' },
   { id: 'eur', name: 'Euro', symbol: 'EUR', color: '#0052B4' },
   { id: 'bist100', name: 'BIST 100', symbol: 'XU100', color: '#E30A17' },
-  { id: 'nasdaq', name: 'NASDAQ 100', symbol: 'NDX', color: '#00AAFF' },
+  { id: 'nasdaq100', name: 'NASDAQ 100', symbol: 'NDX', color: '#00AAFF' },
 ];
 
 export type TimeRange = '1w' | '1m' | '3m' | '6m' | '1y';

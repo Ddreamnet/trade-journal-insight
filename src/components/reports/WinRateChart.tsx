@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import {
   LineChart,
   Line,
@@ -10,8 +10,11 @@ import {
   Legend,
 } from 'recharts';
 import { TimeRange, BenchmarkData, Trade } from '@/types/trade';
+import { MarketAsset, MarketSeriesPoint } from '@/types/market';
+import { useMarketSeries } from '@/contexts/MarketSeriesContext';
 import { format, parseISO, subDays, subMonths, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, startOfDay, startOfWeek, startOfMonth } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface WinRateChartProps {
   timeRange: TimeRange;
@@ -22,16 +25,17 @@ interface WinRateChartProps {
 
 interface ChartDataPoint {
   date: string;
+  rawDate: string;
   winRate: number | null;
-  gold: number;
-  usd: number;
-  eur: number;
-  bist100: number;
-  nasdaq: number;
+  gold?: number;
+  usd?: number;
+  eur?: number;
+  bist100?: number;
+  nasdaq100?: number;
 }
 
-// Generate chart data based on filtered trades
-function generateChartData(filteredTrades: Trade[], timeRange: TimeRange): ChartDataPoint[] {
+// Generate win rate data based on filtered trades
+function generateWinRateData(filteredTrades: Trade[], timeRange: TimeRange) {
   const now = new Date();
   let intervals: Date[];
   let groupBy: 'day' | 'week' | 'month';
@@ -87,25 +91,22 @@ function generateChartData(filteredTrades: Trade[], timeRange: TimeRange): Chart
   let cumulativeTotal = 0;
   let cumulativeSuccess = 0;
 
-  // Random benchmark values (mock - will be replaced with API later)
-  let gold = 100;
-  let usd = 100;
-  let eur = 100;
-  let bist100 = 100;
-  let nasdaq = 100;
-
   return intervals.map((interval) => {
     let key: string;
     let dateLabel: string;
+    let rawDate: string;
 
     if (groupBy === 'day') {
       key = format(interval, 'yyyy-MM-dd');
+      rawDate = key;
       dateLabel = format(interval, 'd MMM', { locale: tr });
     } else if (groupBy === 'week') {
       key = format(startOfWeek(interval, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      rawDate = key;
       dateLabel = format(interval, 'd MMM', { locale: tr });
     } else {
       key = format(interval, 'yyyy-MM');
+      rawDate = format(interval, 'yyyy-MM-dd');
       dateLabel = format(interval, 'MMM yy', { locale: tr });
     }
 
@@ -115,42 +116,92 @@ function generateChartData(filteredTrades: Trade[], timeRange: TimeRange): Chart
 
     const winRate = cumulativeTotal > 0 ? (cumulativeSuccess / cumulativeTotal) * 100 : null;
 
-    // Simulate benchmark changes (mock data)
-    gold += (Math.random() - 0.45) * 3;
-    usd += (Math.random() - 0.5) * 2;
-    eur += (Math.random() - 0.48) * 2;
-    bist100 += (Math.random() - 0.4) * 4;
-    nasdaq += (Math.random() - 0.42) * 3;
-
     return {
       date: dateLabel,
+      rawDate,
       winRate: winRate !== null ? parseFloat(winRate.toFixed(1)) : null,
-      gold: parseFloat(gold.toFixed(1)),
-      usd: parseFloat(usd.toFixed(1)),
-      eur: parseFloat(eur.toFixed(1)),
-      bist100: parseFloat(bist100.toFixed(1)),
-      nasdaq: parseFloat(nasdaq.toFixed(1)),
     };
   });
 }
 
+// Merge benchmark data into chart data
+function mergeBenchmarkData(
+  baseData: { date: string; rawDate: string; winRate: number | null }[],
+  benchmarkData: Record<MarketAsset, MarketSeriesPoint[]>
+): ChartDataPoint[] {
+  return baseData.map((point) => {
+    const result: ChartDataPoint = {
+      date: point.date,
+      rawDate: point.rawDate,
+      winRate: point.winRate,
+    };
+
+    // Match benchmark data by date
+    for (const [asset, points] of Object.entries(benchmarkData)) {
+      const matchingPoint = points.find((p) => p.date === point.rawDate);
+      if (matchingPoint) {
+        result[asset as MarketAsset] = matchingPoint.value;
+      }
+    }
+
+    return result;
+  });
+}
+
 export function WinRateChart({ timeRange, selectedBenchmarks, benchmarks, filteredTrades }: WinRateChartProps) {
-  const data = useMemo(() => generateChartData(filteredTrades, timeRange), [filteredTrades, timeRange]);
+  const { getSeriesData, fetchSeries, isLoading, filterByTimeRange, normalizeData } = useMarketSeries();
+
+  // Fetch data for selected benchmarks
+  useEffect(() => {
+    selectedBenchmarks.forEach((benchmarkId) => {
+      fetchSeries(benchmarkId as MarketAsset);
+    });
+  }, [selectedBenchmarks, fetchSeries]);
+
+  // Generate base win rate data
+  const baseData = useMemo(() => generateWinRateData(filteredTrades, timeRange), [filteredTrades, timeRange]);
+
+  // Get and process benchmark data
+  const benchmarkSeriesData = useMemo(() => {
+    const result: Record<MarketAsset, MarketSeriesPoint[]> = {} as Record<MarketAsset, MarketSeriesPoint[]>;
+
+    selectedBenchmarks.forEach((benchmarkId) => {
+      const seriesData = getSeriesData(benchmarkId as MarketAsset);
+      if (seriesData?.points) {
+        // Filter by time range and normalize
+        const filtered = filterByTimeRange(seriesData.points, timeRange);
+        const normalized = normalizeData(filtered);
+        result[benchmarkId as MarketAsset] = normalized;
+      }
+    });
+
+    return result;
+  }, [selectedBenchmarks, getSeriesData, timeRange, filterByTimeRange, normalizeData]);
+
+  // Merge all data
+  const chartData = useMemo(() => mergeBenchmarkData(baseData, benchmarkSeriesData), [baseData, benchmarkSeriesData]);
+
+  // Check if any benchmark is loading
+  const anyLoading = selectedBenchmarks.some((id) => isLoading(id as MarketAsset));
+
+  // Check if there's any winrate data
+  const hasWinRateData = chartData.some((d) => d.winRate !== null);
 
   const benchmarkKeyMap: { [key: string]: keyof ChartDataPoint } = {
     gold: 'gold',
     usd: 'usd',
     eur: 'eur',
     bist100: 'bist100',
-    nasdaq: 'nasdaq',
+    nasdaq100: 'nasdaq100',
   };
-
-  // Check if there's any winrate data
-  const hasWinRateData = data.some((d) => d.winRate !== null);
 
   return (
     <div className="w-full h-[300px] sm:h-[400px]">
-      {!hasWinRateData && filteredTrades.length === 0 ? (
+      {anyLoading && selectedBenchmarks.length > 0 ? (
+        <div className="w-full h-full flex items-center justify-center">
+          <Skeleton className="w-full h-full" />
+        </div>
+      ) : !hasWinRateData && filteredTrades.length === 0 ? (
         <div className="w-full h-full flex items-center justify-center">
           <p className="text-muted-foreground text-sm">
             Bu dönemde kapatılmış işlem bulunmuyor
@@ -158,7 +209,7 @@ export function WinRateChart({ timeRange, selectedBenchmarks, benchmarks, filter
         </div>
       ) : (
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+          <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               dataKey="date"
@@ -180,8 +231,9 @@ export function WinRateChart({ timeRange, selectedBenchmarks, benchmarks, filter
               }}
               labelStyle={{ color: 'hsl(var(--foreground))' }}
               formatter={(value: number | null, name: string) => {
-                if (value === null) return ['Veri yok', name];
-                return [name === 'Win Rate %' ? `%${value}` : value, name];
+                if (value === null || value === undefined) return ['Veri yok', name];
+                if (name === 'Win Rate %') return [`%${value}`, name];
+                return [value.toFixed(2), name];
               }}
             />
             <Legend />
@@ -210,6 +262,7 @@ export function WinRateChart({ timeRange, selectedBenchmarks, benchmarks, filter
                   strokeWidth={2}
                   strokeDasharray="5 5"
                   dot={false}
+                  connectNulls
                 />
               );
             })}

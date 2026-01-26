@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { MarketDataProvider } from '@/contexts/MarketDataContext';
+import { MarketSeriesProvider } from '@/contexts/MarketSeriesContext';
 import Index from './pages/Index';
 import Login from './pages/Login';
 import Reports from './pages/Reports';
@@ -85,11 +86,13 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <MarketDataProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+          <MarketSeriesProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </MarketSeriesProvider>
         </MarketDataProvider>
       </TooltipProvider>
     </QueryClientProvider>

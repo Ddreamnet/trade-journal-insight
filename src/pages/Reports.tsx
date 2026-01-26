@@ -172,8 +172,8 @@ export default function Reports() {
           onToggle={toggleBenchmark}
         />
         <p className="text-xs text-muted-foreground mt-3">
-          💡 Karşılaştırma verisi sonradan API ile güncellenecektir. Şu an örnek
-          veri gösterilmektedir.
+          💡 Benchmark verileri Stooq'tan günlük olarak çekilmektedir. Tüm değerler
+          100 bazından normalize edilmiştir.
         </p>
       </div>
     </MainLayout>
