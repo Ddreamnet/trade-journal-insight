@@ -2,17 +2,19 @@ import { useState, useMemo } from 'react';
 import { X, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Trade } from '@/types/trade';
 import { cn } from '@/lib/utils';
 
 interface CloseTradeModalProps {
   trade: Trade;
   onClose: () => void;
-  onConfirm: (exitPrice: number) => void;
+  onConfirm: (exitPrice: number, closingNote?: string) => void;
 }
 
 export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalProps) {
   const [exitPrice, setExitPrice] = useState('');
+  const [closingNote, setClosingNote] = useState('');
 
   const { progressPercent, result } = useMemo(() => {
     const exit = parseFloat(exitPrice);
@@ -30,7 +32,7 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
 
   const handleConfirm = () => {
     if (progressPercent === null) return;
-    onConfirm(parseFloat(exitPrice));
+    onConfirm(parseFloat(exitPrice), closingNote.trim() || undefined);
   };
 
   return (
@@ -93,6 +95,20 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
               onChange={(e) => setExitPrice(e.target.value)}
               className="font-mono text-lg h-12"
               autoFocus
+            />
+          </div>
+
+          {/* Closing Note */}
+          <div>
+            <label className="text-sm font-medium text-muted-foreground mb-2 block">
+              Not (Opsiyonel)
+            </label>
+            <Textarea
+              placeholder="İşlem hakkında notlarınız..."
+              value={closingNote}
+              onChange={(e) => setClosingNote(e.target.value)}
+              className="resize-none h-20"
+              maxLength={500}
             />
           </div>
 

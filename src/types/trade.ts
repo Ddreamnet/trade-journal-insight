@@ -60,6 +60,7 @@ export interface Trade {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  closing_note: string | null;
 }
 
 export interface BenchmarkData {

@@ -31,6 +31,7 @@ export interface TradeRow {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  closing_note: string | null;
 }
 
 export function useTrades() {
@@ -89,12 +90,13 @@ export function useTrades() {
   });
 
   const closeTrade = useMutation({
-    mutationFn: async ({ tradeId, exitPrice }: { tradeId: string; exitPrice: number }) => {
+    mutationFn: async ({ tradeId, exitPrice, closingNote }: { tradeId: string; exitPrice: number; closingNote?: string }) => {
       const { data, error } = await supabase
         .from('trades')
         .update({
           status: 'closed' as const,
           exit_price: exitPrice,
+          closing_note: closingNote || null,
         })
         .eq('id', tradeId)
         .select()

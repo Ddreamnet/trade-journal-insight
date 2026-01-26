@@ -1,11 +1,16 @@
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, X, StickyNote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Trade, TRADE_REASONS } from '@/types/trade';
 import { CloseTradeModal } from './CloseTradeModal';
 import { useMarketData } from '@/contexts/MarketDataContext';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import {
   Table,
   TableBody,
@@ -18,7 +23,7 @@ import {
 interface TradeListProps {
   trades: Trade[];
   type: 'active' | 'closed';
-  onCloseTrade?: (tradeId: string, exitPrice: number) => void;
+  onCloseTrade?: (tradeId: string, exitPrice: number, closingNote?: string) => void;
   highlightedTradeId?: string | null;
   isLoading?: boolean;
 }
@@ -27,9 +32,9 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
   const [closingTrade, setClosingTrade] = useState<Trade | null>(null);
   const { getStockBySymbol } = useMarketData();
 
-  const handleCloseConfirm = (exitPrice: number) => {
+  const handleCloseConfirm = (exitPrice: number, closingNote?: string) => {
     if (closingTrade && onCloseTrade) {
-      onCloseTrade(closingTrade.id, exitPrice);
+      onCloseTrade(closingTrade.id, exitPrice, closingNote);
       setClosingTrade(null);
     }
   };
@@ -223,14 +228,29 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
                       </span>
                     </TableCell>
                     <TableCell className="text-center">
-                      <span
-                        className={cn(
-                          'text-xs font-semibold px-2 py-1 rounded-full',
-                          trade.is_successful ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
+                      <div className="flex items-center justify-center gap-2">
+                        <span
+                          className={cn(
+                            'text-xs font-semibold px-2 py-1 rounded-full',
+                            trade.is_successful ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
+                          )}
+                        >
+                          {trade.is_successful ? '✅ Başarılı' : '❌ Başarısız'}
+                        </span>
+                        {trade.closing_note && (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button className="p-1 rounded hover:bg-secondary transition-colors">
+                                <StickyNote className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-64 p-3" side="left">
+                              <div className="text-xs text-muted-foreground mb-1 font-medium">İşlem Notu</div>
+                              <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
+                            </PopoverContent>
+                          </Popover>
                         )}
-                      >
-                        {trade.is_successful ? '✅ Başarılı' : '❌ Başarısız'}
-                      </span>
+                      </div>
                     </TableCell>
                   </>
                 )}
@@ -352,18 +372,33 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
                 </div>
                 <div
                   className={cn(
-                    'text-center p-1.5 rounded-lg',
+                    'text-center p-1.5 rounded-lg relative',
                     trade.is_successful ? 'bg-profit/20' : 'bg-loss/20'
                   )}
                 >
                   <div className="text-[10px] text-muted-foreground uppercase">Sonuç</div>
-                  <div
-                    className={cn(
-                      'text-xs font-semibold',
-                      trade.is_successful ? 'text-profit' : 'text-loss'
+                  <div className="flex items-center justify-center gap-1">
+                    <span
+                      className={cn(
+                        'text-xs font-semibold',
+                        trade.is_successful ? 'text-profit' : 'text-loss'
+                      )}
+                    >
+                      {trade.is_successful ? '✅ Başarılı' : '❌ Başarısız'}
+                    </span>
+                    {trade.closing_note && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="p-0.5 rounded hover:bg-secondary/50 transition-colors">
+                            <StickyNote className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 p-3" side="top">
+                          <div className="text-xs text-muted-foreground mb-1 font-medium">İşlem Notu</div>
+                          <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
+                        </PopoverContent>
+                      </Popover>
                     )}
-                  >
-                    {trade.is_successful ? '✅ Başarılı' : '❌ Başarısız'}
                   </div>
                 </div>
               </div>
