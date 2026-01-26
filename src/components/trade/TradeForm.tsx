@@ -3,11 +3,12 @@ import { X, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { StockLogo } from '@/components/ui/stock-logo';
 import { Stock, TradeType, TradeReason, TRADE_REASONS } from '@/types/trade';
 import { cn } from '@/lib/utils';
 
 interface TradeFormProps {
-  stock: Stock;
+  stock: Stock & { logoUrl?: string };
   onClose: () => void;
   onSave: (trade: {
     stock_symbol: string;
@@ -103,11 +104,11 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
         <div className="sticky top-0 bg-background-secondary border-b border-border p-4 z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <span className="text-xs font-bold text-primary">
-                  {stock.symbol.slice(0, 2)}
-                </span>
-              </div>
+              <StockLogo 
+                symbol={stock.symbol} 
+                logoUrl={stock.logoUrl}
+                size="md"
+              />
               <div>
                 <div className="font-semibold text-foreground">{stock.symbol}</div>
                 <div className="text-sm text-muted-foreground">{stock.name}</div>

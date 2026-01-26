@@ -11,12 +11,12 @@ import { useTrades } from '@/hooks/useTrades';
 
 export default function Index() {
   const [isStockSelectorOpen, setIsStockSelectorOpen] = useState(false);
-  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
+  const [selectedStock, setSelectedStock] = useState<(Stock & { logoUrl?: string }) | null>(null);
   const [highlightedTradeId, setHighlightedTradeId] = useState<string | null>(null);
 
   const { activeTrades, closedTrades, createTrade, closeTrade, isLoading } = useTrades();
 
-  const handleStockSelect = (stock: Stock) => {
+  const handleStockSelect = (stock: Stock & { logoUrl?: string }) => {
     setSelectedStock(stock);
   };
 
