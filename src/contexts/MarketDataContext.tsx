@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { MarketStock, MarketDataResponse } from '@/types/market';
-import { MOCK_STOCKS } from '@/data/mockStocks';
+import { supabase } from '@/integrations/supabase/client';
 
 interface MarketDataContextType {
   stocks: MarketStock[];
@@ -14,22 +14,8 @@ interface MarketDataContextType {
 
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
 
-const API_ENDPOINT = '/api/bist100.php';
 const POLLING_INTERVAL = 60000; // 60 saniye
 const CACHE_KEY = 'bist100_cache';
-
-// Mock verileri MarketStock formatına dönüştür
-const mockToMarketStock = (): MarketStock[] => {
-  return MOCK_STOCKS.map(stock => ({
-    symbol: stock.symbol,
-    last: stock.currentPrice,
-    low: stock.currentPrice * 0.98,
-    high: stock.currentPrice * 1.02,
-    chg: stock.change,
-    chgPct: stock.changePercent,
-    time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
-  }));
-};
 
 // LocalStorage'dan cache oku
 const getCachedData = (): { stocks: MarketStock[]; updatedAt: string } | null => {
@@ -55,15 +41,15 @@ const setCachedData = (stocks: MarketStock[], updatedAt: string) => {
 
 export function MarketDataProvider({ children }: { children: React.ReactNode }) {
   const [stocks, setStocks] = useState<MarketStock[]>(() => {
-    // İlk yüklemede cache varsa kullan, yoksa mock
+    // İlk yüklemede cache varsa kullan
     const cached = getCachedData();
-    return cached?.stocks || mockToMarketStock();
+    return cached?.stocks || [];
   });
   const [lastUpdated, setLastUpdated] = useState<string | null>(() => {
     const cached = getCachedData();
     return cached?.updatedAt || null;
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFallback, setIsFallback] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -73,23 +59,23 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
     setError(null);
 
     try {
-      const response = await fetch(API_ENDPOINT);
+      const { data, error: fnError } = await supabase.functions.invoke('bist100');
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (fnError) {
+        throw new Error(fnError.message);
       }
 
-      const data: MarketDataResponse = await response.json();
+      const response = data as MarketDataResponse;
 
-      if (data.error) {
-        throw new Error(data.error);
+      if (response.error) {
+        throw new Error(response.error);
       }
 
-      if (data.items && data.items.length > 0) {
-        setStocks(data.items);
-        setLastUpdated(data.updatedAt);
+      if (response.items && response.items.length > 0) {
+        setStocks(response.items);
+        setLastUpdated(response.updatedAt);
         setIsFallback(false);
-        setCachedData(data.items, data.updatedAt);
+        setCachedData(response.items, response.updatedAt);
       }
     } catch (err) {
       console.error('Market data fetch error:', err);
@@ -100,10 +86,6 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
       if (cached && cached.stocks.length > 0) {
         setStocks(cached.stocks);
         setLastUpdated(cached.updatedAt);
-        setIsFallback(true);
-      } else {
-        // Cache de yoksa mock kullan
-        setStocks(mockToMarketStock());
         setIsFallback(true);
       }
     } finally {
