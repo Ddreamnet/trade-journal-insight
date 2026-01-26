@@ -6,12 +6,13 @@ const corsHeaders = {
 };
 
 // Asset to Stooq symbol mapping
+// Note: Index symbols use ^ prefix which must be URL encoded as %5E
 const ASSET_SYMBOLS: Record<string, string> = {
-  gold: "xautry.pl",
+  gold: "xautry",
   usd: "usdtry",
   eur: "eurtry",
-  bist100: "xu100.pl",
-  nasdaq100: "ndx.us",
+  bist100: "%5Exu100",  // ^xu100 URL encoded
+  nasdaq100: "%5Endx",   // ^ndx URL encoded
 };
 
 // In-memory cache (30 minutes)

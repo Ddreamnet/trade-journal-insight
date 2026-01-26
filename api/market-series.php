@@ -15,12 +15,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Asset to Stooq symbol mapping
+// Note: Index symbols use ^ prefix which must be URL encoded
 $ASSET_SYMBOLS = [
-    'gold' => 'xautry.pl',
+    'gold' => 'xautry',
     'usd' => 'usdtry',
     'eur' => 'eurtry',
-    'bist100' => 'xu100.pl',
-    'nasdaq100' => 'ndx.us',
+    'bist100' => '%5Exu100',   // ^xu100 URL encoded
+    'nasdaq100' => '%5Endx',    // ^ndx URL encoded
 ];
 
 $CACHE_DIR = __DIR__ . '/cache';
