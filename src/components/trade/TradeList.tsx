@@ -235,7 +235,7 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
                             trade.is_successful ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
                           )}
                         >
-                          {trade.is_successful ? '✅ Başarılı' : '❌ Başarısız'}
+                        {trade.is_successful ? 'Başarılı' : 'Başarısız'}
                         </span>
                         {trade.closing_note && (
                           <Popover>
