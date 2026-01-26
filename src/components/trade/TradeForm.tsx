@@ -235,7 +235,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                     <p className="text-xs text-loss mt-1">⚠️ Fiyat sıfırdan büyük olmalı</p>
                   )}
                 </div>
-                <div className="mb-4">
+                <div className="mb-6">
                   <label className="text-sm font-medium text-muted-foreground mb-2 block">
                     Stop Fiyatı (Stop)
                   </label>
