@@ -17,6 +17,7 @@ export type Database = {
       trades: {
         Row: {
           closed_at: string | null
+          closing_note: string | null
           created_at: string
           entry_price: number
           exit_price: number | null
@@ -36,6 +37,7 @@ export type Database = {
         }
         Insert: {
           closed_at?: string | null
+          closing_note?: string | null
           created_at?: string
           entry_price: number
           exit_price?: number | null
@@ -55,6 +57,7 @@ export type Database = {
         }
         Update: {
           closed_at?: string | null
+          closing_note?: string | null
           created_at?: string
           entry_price?: number
           exit_price?: number | null
