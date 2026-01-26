@@ -235,7 +235,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                     <p className="text-xs text-loss mt-1">⚠️ Fiyat sıfırdan büyük olmalı</p>
                   )}
                 </div>
-                <div className="mb-6">
+                <div>
                   <label className="text-sm font-medium text-muted-foreground mb-2 block">
                     Stop Fiyatı (Stop)
                   </label>
@@ -255,8 +255,10 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                     <p className="text-xs text-loss mt-1">⚠️ Stop fiyatı Entry fiyatından farklı olmalı</p>
                   )}
                 </div>
+              </div>
 
-                {/* RR Display */}
+              {/* RR Display */}
+              <div className="pt-2">
                 {rrRatio !== null && (
                   <div
                     className={cn(
