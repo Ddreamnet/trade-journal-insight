@@ -3,7 +3,7 @@ import { Search, TrendingUp, TrendingDown, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Stock } from '@/types/trade';
-import { MOCK_STOCKS } from '@/data/mockStocks';
+import { useMarketData } from '@/contexts/MarketDataContext';
 import { cn } from '@/lib/utils';
 
 interface StockSelectorProps {
@@ -14,18 +14,28 @@ interface StockSelectorProps {
 
 export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const { stocks } = useMarketData();
 
-  // Filter mock stocks based on search query
+  // Convert MarketStock to Stock format and filter
   const filteredStocks = useMemo(() => {
-    if (!searchQuery) return MOCK_STOCKS;
+    const stockList: Stock[] = stocks.map((s, index) => ({
+      id: `${index + 1}`,
+      symbol: s.symbol,
+      name: s.symbol, // API'den isim gelmiyorsa sembol kullan
+      currentPrice: s.last,
+      change: s.chg,
+      changePercent: s.chgPct
+    }));
+
+    if (!searchQuery) return stockList;
     
     const query = searchQuery.toLowerCase();
-    return MOCK_STOCKS.filter(
+    return stockList.filter(
       (stock) =>
         stock.symbol.toLowerCase().includes(query) ||
         stock.name.toLowerCase().includes(query)
     );
-  }, [searchQuery]);
+  }, [stocks, searchQuery]);
 
   const handleSelect = (stock: Stock) => {
     onSelect(stock);
