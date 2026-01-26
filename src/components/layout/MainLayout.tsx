@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Header } from './Header';
 import { TickerTape } from './TickerTape';
+import { MarketDataStatus } from './MarketDataStatus';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -12,7 +13,10 @@ export function MainLayout({ children }: MainLayoutProps) {
       <Header />
       <div className="pt-16">
         <TickerTape />
-        <main className="container mx-auto px-4 py-6">
+        <div className="container mx-auto px-4 pt-2 flex justify-end">
+          <MarketDataStatus />
+        </div>
+        <main className="container mx-auto px-4 py-4">
           {children}
         </main>
       </div>

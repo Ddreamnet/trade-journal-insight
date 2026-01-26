@@ -1,10 +1,12 @@
 import { TrendingUp, TrendingDown } from 'lucide-react';
-import { MOCK_STOCKS } from '@/data/mockStocks';
+import { useMarketData } from '@/contexts/MarketDataContext';
 import { cn } from '@/lib/utils';
 
 export function TickerTape() {
-  // Use mock data - duplicate for seamless loop
-  const stocks = [...MOCK_STOCKS, ...MOCK_STOCKS];
+  const { stocks } = useMarketData();
+  
+  // Duplicate for seamless loop
+  const displayStocks = [...stocks, ...stocks];
 
   return (
     <div className="w-full bg-background-secondary border-b border-border overflow-hidden">
@@ -15,7 +17,7 @@ export function TickerTape() {
         
         {/* Ticker content */}
         <div className="ticker-tape flex items-center py-2 whitespace-nowrap">
-          {stocks.map((stock, index) => (
+          {displayStocks.map((stock, index) => (
             <div
               key={`${stock.symbol}-${index}`}
               className="flex items-center gap-2 px-4 border-r border-border/50 last:border-r-0"
@@ -24,22 +26,22 @@ export function TickerTape() {
                 {stock.symbol}
               </span>
               <span className="font-mono text-sm text-foreground">
-                ₺{stock.currentPrice.toFixed(2)}
+                ₺{stock.last.toFixed(2)}
               </span>
               <div
                 className={cn(
                   'flex items-center gap-1 text-xs font-medium',
-                  stock.change >= 0 ? 'text-profit' : 'text-loss'
+                  stock.chgPct >= 0 ? 'text-profit' : 'text-loss'
                 )}
               >
-                {stock.change >= 0 ? (
+                {stock.chgPct >= 0 ? (
                   <TrendingUp className="w-3 h-3" />
                 ) : (
                   <TrendingDown className="w-3 h-3" />
                 )}
                 <span>
-                  {stock.change >= 0 ? '+' : ''}
-                  {stock.changePercent.toFixed(2)}%
+                  {stock.chgPct >= 0 ? '+' : ''}
+                  {stock.chgPct.toFixed(2)}%
                 </span>
               </div>
             </div>
