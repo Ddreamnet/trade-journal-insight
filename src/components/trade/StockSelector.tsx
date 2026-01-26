@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 interface StockSelectorProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (stock: Stock) => void;
+  onSelect: (stock: Stock & { logoUrl?: string }) => void;
 }
 
 export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps) {
