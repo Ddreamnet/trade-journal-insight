@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Search, TrendingUp, TrendingDown, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { StockLogo } from '@/components/ui/stock-logo';
 import { Stock } from '@/types/trade';
 import { useMarketData } from '@/contexts/MarketDataContext';
 import { cn } from '@/lib/utils';
@@ -18,13 +19,14 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
 
   // Convert MarketStock to Stock format and filter
   const filteredStocks = useMemo(() => {
-    const stockList: Stock[] = stocks.map((s, index) => ({
+    const stockList: (Stock & { logoUrl?: string })[] = stocks.map((s, index) => ({
       id: `${index + 1}`,
       symbol: s.symbol,
       name: s.symbol, // API'den isim gelmiyorsa sembol kullan
       currentPrice: s.last,
       change: s.chg,
-      changePercent: s.chgPct
+      changePercent: s.chgPct,
+      logoUrl: s.logoUrl
     }));
 
     if (!searchQuery) return stockList;
@@ -90,11 +92,11 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
                   className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-secondary transition-colors text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <span className="text-xs font-bold text-primary">
-                        {stock.symbol.slice(0, 2)}
-                      </span>
-                    </div>
+                    <StockLogo 
+                      symbol={stock.symbol} 
+                      logoUrl={stock.logoUrl}
+                      size="md"
+                    />
                     <div>
                       <div className="font-semibold text-foreground">
                         {stock.symbol}

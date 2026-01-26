@@ -70,6 +70,18 @@ async function fetchBistData() {
           .trim();
       };
       
+      // Extract logo URL from first cell (look for img src)
+      const firstCell = cellMatches[0];
+      const logoMatch = firstCell.match(/<img[^>]*src="([^"]+)"[^>]*>/i);
+      let logoUrl = logoMatch ? logoMatch[1] : null;
+      
+      // Make sure logo URL is absolute
+      if (logoUrl && !logoUrl.startsWith('http')) {
+        logoUrl = logoUrl.startsWith('/') 
+          ? `https://www.hangikredi.com${logoUrl}` 
+          : `https://www.hangikredi.com/${logoUrl}`;
+      }
+      
       // First cell contains symbol and time
       const firstCellText = getText(cellMatches[0]);
       
@@ -100,7 +112,8 @@ async function fetchBistData() {
           high: parsePrice(highText),
           chg: parsePrice(changeText),
           chgPct: parsePercent(changePctText),
-          time: time
+          time: time,
+          logoUrl: logoUrl
         });
       }
     }

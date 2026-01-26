@@ -6,6 +6,7 @@ export interface MarketStock {
   chg: number;
   chgPct: number;
   time: string;
+  logoUrl?: string;
 }
 
 export interface MarketDataResponse {
