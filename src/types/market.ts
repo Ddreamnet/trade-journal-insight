@@ -17,17 +17,18 @@ export interface MarketDataResponse {
 }
 
 // Market Series Types for Historical Data
-export type MarketAsset = 'gold' | 'usd' | 'eur' | 'bist100' | 'nasdaq100';
+export type MarketAsset = 'gold' | 'usd' | 'eur' | 'bist100' | 'nasdaq100' | 'inflation_tr';
 
 export interface MarketSeriesPoint {
   date: string; // YYYY-MM-DD
-  value: number; // Close price
+  value: number; // Close price or percentage
 }
 
 export interface MarketSeriesData {
   asset: MarketAsset;
   updatedAt: string;
   points: MarketSeriesPoint[];
+  source?: string;
 }
 
 export const ASSET_LABELS: Record<MarketAsset, string> = {
@@ -36,4 +37,5 @@ export const ASSET_LABELS: Record<MarketAsset, string> = {
   eur: 'Euro',
   bist100: 'BIST 100',
   nasdaq100: 'NASDAQ 100',
+  inflation_tr: 'Enflasyon (TR)',
 };

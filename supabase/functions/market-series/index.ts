@@ -5,9 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Asset to Stooq symbol mapping
-// Note: Index symbols use ^ prefix which must be URL encoded as %5E
-const ASSET_SYMBOLS: Record<string, string> = {
+// Asset to data source mapping
+const STOOQ_SYMBOLS: Record<string, string> = {
   gold: "xautry",
   usd: "usdtry",
   eur: "eurtry",
@@ -15,9 +14,10 @@ const ASSET_SYMBOLS: Record<string, string> = {
   nasdaq100: "%5Endx",   // ^ndx URL encoded
 };
 
-// In-memory cache (30 minutes)
+// In-memory cache
 const cache = new Map<string, { data: unknown; timestamp: number }>();
-const CACHE_DURATION_MS = 30 * 60 * 1000;
+const STOOQ_CACHE_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+const EVDS_CACHE_DURATION_MS = 12 * 60 * 60 * 1000; // 12 hours (inflation updates monthly)
 
 interface SeriesPoint {
   date: string;
@@ -25,9 +25,9 @@ interface SeriesPoint {
 }
 
 async function fetchStooqData(asset: string): Promise<SeriesPoint[]> {
-  const symbol = ASSET_SYMBOLS[asset];
+  const symbol = STOOQ_SYMBOLS[asset];
   if (!symbol) {
-    throw new Error(`Unknown asset: ${asset}`);
+    throw new Error(`Unknown Stooq asset: ${asset}`);
   }
 
   const url = `https://stooq.com/q/d/l/?s=${symbol}&i=d`;
@@ -65,8 +65,72 @@ async function fetchStooqData(asset: string): Promise<SeriesPoint[]> {
   // Sort by date ascending
   points.sort((a, b) => a.date.localeCompare(b.date));
 
-  // Keep last 365 days
-  return points.slice(-365);
+  // Keep last 3 years (~1095 days)
+  return points.slice(-1095);
+}
+
+async function fetchInflationData(): Promise<SeriesPoint[]> {
+  const apiKey = Deno.env.get("EVDS_API_KEY");
+  if (!apiKey) {
+    throw new Error("EVDS_API_KEY not configured");
+  }
+
+  // TÜFE Yıllık % Değişim (TP.FG.J0)
+  // Get last 3 years of monthly data
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setFullYear(startDate.getFullYear() - 3);
+
+  const startStr = `${String(startDate.getDate()).padStart(2, '0')}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${startDate.getFullYear()}`;
+  const endStr = `${String(endDate.getDate()).padStart(2, '0')}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${endDate.getFullYear()}`;
+
+  // EVDS Series: TP.FG.J0 = TÜFE Yıllık % Değişim
+  const url = `https://evds2.tcmb.gov.tr/service/evds/series=TP.FG.J0&startDate=${startStr}&endDate=${endStr}&type=json&key=${apiKey}`;
+  
+  console.log(`Fetching EVDS inflation data: startDate=${startStr}, endDate=${endStr}`);
+
+  const response = await fetch(url, {
+    headers: {
+      "Accept": "application/json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    console.error("EVDS response error:", text);
+    throw new Error(`EVDS fetch failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  
+  if (!data.items || !Array.isArray(data.items)) {
+    console.error("EVDS unexpected response:", JSON.stringify(data));
+    throw new Error("EVDS returned unexpected format");
+  }
+
+  const points: SeriesPoint[] = [];
+
+  for (const item of data.items) {
+    // EVDS returns date as "DD-MM-YYYY" and value in "TP_FG_J0" field
+    const dateStr = item.Tarih; // "DD-MM-YYYY"
+    const value = parseFloat(item.TP_FG_J0);
+
+    if (dateStr && !isNaN(value)) {
+      // Convert DD-MM-YYYY to YYYY-MM-DD
+      const parts = dateStr.split("-");
+      if (parts.length === 3) {
+        const isoDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        points.push({ date: isoDate, value });
+      }
+    }
+  }
+
+  // Sort by date ascending
+  points.sort((a, b) => a.date.localeCompare(b.date));
+
+  console.log(`EVDS returned ${points.length} inflation data points`);
+  return points;
 }
 
 serve(async (req: Request) => {
@@ -79,10 +143,12 @@ serve(async (req: Request) => {
     const url = new URL(req.url);
     const asset = url.searchParams.get("asset");
 
-    if (!asset || !ASSET_SYMBOLS[asset]) {
+    const validAssets = [...Object.keys(STOOQ_SYMBOLS), "inflation_tr"];
+
+    if (!asset || !validAssets.includes(asset)) {
       return new Response(
         JSON.stringify({
-          error: "Invalid asset. Valid: gold, usd, eur, bist100, nasdaq100",
+          error: "Invalid asset. Valid: gold, usd, eur, bist100, nasdaq100, inflation_tr",
         }),
         {
           status: 400,
@@ -91,11 +157,14 @@ serve(async (req: Request) => {
       );
     }
 
+    // Determine cache duration based on asset type
+    const cacheDuration = asset === "inflation_tr" ? EVDS_CACHE_DURATION_MS : STOOQ_CACHE_DURATION_MS;
+
     // Check cache
     const cached = cache.get(asset);
     const now = Date.now();
 
-    if (cached && now - cached.timestamp < CACHE_DURATION_MS) {
+    if (cached && now - cached.timestamp < cacheDuration) {
       console.log(`Serving ${asset} from cache`);
       return new Response(JSON.stringify(cached.data), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -104,12 +173,22 @@ serve(async (req: Request) => {
 
     // Fetch fresh data
     console.log(`Fetching fresh data for ${asset}`);
-    const points = await fetchStooqData(asset);
+    let points: SeriesPoint[];
+    let source: string;
+
+    if (asset === "inflation_tr") {
+      points = await fetchInflationData();
+      source = "TCMB EVDS";
+    } else {
+      points = await fetchStooqData(asset);
+      source = "Stooq";
+    }
 
     const responseData = {
       asset,
       updatedAt: new Date().toISOString(),
       points,
+      source,
     };
 
     // Update cache
