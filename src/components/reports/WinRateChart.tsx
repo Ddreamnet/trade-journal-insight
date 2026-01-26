@@ -32,6 +32,7 @@ interface ChartDataPoint {
   eur?: number;
   bist100?: number;
   nasdaq100?: number;
+  inflation_tr?: number;
 }
 
 // Generate win rate data based on filtered trades
@@ -193,6 +194,7 @@ export function WinRateChart({ timeRange, selectedBenchmarks, benchmarks, filter
     eur: 'eur',
     bist100: 'bist100',
     nasdaq100: 'nasdaq100',
+    inflation_tr: 'inflation_tr',
   };
 
   return (

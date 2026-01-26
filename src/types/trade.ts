@@ -76,9 +76,10 @@ export const BENCHMARKS: BenchmarkData[] = [
   { id: 'eur', name: 'Euro', symbol: 'EUR', color: '#0052B4' },
   { id: 'bist100', name: 'BIST 100', symbol: 'XU100', color: '#E30A17' },
   { id: 'nasdaq100', name: 'NASDAQ 100', symbol: 'NDX', color: '#00AAFF' },
+  { id: 'inflation_tr', name: 'Enflasyon (TR)', symbol: 'TÜFE', color: '#FF6B35' },
 ];
 
-export type TimeRange = '1w' | '1m' | '3m' | '6m' | '1y';
+export type TimeRange = '1w' | '1m' | '3m' | '6m' | '1y' | '3y';
 
 export interface TimeRangeOption {
   id: TimeRange;
@@ -91,4 +92,5 @@ export const TIME_RANGES: TimeRangeOption[] = [
   { id: '3m', label: '3 Ay' },
   { id: '6m', label: '6 Ay' },
   { id: '1y', label: '1 Sene' },
+  { id: '3y', label: '3 Sene' },
 ];

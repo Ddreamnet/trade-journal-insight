@@ -29,6 +29,9 @@ function filterTradesByTimeRange(trades: Trade[], timeRange: TimeRange): Trade[]
     case '1y':
       cutoffDate = subYears(now, 1);
       break;
+    case '3y':
+      cutoffDate = subYears(now, 3);
+      break;
     default:
       cutoffDate = subMonths(now, 1);
   }
@@ -172,7 +175,7 @@ export default function Reports() {
           onToggle={toggleBenchmark}
         />
         <p className="text-xs text-muted-foreground mt-3">
-          💡 Benchmark verileri Stooq'tan günlük olarak çekilmektedir. Tüm değerler
+          💡 Piyasa verileri Stooq ve TCMB EVDS'den çekilmektedir. Tüm değerler
           100 bazından normalize edilmiştir.
         </p>
       </div>

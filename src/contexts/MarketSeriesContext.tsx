@@ -157,8 +157,13 @@ export function MarketSeriesProvider({ children }: { children: React.ReactNode }
           cutoffDate = subMonths(now, 6);
           break;
         case '1y':
+          cutoffDate = subMonths(now, 12);
+          break;
+        case '3y':
+          cutoffDate = subMonths(now, 36);
+          break;
         default:
-          return points; // Return all data
+          cutoffDate = subMonths(now, 12); // Default to 1 year
       }
 
       return points.filter((point) => {
