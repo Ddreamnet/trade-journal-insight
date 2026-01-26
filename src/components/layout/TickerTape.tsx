@@ -1,72 +1,20 @@
-import { TrendingUp, TrendingDown, Clock, AlertCircle } from 'lucide-react';
-import { useYahooFinance } from '@/hooks/useYahooFinance';
+import { TrendingUp, TrendingDown } from 'lucide-react';
+import { MOCK_STOCKS } from '@/data/mockStocks';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import { tr } from 'date-fns/locale';
 
 export function TickerTape() {
-  const { getTickerStocks, isLoading, isFetching, isError, isUsingCachedData, cacheTimestamp } = useYahooFinance();
-  
-  const tickerStocks = getTickerStocks(25);
-  
-  // Duplicate for seamless loop
-  const stocks = [...tickerStocks, ...tickerStocks];
-
-  if (isLoading && stocks.length === 0) {
-    return (
-      <div className="w-full bg-background-secondary border-b border-border overflow-hidden">
-        <div className="flex items-center justify-center py-2 text-sm text-muted-foreground">
-          Veriler yükleniyor...
-        </div>
-      </div>
-    );
-  }
-
-  if (stocks.length === 0) {
-    return (
-      <div className="w-full bg-background-secondary border-b border-border overflow-hidden">
-        <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
-          <Clock className="w-4 h-4" />
-          Henüz veri yok - piyasa açıldığında güncellenecek
-        </div>
-      </div>
-    );
-  }
-
-  // Format cache timestamp
-  const cacheInfo = cacheTimestamp 
-    ? format(cacheTimestamp, "d MMM HH:mm", { locale: tr })
-    : null;
+  // Use mock data - duplicate for seamless loop
+  const stocks = [...MOCK_STOCKS, ...MOCK_STOCKS];
 
   return (
     <div className="w-full bg-background-secondary border-b border-border overflow-hidden">
       <div className="relative">
-        {/* Status indicators */}
-        {(isUsingCachedData || isError) && (
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20 flex items-center gap-1 text-xs text-muted-foreground">
-            {isError ? (
-              <>
-                <AlertCircle className="w-3 h-3 text-destructive" />
-                <span>Veri güncellenemedi</span>
-              </>
-            ) : cacheInfo && (
-              <>
-                <Clock className="w-3 h-3" />
-                <span>Son veri: {cacheInfo}</span>
-              </>
-            )}
-          </div>
-        )}
-        
         {/* Gradient fades */}
         <div className="absolute left-0 top-0 bottom-0 w-16 gradient-fade-left z-10 pointer-events-none" />
         <div className="absolute right-0 top-0 bottom-0 w-16 gradient-fade-right z-10 pointer-events-none" />
         
         {/* Ticker content */}
-        <div className={cn(
-          "ticker-tape flex items-center py-2 whitespace-nowrap",
-          isFetching && "opacity-80"
-        )}>
+        <div className="ticker-tape flex items-center py-2 whitespace-nowrap">
           {stocks.map((stock, index) => (
             <div
               key={`${stock.symbol}-${index}`}
@@ -76,7 +24,7 @@ export function TickerTape() {
                 {stock.symbol}
               </span>
               <span className="font-mono text-sm text-foreground">
-                ₺{stock.lastPrice.toFixed(2)}
+                ₺{stock.currentPrice.toFixed(2)}
               </span>
               <div
                 className={cn(
