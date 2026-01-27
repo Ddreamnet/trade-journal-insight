@@ -75,22 +75,28 @@ async function fetchInflationData(): Promise<SeriesPoint[]> {
     throw new Error("EVDS_API_KEY not configured");
   }
 
-  // TÜFE Yıllık % Değişim (TP.FG.J0)
-  // Get last 3 years of monthly data
+  // TÜFE CPI Index (TP.FE.OKTG01) with monthly percent change (formulas=1)
+  // Get last 3 years + 1 extra month for percent change calculation
   const endDate = new Date();
   const startDate = new Date();
   startDate.setFullYear(startDate.getFullYear() - 3);
+  startDate.setMonth(startDate.getMonth() - 1); // Extra month for formulas=1
 
-  const startStr = `${String(startDate.getDate()).padStart(2, '0')}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${startDate.getFullYear()}`;
-  const endStr = `${String(endDate.getDate()).padStart(2, '0')}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${endDate.getFullYear()}`;
+  // EVDS requires startDate to be 01 of month (dd-mm-yyyy format)
+  const startStr = `01-${String(startDate.getMonth() + 1).padStart(2, '0')}-${startDate.getFullYear()}`;
+  const endStr = `01-${String(endDate.getMonth() + 1).padStart(2, '0')}-${endDate.getFullYear()}`;
 
-  // EVDS Series: TP.FG.J0 = TÜFE Yıllık % Değişim
-  const url = `https://evds2.tcmb.gov.tr/service/evds/series=TP.FG.J0&startDate=${startStr}&endDate=${endStr}&type=json&key=${apiKey}`;
+  // EVDS Series: TP.FE.OKTG01 = TÜFE CPI Index
+  // frequency=5 = Monthly
+  // formulas=1 = Percent Change (month-over-month)
+  const url = `https://evds2.tcmb.gov.tr/service/evds/series=TP.FE.OKTG01&startDate=${startStr}&endDate=${endStr}&type=json&frequency=5&formulas=1`;
   
-  console.log(`Fetching EVDS inflation data: startDate=${startStr}, endDate=${endStr}`);
+  console.log(`Fetching EVDS inflation data: ${url}`);
 
+  // CRITICAL: API key must be sent in HTTP header, NOT in URL
   const response = await fetch(url, {
     headers: {
+      "key": apiKey,
       "Accept": "application/json",
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     },
@@ -98,7 +104,10 @@ async function fetchInflationData(): Promise<SeriesPoint[]> {
 
   if (!response.ok) {
     const text = await response.text();
-    console.error("EVDS response error:", text);
+    console.error("EVDS response error:", response.status, text);
+    if (response.status === 403) {
+      console.error("EVDS 403 Forbidden - API key header missing or invalid");
+    }
     throw new Error(`EVDS fetch failed: ${response.status}`);
   }
 
@@ -112,9 +121,9 @@ async function fetchInflationData(): Promise<SeriesPoint[]> {
   const points: SeriesPoint[] = [];
 
   for (const item of data.items) {
-    // EVDS returns date as "DD-MM-YYYY" and value in "TP_FG_J0" field
+    // EVDS returns date as "DD-MM-YYYY" and value in "TP_FE_OKTG01" field (underscores for dots)
     const dateStr = item.Tarih; // "DD-MM-YYYY"
-    const value = parseFloat(item.TP_FG_J0);
+    const value = parseFloat(item.TP_FE_OKTG01);
 
     if (dateStr && !isNaN(value)) {
       // Convert DD-MM-YYYY to YYYY-MM-DD

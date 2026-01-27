@@ -140,6 +140,7 @@ function fetchStooqData($asset, $symbol, $cacheFile) {
 
 /**
  * Fetch TÜFE (CPI) inflation data from TCMB EVDS
+ * Uses TP.FE.OKTG01 series with formulas=1 for month-over-month percent change
  */
 function fetchInflationData($cacheFile) {
     // EVDS API key should be set as environment variable or in a config file
@@ -157,6 +158,7 @@ function fetchInflationData($cacheFile) {
     if (empty($apiKey)) {
         // Return stale cache if available
         if (file_exists($cacheFile)) {
+            error_log("EVDS: API key not configured, returning stale cache");
             return file_get_contents($cacheFile);
         }
         
@@ -164,36 +166,74 @@ function fetchInflationData($cacheFile) {
         return json_encode(['error' => 'EVDS_API_KEY not configured']);
     }
     
-    // Get last 3 years of data
-    $endDate = date('d-m-Y');
-    $startDate = date('d-m-Y', strtotime('-3 years'));
+    // Get last 3 years + 1 extra month for percent change calculation
+    // EVDS requires startDate to be 01 of month (dd-mm-yyyy format)
+    $endDate = date('01-m-Y');
+    $startDate = date('01-m-Y', strtotime('-3 years -1 month'));
     
-    // EVDS Series: TP.FG.J0 = TÜFE Yıllık % Değişim
-    $url = "https://evds2.tcmb.gov.tr/service/evds/series=TP.FG.J0&startDate={$startDate}&endDate={$endDate}&type=json&key={$apiKey}";
+    // EVDS Series: TP.FE.OKTG01 = TÜFE CPI Index
+    // frequency=5 = Monthly
+    // formulas=1 = Percent Change (month-over-month)
+    // NOTE: API key is NOT in URL, it goes in HTTP header
+    $url = "https://evds2.tcmb.gov.tr/service/evds/series=TP.FE.OKTG01&startDate={$startDate}&endDate={$endDate}&type=json&frequency=5&formulas=1";
     
-    $context = stream_context_create([
-        'http' => [
-            'method' => 'GET',
-            'header' => "Accept: application/json\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\n",
-            'timeout' => 30,
-        ]
+    error_log("EVDS: Fetching from {$url}");
+    
+    // Use cURL for better control over headers
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_HTTPHEADER => [
+            "key: {$apiKey}",  // CRITICAL: API key in header, not URL
+            "Accept: application/json",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        ],
     ]);
     
-    $response = @file_get_contents($url, false, $context);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
     
-    if ($response === false) {
+    if ($response === false || !empty($curlError)) {
+        error_log("EVDS: cURL error - {$curlError}");
         // Try to return stale cache
         if (file_exists($cacheFile)) {
             return file_get_contents($cacheFile);
         }
         
         http_response_code(502);
-        return json_encode(['error' => 'Failed to fetch data from TCMB EVDS']);
+        return json_encode(['error' => 'Failed to fetch data from TCMB EVDS: ' . $curlError]);
+    }
+    
+    if ($httpCode === 403) {
+        error_log("EVDS: 403 Forbidden - API key header missing or invalid");
+        // Try to return stale cache
+        if (file_exists($cacheFile)) {
+            return file_get_contents($cacheFile);
+        }
+        
+        http_response_code(403);
+        return json_encode(['error' => 'EVDS 403 Forbidden - API key header missing or invalid']);
+    }
+    
+    if ($httpCode !== 200) {
+        error_log("EVDS: HTTP {$httpCode} - {$response}");
+        // Try to return stale cache
+        if (file_exists($cacheFile)) {
+            return file_get_contents($cacheFile);
+        }
+        
+        http_response_code(502);
+        return json_encode(['error' => "EVDS returned HTTP {$httpCode}"]);
     }
     
     $data = json_decode($response, true);
     
     if (!isset($data['items']) || !is_array($data['items'])) {
+        error_log("EVDS: Unexpected response format - " . substr($response, 0, 500));
         // Try to return stale cache
         if (file_exists($cacheFile)) {
             return file_get_contents($cacheFile);
@@ -206,9 +246,9 @@ function fetchInflationData($cacheFile) {
     $points = [];
     
     foreach ($data['items'] as $item) {
-        // EVDS returns date as "DD-MM-YYYY" and value in "TP_FG_J0" field
+        // EVDS returns date as "DD-MM-YYYY" and value in "TP_FE_OKTG01" field (dots become underscores)
         $dateStr = $item['Tarih'] ?? '';
-        $value = isset($item['TP_FG_J0']) ? floatval($item['TP_FG_J0']) : null;
+        $value = isset($item['TP_FE_OKTG01']) ? floatval($item['TP_FE_OKTG01']) : null;
         
         if (!empty($dateStr) && $value !== null) {
             // Convert DD-MM-YYYY to YYYY-MM-DD
@@ -227,6 +267,8 @@ function fetchInflationData($cacheFile) {
     usort($points, function($a, $b) {
         return strcmp($a['date'], $b['date']);
     });
+    
+    error_log("EVDS: Successfully fetched " . count($points) . " inflation data points");
     
     $responseData = [
         'asset' => 'inflation_tr',

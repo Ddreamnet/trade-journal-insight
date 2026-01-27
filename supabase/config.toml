@@ -1,1 +1,7 @@
 project_id = "pjqbpkblutbdpfzzwxmr"
+
+[functions.market-series]
+verify_jwt = false
+
+[functions.bist100]
+verify_jwt = false
