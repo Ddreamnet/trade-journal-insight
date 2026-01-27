@@ -6,7 +6,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { StockSelector } from '@/components/trade/StockSelector';
 import { TradeForm } from '@/components/trade/TradeForm';
 import { TradeList } from '@/components/trade/TradeList';
-import { Stock } from '@/types/trade';
+import { Stock, ClosingType } from '@/types/trade';
 import { useTrades } from '@/hooks/useTrades';
 
 export default function Index() {
@@ -28,6 +28,7 @@ export default function Index() {
     target_price: number;
     stop_price: number;
     reasons: string[];
+    position_amount?: number;
   }) => {
     const result = await createTrade.mutateAsync(tradeData);
     setSelectedStock(null);
@@ -42,9 +43,11 @@ export default function Index() {
   const handleCloseTrade = async (
     tradeId: string,
     exitPrice: number,
+    closingType: ClosingType,
+    stopReason?: string,
     closingNote?: string
   ) => {
-    await closeTrade.mutateAsync({ tradeId, exitPrice, closingNote });
+    await closeTrade.mutateAsync({ tradeId, exitPrice, closingType, stopReason, closingNote });
   };
 
   return (

@@ -18,6 +18,7 @@ interface TradeFormProps {
     target_price: number;
     stop_price: number;
     reasons: string[];
+    position_amount?: number;
   }) => void;
   isSubmitting?: boolean;
 }
@@ -28,17 +29,20 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
   const [entryPrice, setEntryPrice] = useState(stock.currentPrice.toString());
   const [targetPrice, setTargetPrice] = useState('');
   const [stopPrice, setStopPrice] = useState('');
+  const [positionAmount, setPositionAmount] = useState('');
   const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
 
   const parsedEntry = parseFloat(entryPrice);
   const parsedTarget = parseFloat(targetPrice);
   const parsedStop = parseFloat(stopPrice);
+  const parsedPosition = parseFloat(positionAmount);
 
   // Validation checks
   const hasEntryStopError = !isNaN(parsedEntry) && !isNaN(parsedStop) && parsedEntry === parsedStop;
   const hasNegativeEntry = !isNaN(parsedEntry) && parsedEntry <= 0;
   const hasNegativeTarget = !isNaN(parsedTarget) && parsedTarget <= 0;
   const hasNegativeStop = !isNaN(parsedStop) && parsedStop <= 0;
+  const hasNegativePosition = !isNaN(parsedPosition) && parsedPosition <= 0;
   const hasAnyNegativeError = hasNegativeEntry || hasNegativeTarget || hasNegativeStop;
 
   const rrRatio = useMemo(() => {
@@ -74,6 +78,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
         target_price: parsedTarget,
         stop_price: parsedStop,
         reasons,
+        position_amount: !isNaN(parsedPosition) && parsedPosition > 0 ? parsedPosition : undefined,
       });
     } finally {
       setIsSubmittingLocal(false);
@@ -252,6 +257,27 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                     <p className="text-xs text-loss mt-1">⚠️ Stop fiyatı Entry fiyatından farklı olmalı</p>
                   )}
                 </div>
+              </div>
+
+              {/* Position Amount (Optional) */}
+              <div>
+                <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                  İşlem Tutarı (₺) - Opsiyonel
+                </label>
+                <NumberInput
+                  step="1"
+                  min="1"
+                  placeholder="Örn: 10000"
+                  value={positionAmount}
+                  onChange={(e) => setPositionAmount(e.target.value)}
+                  className={cn('font-mono', hasNegativePosition && 'border-loss focus-visible:ring-loss')}
+                />
+                {hasNegativePosition && (
+                  <p className="text-xs text-loss mt-1">⚠️ Tutar sıfırdan büyük olmalı</p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  💡 Equity grafiği için işleme giren para miktarını girin
+                </p>
               </div>
 
               {/* RR Display */}

@@ -41,6 +41,55 @@ export const TRADE_REASONS: TradeReasonOption[] = [
   { id: 'takas_toplu', label: 'Takas Toplu' },
 ];
 
+// Stop reasons for closing trades
+export type StopReason =
+  | '14ma_ustu_kapanis'
+  | '14ma_alti_kapanis'
+  | '22ma_ustu_kapanis'
+  | '22ma_alti_kapanis'
+  | '50ma_ustu_kapanis'
+  | '50ma_alti_kapanis'
+  | '100ma_ustu_kapanis'
+  | '100ma_alti_kapanis'
+  | '200ma_ustu_kapanis'
+  | '200ma_alti_kapanis'
+  | 'yukselen_trend_asagi_kirilimi'
+  | 'dusen_trend_yukari_kirilimi'
+  | 'yatay_trend_yukari_kirilimi'
+  | 'yatay_trend_asagi_kirilimi'
+  | 'takas_toplu'
+  | 'takas_bozulmus'
+  | 'hacim_artisi'
+  | 'hacim_azalisi';
+
+export interface StopReasonOption {
+  id: StopReason;
+  label: string;
+}
+
+export const STOP_REASONS: StopReasonOption[] = [
+  { id: '14ma_ustu_kapanis', label: '14 MA Üstü Kapanış' },
+  { id: '14ma_alti_kapanis', label: '14 MA Altı Kapanış' },
+  { id: '22ma_ustu_kapanis', label: '22 MA Üstü Kapanış' },
+  { id: '22ma_alti_kapanis', label: '22 MA Altı Kapanış' },
+  { id: '50ma_ustu_kapanis', label: '50 MA Üstü Kapanış' },
+  { id: '50ma_alti_kapanis', label: '50 MA Altı Kapanış' },
+  { id: '100ma_ustu_kapanis', label: '100 MA Üstü Kapanış' },
+  { id: '100ma_alti_kapanis', label: '100 MA Altı Kapanış' },
+  { id: '200ma_ustu_kapanis', label: '200 MA Üstü Kapanış' },
+  { id: '200ma_alti_kapanis', label: '200 MA Altı Kapanış' },
+  { id: 'yukselen_trend_asagi_kirilimi', label: 'Yükselen Trend Aşağı Kırılımı' },
+  { id: 'dusen_trend_yukari_kirilimi', label: 'Düşen Trend Yukarı Kırılımı' },
+  { id: 'yatay_trend_yukari_kirilimi', label: 'Yatay Trend Yukarı Kırılımı' },
+  { id: 'yatay_trend_asagi_kirilimi', label: 'Yatay Trend Aşağı Kırılımı' },
+  { id: 'takas_toplu', label: 'Takas Toplu' },
+  { id: 'takas_bozulmus', label: 'Takas Bozulmuş' },
+  { id: 'hacim_artisi', label: 'Hacim Artışı' },
+  { id: 'hacim_azalisi', label: 'Hacim Azalışı' },
+];
+
+export type ClosingType = 'kar_al' | 'stop';
+
 // Trade interface aligned with database schema
 export interface Trade {
   id: string;
@@ -61,6 +110,9 @@ export interface Trade {
   updated_at: string;
   closed_at: string | null;
   closing_note: string | null;
+  position_amount: number | null;
+  closing_type: ClosingType | null;
+  stop_reason: string | null;
 }
 
 export interface BenchmarkData {

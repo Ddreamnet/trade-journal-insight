@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TrendingUp, TrendingDown, X, StickyNote } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Trade, TRADE_REASONS } from '@/types/trade';
+import { Trade, TRADE_REASONS, STOP_REASONS, ClosingType } from '@/types/trade';
 import { CloseTradeModal } from './CloseTradeModal';
 import { useMarketData } from '@/contexts/MarketDataContext';
 import { cn } from '@/lib/utils';
@@ -23,7 +23,7 @@ import {
 interface TradeListProps {
   trades: Trade[];
   type: 'active' | 'closed';
-  onCloseTrade?: (tradeId: string, exitPrice: number, closingNote?: string) => void;
+  onCloseTrade?: (tradeId: string, exitPrice: number, closingType: ClosingType, stopReason?: string, closingNote?: string) => void;
   highlightedTradeId?: string | null;
   isLoading?: boolean;
 }
@@ -32,9 +32,9 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
   const [closingTrade, setClosingTrade] = useState<Trade | null>(null);
   const { getStockBySymbol } = useMarketData();
 
-  const handleCloseConfirm = (exitPrice: number, closingNote?: string) => {
+  const handleCloseConfirm = (exitPrice: number, closingType: ClosingType, stopReason?: string, closingNote?: string) => {
     if (closingTrade && onCloseTrade) {
-      onCloseTrade(closingTrade.id, exitPrice, closingNote);
+      onCloseTrade(closingTrade.id, exitPrice, closingType, stopReason, closingNote);
       setClosingTrade(null);
     }
   };
@@ -43,6 +43,11 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
     return reasonIds
       .map((id) => TRADE_REASONS.find((r) => r.id === id)?.label || id)
       .join(', ');
+  };
+
+  const getStopReasonLabel = (stopReasonId: string | null) => {
+    if (!stopReasonId) return null;
+    return STOP_REASONS.find((r) => r.id === stopReasonId)?.label || stopReasonId;
   };
 
   // Anlık fiyat ve fark hesaplama
@@ -232,12 +237,12 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
                         <span
                           className={cn(
                             'text-xs font-semibold px-2 py-1 rounded-full',
-                            trade.is_successful ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
+                            trade.closing_type === 'kar_al' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
                           )}
                         >
-                        {trade.is_successful ? 'Başarılı' : 'Başarısız'}
+                          {trade.closing_type === 'kar_al' ? '💰 Kâr Al' : '🛑 Stop'}
                         </span>
-                        {trade.closing_note && (
+                        {(trade.closing_note || trade.stop_reason) && (
                           <Popover>
                             <PopoverTrigger asChild>
                               <button className="p-1 rounded hover:bg-secondary transition-colors">
@@ -245,8 +250,18 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className="w-64 p-3" side="left">
-                              <div className="text-xs text-muted-foreground mb-1 font-medium">İşlem Notu</div>
-                              <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
+                              {trade.stop_reason && (
+                                <div className="mb-2">
+                                  <div className="text-xs text-muted-foreground mb-1 font-medium">Stop Sebebi</div>
+                                  <p className="text-sm text-foreground">{getStopReasonLabel(trade.stop_reason)}</p>
+                                </div>
+                              )}
+                              {trade.closing_note && (
+                                <div>
+                                  <div className="text-xs text-muted-foreground mb-1 font-medium">Not</div>
+                                  <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
+                                </div>
+                              )}
                             </PopoverContent>
                           </Popover>
                         )}
@@ -373,7 +388,7 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
                 <div
                   className={cn(
                     'text-center p-1.5 rounded-lg relative',
-                    trade.is_successful ? 'bg-profit/20' : 'bg-loss/20'
+                    trade.closing_type === 'kar_al' ? 'bg-profit/20' : 'bg-loss/20'
                   )}
                 >
                   <div className="text-[10px] text-muted-foreground uppercase">Sonuç</div>
@@ -381,12 +396,12 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
                     <span
                       className={cn(
                         'text-xs font-semibold',
-                        trade.is_successful ? 'text-profit' : 'text-loss'
+                        trade.closing_type === 'kar_al' ? 'text-profit' : 'text-loss'
                       )}
                     >
-                      {trade.is_successful ? '✅ Başarılı' : '❌ Başarısız'}
+                      {trade.closing_type === 'kar_al' ? '💰 Kâr Al' : '🛑 Stop'}
                     </span>
-                    {trade.closing_note && (
+                    {(trade.closing_note || trade.stop_reason) && (
                       <Popover>
                         <PopoverTrigger asChild>
                           <button className="p-0.5 rounded hover:bg-secondary/50 transition-colors">
@@ -394,8 +409,18 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
                           </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-56 p-3" side="top">
-                          <div className="text-xs text-muted-foreground mb-1 font-medium">İşlem Notu</div>
-                          <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
+                          {trade.stop_reason && (
+                            <div className="mb-2">
+                              <div className="text-xs text-muted-foreground mb-1 font-medium">Stop Sebebi</div>
+                              <p className="text-sm text-foreground">{getStopReasonLabel(trade.stop_reason)}</p>
+                            </div>
+                          )}
+                          {trade.closing_note && (
+                            <div>
+                              <div className="text-xs text-muted-foreground mb-1 font-medium">Not</div>
+                              <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
+                            </div>
+                          )}
                         </PopoverContent>
                       </Popover>
                     )}
@@ -414,7 +439,7 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full h-8 text-xs"
+                className="w-full h-9"
                 onClick={() => setClosingTrade(trade)}
               >
                 <X className="w-3 h-3 mr-1" />

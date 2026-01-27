@@ -18,11 +18,13 @@ export type Database = {
         Row: {
           closed_at: string | null
           closing_note: string | null
+          closing_type: string | null
           created_at: string
           entry_price: number
           exit_price: number | null
           id: string
           is_successful: boolean | null
+          position_amount: number | null
           progress_percent: number | null
           reasons: string[] | null
           rr_ratio: number | null
@@ -30,6 +32,7 @@ export type Database = {
           stock_name: string
           stock_symbol: string
           stop_price: number
+          stop_reason: string | null
           target_price: number
           trade_type: Database["public"]["Enums"]["trade_type"]
           updated_at: string
@@ -38,11 +41,13 @@ export type Database = {
         Insert: {
           closed_at?: string | null
           closing_note?: string | null
+          closing_type?: string | null
           created_at?: string
           entry_price: number
           exit_price?: number | null
           id?: string
           is_successful?: boolean | null
+          position_amount?: number | null
           progress_percent?: number | null
           reasons?: string[] | null
           rr_ratio?: number | null
@@ -50,6 +55,7 @@ export type Database = {
           stock_name: string
           stock_symbol: string
           stop_price: number
+          stop_reason?: string | null
           target_price: number
           trade_type: Database["public"]["Enums"]["trade_type"]
           updated_at?: string
@@ -58,11 +64,13 @@ export type Database = {
         Update: {
           closed_at?: string | null
           closing_note?: string | null
+          closing_type?: string | null
           created_at?: string
           entry_price?: number
           exit_price?: number | null
           id?: string
           is_successful?: boolean | null
+          position_amount?: number | null
           progress_percent?: number | null
           reasons?: string[] | null
           rr_ratio?: number | null
@@ -70,6 +78,7 @@ export type Database = {
           stock_name?: string
           stock_symbol?: string
           stop_price?: number
+          stop_reason?: string | null
           target_price?: number
           trade_type?: Database["public"]["Enums"]["trade_type"]
           updated_at?: string
