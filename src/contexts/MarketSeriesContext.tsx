@@ -19,6 +19,41 @@ const CACHE_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 
 // Edge function URL
 const API_URL = 'https://pjqbpkblutbdpfzzwxmr.supabase.co/functions/v1/market-series';
+// Fallback to cPanel PHP endpoint if edge function fails
+const PHP_API_URL = '/api/market-series.php';
+
+// Hardcoded inflation data as ultimate fallback (EVDS may have IP restrictions)
+// Source: TÜİK TÜFE monthly percent change (month-over-month)
+const FALLBACK_INFLATION_DATA: MarketSeriesPoint[] = [
+  // 2023
+  { date: '2023-01-01', value: 6.65 },
+  { date: '2023-02-01', value: 3.15 },
+  { date: '2023-03-01', value: 2.29 },
+  { date: '2023-04-01', value: 2.39 },
+  { date: '2023-05-01', value: 0.04 },
+  { date: '2023-06-01', value: 3.92 },
+  { date: '2023-07-01', value: 9.49 },
+  { date: '2023-08-01', value: 9.09 },
+  { date: '2023-09-01', value: 4.75 },
+  { date: '2023-10-01', value: 3.43 },
+  { date: '2023-11-01', value: 3.28 },
+  { date: '2023-12-01', value: 2.93 },
+  // 2024
+  { date: '2024-01-01', value: 6.70 },
+  { date: '2024-02-01', value: 4.53 },
+  { date: '2024-03-01', value: 3.16 },
+  { date: '2024-04-01', value: 3.18 },
+  { date: '2024-05-01', value: 3.37 },
+  { date: '2024-06-01', value: 1.64 },
+  { date: '2024-07-01', value: 3.23 },
+  { date: '2024-08-01', value: 2.47 },
+  { date: '2024-09-01', value: 2.97 },
+  { date: '2024-10-01', value: 2.88 },
+  { date: '2024-11-01', value: 2.24 },
+  { date: '2024-12-01', value: 1.03 },
+  // 2025
+  { date: '2025-01-01', value: 5.25 },
+];
 
 interface CacheEntry {
   data: MarketSeriesData;
@@ -101,15 +136,46 @@ export function MarketSeriesProvider({ children }: { children: React.ReactNode }
     setErrorStates((prev) => ({ ...prev, [asset]: null }));
 
     try {
-      const response = await fetch(`${API_URL}?asset=${asset}`);
+      let data: MarketSeriesData | null = null;
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      // Try Edge Function first
+      try {
+        const response = await fetch(`${API_URL}?asset=${asset}`);
+        if (response.ok) {
+          data = await response.json();
+        }
+      } catch (edgeError) {
+        console.warn(`Edge function failed for ${asset}, trying PHP fallback:`, edgeError);
       }
 
-      const data: MarketSeriesData = await response.json();
+      // Try PHP fallback if Edge failed
+      if (!data) {
+        try {
+          const phpResponse = await fetch(`${PHP_API_URL}?asset=${asset}`);
+          if (phpResponse.ok) {
+            data = await phpResponse.json();
+          }
+        } catch (phpError) {
+          console.warn(`PHP fallback failed for ${asset}:`, phpError);
+        }
+      }
 
-      setSeriesData((prev) => ({ ...prev, [asset]: data }));
+      // Use hardcoded fallback for inflation if both APIs failed
+      if (!data && asset === 'inflation_tr') {
+        console.warn('Using hardcoded fallback data for inflation_tr');
+        data = {
+          asset: 'inflation_tr',
+          updatedAt: new Date().toISOString(),
+          points: FALLBACK_INFLATION_DATA,
+          source: 'TÜİK (Fallback)',
+        };
+      }
+
+      if (data) {
+        setSeriesData((prev) => ({ ...prev, [asset]: data! }));
+      } else {
+        throw new Error('All data sources failed');
+      }
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'Veri alınamadı';
       console.error(`Failed to fetch ${asset} series:`, e);
