@@ -93,9 +93,16 @@ export function MarketSeriesProvider({ children }: { children: React.ReactNode }
         const validData: Record<string, MarketSeriesData> = {};
 
         for (const [asset, entry] of Object.entries(cache)) {
-          if (now - entry.timestamp < CACHE_DURATION_MS) {
-            validData[asset] = entry.data;
+          // Skip expired entries
+          if (now - entry.timestamp >= CACHE_DURATION_MS) {
+            continue;
           }
+          // Skip entries with empty points (force refetch)
+          if (!entry.data.points || entry.data.points.length === 0) {
+            console.warn(`Skipping cached ${asset} - has empty points`);
+            continue;
+          }
+          validData[asset] = entry.data;
         }
 
         if (Object.keys(validData).length > 0) {
@@ -155,25 +162,37 @@ export function MarketSeriesProvider({ children }: { children: React.ReactNode }
       try {
         const response = await fetch(`${API_URL}?asset=${asset}`);
         if (response.ok) {
-          data = await response.json();
+          const json = await response.json();
+          // Only accept data if it has actual points
+          if (json.points && json.points.length > 0) {
+            data = json;
+          } else {
+            console.warn(`Edge function returned empty data for ${asset}`);
+          }
         }
       } catch (edgeError) {
         console.warn(`Edge function failed for ${asset}, trying PHP fallback:`, edgeError);
       }
 
-      // Try PHP fallback if Edge failed
+      // Try PHP fallback if Edge failed or returned empty
       if (!data) {
         try {
           const phpResponse = await fetch(`${PHP_API_URL}?asset=${asset}`);
           if (phpResponse.ok) {
-            data = await phpResponse.json();
+            const phpJson = await phpResponse.json();
+            // Only accept data if it has actual points
+            if (phpJson.points && phpJson.points.length > 0) {
+              data = phpJson;
+            } else {
+              console.warn(`PHP fallback returned empty data for ${asset}`);
+            }
           }
         } catch (phpError) {
           console.warn(`PHP fallback failed for ${asset}:`, phpError);
         }
       }
 
-      // Use hardcoded fallback for inflation if both APIs failed
+      // Use hardcoded fallback for inflation if both APIs failed or returned empty
       if (!data && asset === 'inflation_tr') {
         console.warn('Using hardcoded fallback data for inflation_tr');
         data = {
