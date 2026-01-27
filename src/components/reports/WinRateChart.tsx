@@ -87,6 +87,10 @@ function generateWinRateData(filteredTrades: Trade[], timeRange: TimeRange) {
       intervals = eachMonthOfInterval({ start: subMonths(now, 11), end: now });
       groupBy = 'month';
       break;
+    case '3y':
+      intervals = eachMonthOfInterval({ start: subMonths(now, 35), end: now });
+      groupBy = 'month';
+      break;
     default:
       intervals = eachDayOfInterval({ start: subDays(now, 29), end: now });
       groupBy = 'day';
