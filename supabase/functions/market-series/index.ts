@@ -89,7 +89,8 @@ async function fetchInflationData(): Promise<SeriesPoint[]> {
   // EVDS Series: TP.FE.OKTG01 = TÜFE CPI Index
   // frequency=5 = Monthly
   // formulas=1 = Percent Change (month-over-month)
-  const url = `https://evds2.tcmb.gov.tr/service/evds/series=TP.FE.OKTG01&startDate=${startStr}&endDate=${endStr}&type=json&frequency=5&formulas=1`;
+  // NOTE: EVDS uses ? for first param, & for rest
+  const url = `https://evds2.tcmb.gov.tr/service/evds?series=TP.FE.OKTG01&startDate=${startStr}&endDate=${endStr}&type=json&frequency=5&formulas=1`;
   
   console.log(`Fetching EVDS inflation data: ${url}`);
 
@@ -113,10 +114,24 @@ async function fetchInflationData(): Promise<SeriesPoint[]> {
 
   const data = await response.json();
   
+  // Log the full response structure for debugging
+  console.log("EVDS response keys:", Object.keys(data));
+  console.log("EVDS response sample:", JSON.stringify(data).substring(0, 1000));
+  
+  // Check if we have items array
   if (!data.items || !Array.isArray(data.items)) {
-    console.error("EVDS unexpected response:", JSON.stringify(data));
-    throw new Error("EVDS returned unexpected format");
+    console.error("EVDS no items array found. Full response:", JSON.stringify(data).substring(0, 2000));
+    throw new Error("EVDS returned unexpected format - no items array");
   }
+  
+  if (data.items.length === 0) {
+    console.error("EVDS returned empty items array. This might indicate wrong series code or date range.");
+    console.error("Check if API key is valid and has access to TP.FE.OKTG01 series");
+    throw new Error("EVDS returned empty data");
+  }
+  
+  console.log("EVDS items count:", data.items.length);
+  console.log("EVDS first item:", JSON.stringify(data.items[0]));
 
   const points: SeriesPoint[] = [];
 
