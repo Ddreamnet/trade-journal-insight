@@ -12,7 +12,20 @@ import {
 import { TimeRange, BenchmarkData, Trade } from '@/types/trade';
 import { MarketAsset, MarketSeriesPoint } from '@/types/market';
 import { useMarketSeries } from '@/contexts/MarketSeriesContext';
-import { format, parseISO, subDays, subMonths, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, startOfDay, startOfWeek, startOfMonth } from 'date-fns';
+import {
+  format,
+  parseISO,
+  subDays,
+  subMonths,
+  eachDayOfInterval,
+  eachWeekOfInterval,
+  eachMonthOfInterval,
+  startOfDay,
+  startOfWeek,
+  startOfMonth,
+  isAfter,
+  isEqual,
+} from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -51,11 +64,23 @@ function generateWinRateData(filteredTrades: Trade[], timeRange: TimeRange) {
       groupBy = 'day';
       break;
     case '3m':
-      intervals = eachWeekOfInterval({ start: subMonths(now, 3), end: now });
+      intervals = eachWeekOfInterval(
+        {
+          start: startOfWeek(subMonths(now, 3), { weekStartsOn: 1 }),
+          end: now,
+        },
+        { weekStartsOn: 1 }
+      );
       groupBy = 'week';
       break;
     case '6m':
-      intervals = eachWeekOfInterval({ start: subMonths(now, 6), end: now });
+      intervals = eachWeekOfInterval(
+        {
+          start: startOfWeek(subMonths(now, 6), { weekStartsOn: 1 }),
+          end: now,
+        },
+        { weekStartsOn: 1 }
+      );
       groupBy = 'week';
       break;
     case '1y':
@@ -130,6 +155,30 @@ function mergeBenchmarkData(
   baseData: { date: string; rawDate: string; winRate: number | null }[],
   benchmarkData: Record<MarketAsset, MarketSeriesPoint[]>
 ): ChartDataPoint[] {
+  // Benchmarks come as sparse points (monthly for inflation). Base chart may be weekly/daily.
+  // To avoid "no data" in 3m/6m, we carry-forward the last known benchmark value.
+  const prepared: Record<string, { date: Date; value: number }[]> = {};
+
+  for (const [asset, points] of Object.entries(benchmarkData)) {
+    prepared[asset] = (points || [])
+      .map((p) => ({ date: parseISO(p.date), value: p.value }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+  }
+
+  const findLatestValue = (asset: string, targetIso: string): number | undefined => {
+    const list = prepared[asset];
+    if (!list || list.length === 0) return undefined;
+
+    const target = parseISO(targetIso);
+    // Find latest point where point.date <= target
+    let latest: number | undefined;
+    for (const p of list) {
+      if (isAfter(p.date, target) && !isEqual(p.date, target)) break;
+      latest = p.value;
+    }
+    return latest;
+  };
+
   return baseData.map((point) => {
     const result: ChartDataPoint = {
       date: point.date,
@@ -137,11 +186,10 @@ function mergeBenchmarkData(
       winRate: point.winRate,
     };
 
-    // Match benchmark data by date
-    for (const [asset, points] of Object.entries(benchmarkData)) {
-      const matchingPoint = points.find((p) => p.date === point.rawDate);
-      if (matchingPoint) {
-        result[asset as MarketAsset] = matchingPoint.value;
+    for (const asset of Object.keys(benchmarkData)) {
+      const v = findLatestValue(asset, point.rawDate);
+      if (v !== undefined) {
+        result[asset as MarketAsset] = v;
       }
     }
 
