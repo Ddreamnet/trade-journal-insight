@@ -127,7 +127,7 @@
 
   .ticker-tape {
     /* Ticker hızı: değeri düşür = daha hızlı (örn: 10s çok hızlı, 30s yavaş) */
-    animation: ticker 5s linear infinite;
+    animation: ticker 15s linear infinite;
   }
 
   .ticker-tape:hover {
