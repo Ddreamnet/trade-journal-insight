@@ -51,8 +51,21 @@ const FALLBACK_INFLATION_DATA: MarketSeriesPoint[] = [
   { date: '2024-10-01', value: 2.88 },
   { date: '2024-11-01', value: 2.24 },
   { date: '2024-12-01', value: 1.03 },
-  // 2025
+  // 2025 (TÜİK resmi verileri)
   { date: '2025-01-01', value: 5.25 },
+  { date: '2025-02-01', value: 2.27 },
+  { date: '2025-03-01', value: 2.46 },
+  { date: '2025-04-01', value: 3.00 },
+  { date: '2025-05-01', value: 2.10 },
+  { date: '2025-06-01', value: 1.87 },
+  { date: '2025-07-01', value: 2.43 },
+  { date: '2025-08-01', value: 2.54 },
+  { date: '2025-09-01', value: 2.61 },
+  { date: '2025-10-01', value: 2.83 },
+  { date: '2025-11-01', value: 2.22 },
+  { date: '2025-12-01', value: 1.55 },
+  // 2026
+  { date: '2026-01-01', value: 3.85 },
 ];
 
 interface CacheEntry {
