@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from '@/hooks/use-toast';
+import { ClosingType } from '@/types/trade';
 
 export interface TradeInsert {
   stock_symbol: string;
@@ -11,6 +12,7 @@ export interface TradeInsert {
   target_price: number;
   stop_price: number;
   reasons: string[];
+  position_amount?: number;
 }
 
 export interface TradeRow {
@@ -32,6 +34,17 @@ export interface TradeRow {
   updated_at: string;
   closed_at: string | null;
   closing_note: string | null;
+  position_amount: number | null;
+  closing_type: ClosingType | null;
+  stop_reason: string | null;
+}
+
+export interface CloseTradeParams {
+  tradeId: string;
+  exitPrice: number;
+  closingType: ClosingType;
+  stopReason?: string;
+  closingNote?: string;
 }
 
 export function useTrades() {
@@ -63,6 +76,7 @@ export function useTrades() {
         .insert({
           ...trade,
           user_id: user.id,
+          position_amount: trade.position_amount || null,
         })
         .select()
         .single();
@@ -90,12 +104,14 @@ export function useTrades() {
   });
 
   const closeTrade = useMutation({
-    mutationFn: async ({ tradeId, exitPrice, closingNote }: { tradeId: string; exitPrice: number; closingNote?: string }) => {
+    mutationFn: async ({ tradeId, exitPrice, closingType, stopReason, closingNote }: CloseTradeParams) => {
       const { data, error } = await supabase
         .from('trades')
         .update({
           status: 'closed' as const,
           exit_price: exitPrice,
+          closing_type: closingType,
+          stop_reason: closingType === 'stop' ? stopReason : null,
           closing_note: closingNote || null,
         })
         .eq('id', tradeId)
@@ -110,9 +126,9 @@ export function useTrades() {
         old.map((t) => (t.id === updatedTrade.id ? updatedTrade : t))
       );
       
-      const isSuccess = updatedTrade.is_successful;
+      const isKarAl = updatedTrade.closing_type === 'kar_al';
       toast({
-        title: isSuccess ? '✅ Başarılı işlem!' : '❌ Başarısız işlem',
+        title: isKarAl ? '💰 Kâr Al!' : '🛑 Stop',
         description: `İşlem %${updatedTrade.progress_percent?.toFixed(1)} ilerleme ile kapatıldı.`,
       });
     },
