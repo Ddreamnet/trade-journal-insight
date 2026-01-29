@@ -145,7 +145,7 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
             {type === 'active' && (
               <TableHead className="text-muted-foreground font-medium text-center">İşlem</TableHead>
             )}
-            <TableHead className="text-muted-foreground font-medium w-16"></TableHead>
+            <TableHead className="text-muted-foreground font-medium w-10 px-1"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -297,7 +297,7 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                 )}
 
                 {/* Edit + Note Icons (En Sağ) */}
-                <TableCell className="py-1 px-2">
+                <TableCell className="py-1 px-1 w-10">
                   <div className="flex items-center justify-end gap-1">
                     <button
                       onClick={() => setEditingTrade(trade)}
