@@ -153,20 +153,20 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                 )}
               >
                 {/* Edit Icon + Note Icon */}
-                <TableCell className="py-3 w-12">
-                  <div className="flex items-center gap-0.5">
+                <TableCell className="py-1 px-1">
+                  <div className="flex items-center gap-0">
                     <button
                       onClick={() => setEditingTrade(trade)}
-                      className="p-1.5 rounded-md hover:bg-secondary transition-colors"
+                      className="p-0.5 rounded hover:bg-secondary transition-colors"
                       title="Düzenle"
                     >
-                      <Pencil className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+                      <Pencil className="w-5 h-5 text-muted-foreground hover:text-foreground" />
                     </button>
                     {(trade.closing_note || trade.stop_reason) && (
                       <Popover>
                         <PopoverTrigger asChild>
-                          <button className="p-1.5 rounded-md hover:bg-secondary transition-colors" title="Notlar">
-                            <StickyNote className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+                          <button className="p-0.5 rounded hover:bg-secondary transition-colors" title="Notlar">
+                            <StickyNote className="w-5 h-5 text-muted-foreground hover:text-foreground" />
                           </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-64 p-3" side="bottom">
