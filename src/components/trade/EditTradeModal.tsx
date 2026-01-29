@@ -347,7 +347,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
                           className="h-10"
                           onClick={() => setClosingType('stop')}
                         >
-                          🛑 Stop
+                          Stop
                         </Button>
                       </div>
                     </div>

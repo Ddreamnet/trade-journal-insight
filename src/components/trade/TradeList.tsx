@@ -270,7 +270,7 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                             trade.closing_type === 'kar_al' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
                           )}
                         >
-                          {trade.closing_type === 'kar_al' ? '💰 Kâr Al' : '🛑 Stop'}
+                          {trade.closing_type === 'kar_al' ? '💰 Kâr Al' : 'Stop'}
                         </span>
                         {(trade.closing_note || trade.stop_reason) && (
                           <Popover>
@@ -437,7 +437,7 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                         trade.closing_type === 'kar_al' ? 'text-profit' : 'text-loss'
                       )}
                     >
-                      {trade.closing_type === 'kar_al' ? '💰 Kâr Al' : '🛑 Stop'}
+                      {trade.closing_type === 'kar_al' ? '💰 Kâr Al' : 'Stop'}
                     </span>
                     {(trade.closing_note || trade.stop_reason) && (
                       <Popover>
