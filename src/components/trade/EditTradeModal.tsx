@@ -339,7 +339,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
                             setStopReason('');
                           }}
                         >
-                          💰 Kâr Al
+                          Kâr Al
                         </Button>
                         <Button
                           type="button"
