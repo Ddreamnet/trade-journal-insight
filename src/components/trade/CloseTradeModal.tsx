@@ -3,7 +3,7 @@ import { X, TrendingUp, CircleStop } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trade, ClosingType, StopReason, STOP_REASONS } from '@/types/trade';
@@ -18,7 +18,7 @@ interface CloseTradeModalProps {
 export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalProps) {
   const [exitPrice, setExitPrice] = useState('');
   const [closingType, setClosingType] = useState<ClosingType | null>(null);
-  const [stopReason, setStopReason] = useState<StopReason | ''>('');
+  const [stopReasons, setStopReasons] = useState<StopReason[]>([]);
   const [closingNote, setClosingNote] = useState('');
 
   // Calculate signed progress percentage
@@ -47,21 +47,29 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
     return (movement / targetMovement) * 100;
   }, [exitPrice, trade]);
 
+  const handleCheckedChange = (id: StopReason, checked: boolean) => {
+    if (checked) {
+      setStopReasons([...stopReasons, id]);
+    } else {
+      setStopReasons(stopReasons.filter(r => r !== id));
+    }
+  };
+
   const handleConfirm = () => {
     if (!closingType || progressPercent === null) return;
-    if (closingType === 'stop' && !stopReason) return;
+    if (closingType === 'stop' && stopReasons.length === 0) return;
     
     onConfirm(
       parseFloat(exitPrice),
       closingType,
-      closingType === 'stop' ? stopReason : undefined,
+      closingType === 'stop' ? stopReasons.join(',') : undefined,
       closingNote.trim() || undefined
     );
   };
 
   const isValid = closingType !== null && 
     progressPercent !== null && 
-    (closingType === 'kar_al' || (closingType === 'stop' && stopReason));
+    (closingType === 'kar_al' || (closingType === 'stop' && stopReasons.length > 0));
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
@@ -158,7 +166,7 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
                     className="h-14 flex-col gap-1"
                     onClick={() => {
                       setClosingType('kar_al');
-                      setStopReason('');
+                      setStopReasons([]);
                     }}
                   >
                     <TrendingUp className="w-5 h-5" />
@@ -177,33 +185,33 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
               </div>
             )}
 
-            {/* Stop Reasons */}
+            {/* Stop Reasons - Çoklu Seçim */}
             {closingType === 'stop' && (
               <div>
                 <label className="text-sm font-medium text-muted-foreground mb-3 block">
-                  Stop Sebebi
+                  Stop Sebepleri (birden fazla seçebilirsiniz)
                 </label>
-                <RadioGroup
-                  value={stopReason}
-                  onValueChange={(value) => setStopReason(value as StopReason)}
-                  className="grid gap-2"
-                >
+                <div className="grid gap-2">
                   {STOP_REASONS.map((reason) => (
                     <Label
                       key={reason.id}
-                      htmlFor={reason.id}
+                      htmlFor={`stop-${reason.id}`}
                       className={cn(
                         'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
-                        stopReason === reason.id
+                        stopReasons.includes(reason.id)
                           ? 'border-primary bg-primary/10'
                           : 'border-border hover:border-muted-foreground/50'
                       )}
                     >
-                      <RadioGroupItem value={reason.id} id={reason.id} />
+                      <Checkbox
+                        id={`stop-${reason.id}`}
+                        checked={stopReasons.includes(reason.id)}
+                        onCheckedChange={(checked) => handleCheckedChange(reason.id, !!checked)}
+                      />
                       <span className="text-sm text-foreground">{reason.label}</span>
                     </Label>
                   ))}
-                </RadioGroup>
+                </div>
               </div>
             )}
 

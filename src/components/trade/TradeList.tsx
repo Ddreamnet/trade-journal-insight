@@ -13,6 +13,12 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   Table,
   TableBody,
   TableCell,
@@ -63,9 +69,11 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
       .join(', ');
   };
 
-  const getStopReasonLabel = (stopReasonId: string | null) => {
-    if (!stopReasonId) return null;
-    return STOP_REASONS.find((r) => r.id === stopReasonId)?.label || stopReasonId;
+  const getStopReasonLabels = (stopReasonIds: string | null) => {
+    if (!stopReasonIds) return null;
+    return stopReasonIds.split(',')
+      .map(id => STOP_REASONS.find((r) => r.id === id)?.label || id)
+      .join(', ');
   };
 
   // Anlık fiyat ve fark hesaplama
@@ -118,7 +126,6 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
       <Table>
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
-            <TableHead className="text-muted-foreground font-medium w-8"></TableHead>
             <TableHead className="text-muted-foreground font-medium">Hisse</TableHead>
             <TableHead className="text-muted-foreground font-medium text-center">Tür</TableHead>
             <TableHead className="text-muted-foreground font-medium text-center">Entry</TableHead>
@@ -138,6 +145,7 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
             {type === 'active' && (
               <TableHead className="text-muted-foreground font-medium text-center">İşlem</TableHead>
             )}
+            <TableHead className="text-muted-foreground font-medium w-16"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -152,42 +160,6 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                   highlightedTradeId === trade.id && 'highlight-new bg-primary/10'
                 )}
               >
-                {/* Edit Icon + Note Icon */}
-                <TableCell className="py-1 px-1">
-                  <div className="flex items-center gap-0">
-                    <button
-                      onClick={() => setEditingTrade(trade)}
-                      className="p-0.5 rounded hover:bg-secondary transition-colors"
-                      title="Düzenle"
-                    >
-                      <Pencil className="w-5 h-5 text-muted-foreground hover:text-foreground" />
-                    </button>
-                    {(trade.closing_note || trade.stop_reason) && (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="p-0.5 rounded hover:bg-secondary transition-colors" title="Notlar">
-                            <StickyNote className="w-5 h-5 text-muted-foreground hover:text-foreground" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 p-3" side="bottom">
-                          {trade.stop_reason && (
-                            <div className="mb-2">
-                              <div className="text-xs text-muted-foreground mb-1 font-medium">Stop Sebebi</div>
-                              <p className="text-sm text-foreground">{getStopReasonLabel(trade.stop_reason)}</p>
-                            </div>
-                          )}
-                          {trade.closing_note && (
-                            <div>
-                              <div className="text-xs text-muted-foreground mb-1 font-medium">Not</div>
-                              <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
-                            </div>
-                          )}
-                        </PopoverContent>
-                      </Popover>
-                    )}
-                  </div>
-                </TableCell>
-
                 {/* Hisse */}
                 <TableCell className="py-3">
                   <div className="flex items-center gap-2">
@@ -262,9 +234,18 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
 
                 {/* Sebepler */}
                 <TableCell className="max-w-[150px]">
-                  <span className="text-xs text-muted-foreground line-clamp-2">
-                    {getReasonLabels(trade.reasons)}
-                  </span>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-xs text-muted-foreground line-clamp-2 cursor-default">
+                          {getReasonLabels(trade.reasons)}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p>{getReasonLabels(trade.reasons)}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </TableCell>
 
                 {/* RR */}
@@ -314,6 +295,42 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                     </Button>
                   </TableCell>
                 )}
+
+                {/* Edit + Note Icons (En Sağ) */}
+                <TableCell className="py-1 px-2">
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      onClick={() => setEditingTrade(trade)}
+                      className="p-1 rounded hover:bg-secondary transition-colors"
+                      title="Düzenle"
+                    >
+                      <Pencil className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                    </button>
+                    {(trade.closing_note || trade.stop_reason) && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="p-1 rounded hover:bg-secondary transition-colors" title="Notlar">
+                            <StickyNote className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-3" side="bottom">
+                          {trade.stop_reason && (
+                            <div className="mb-2">
+                              <div className="text-xs text-muted-foreground mb-1 font-medium">Stop Sebebi</div>
+                              <p className="text-sm text-foreground">{getStopReasonLabels(trade.stop_reason)}</p>
+                            </div>
+                          )}
+                          {trade.closing_note && (
+                            <div>
+                              <div className="text-xs text-muted-foreground mb-1 font-medium">Not</div>
+                              <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
+                            </div>
+                          )}
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             );
           })}
@@ -336,17 +353,9 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
               highlightedTradeId === trade.id && 'highlight-new bg-primary/10'
             )}
           >
-            {/* Row 1: Hisse + Tür + RR + Edit */}
+            {/* Row 1: Hisse + Tür + RR + Icons */}
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                {/* Edit button */}
-                <button
-                  onClick={() => setEditingTrade(trade)}
-                  className="p-1.5 rounded-md hover:bg-secondary transition-colors shrink-0"
-                  title="Düzenle"
-                >
-                  <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                </button>
                 <div
                   className={cn(
                     'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
@@ -383,6 +392,39 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                 >
                   RR {(trade.rr_ratio ?? 0).toFixed(1)}
                 </span>
+                {/* Edit + Note Icons */}
+                <div className="flex items-center gap-0.5">
+                  <button
+                    onClick={() => setEditingTrade(trade)}
+                    className="p-1 rounded hover:bg-secondary transition-colors"
+                    title="Düzenle"
+                  >
+                    <Pencil className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                  </button>
+                  {(trade.closing_note || trade.stop_reason) && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="p-1 rounded hover:bg-secondary transition-colors" title="Notlar">
+                          <StickyNote className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-56 p-3" side="bottom">
+                        {trade.stop_reason && (
+                          <div className="mb-2">
+                            <div className="text-xs text-muted-foreground mb-1 font-medium">Stop Sebebi</div>
+                            <p className="text-sm text-foreground">{getStopReasonLabels(trade.stop_reason)}</p>
+                          </div>
+                        )}
+                        {trade.closing_note && (
+                          <div>
+                            <div className="text-xs text-muted-foreground mb-1 font-medium">Not</div>
+                            <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
+                          </div>
+                        )}
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -439,36 +481,13 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                     >
                       {trade.closing_type === 'kar_al' ? 'Kâr Al' : 'Stop'}
                     </span>
-                    {(trade.closing_note || trade.stop_reason) && (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="p-0.5 rounded hover:bg-secondary/50 transition-colors">
-                            <StickyNote className="w-3 h-3 text-muted-foreground hover:text-foreground" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-56 p-3" side="top">
-                          {trade.stop_reason && (
-                            <div className="mb-2">
-                              <div className="text-xs text-muted-foreground mb-1 font-medium">Stop Sebebi</div>
-                              <p className="text-sm text-foreground">{getStopReasonLabel(trade.stop_reason)}</p>
-                            </div>
-                          )}
-                          {trade.closing_note && (
-                            <div>
-                              <div className="text-xs text-muted-foreground mb-1 font-medium">Not</div>
-                              <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
-                            </div>
-                          )}
-                        </PopoverContent>
-                      </Popover>
-                    )}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Row 3: Sebepler */}
-            <div className="text-[10px] text-muted-foreground mb-2 line-clamp-1">
+            {/* Row 3: Sebepler (sarmalı - alt satırlara akıyor) */}
+            <div className="text-[10px] text-muted-foreground mb-2">
               <span className="font-medium">Sebepler:</span> {getReasonLabels(trade.reasons)}
             </div>
 
