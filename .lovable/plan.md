@@ -1,262 +1,198 @@
 
-# Stooq Tarihsel Veri Entegrasyonu Planı
+# Plan: Trade Listesi UI İyileştirmeleri ve Çoklu Stop Sebep Seçimi
 
 ## Özet
-Raporlarım sayfasındaki grafikler için Stooq'tan tarihsel fiyat serisi çekip, benchmark karşılaştırmasını gerçek verilerle yapacağız.
+Bu plan 4 temel değişikliği kapsıyor:
+1. Düzenleme ve not ikonlarını satırın en sağına taşıma
+2. Mobil görünümde düzenleme ikonunu not ikonu ile birlikte ekleme
+3. Sebepler metnini mobilde alt satırlara akıtma, masaüstünde tooltip ile gösterme
+4. İşlem kapatırken çoklu stop sebebi seçimine izin verme
 
 ---
 
-## Mimari Tasarım
+## Değişiklikler
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                          Frontend                                │
-├─────────────────────────────────────────────────────────────────┤
-│  MarketSeriesProvider (yeni context)                            │
-│  ├── 1 yıllık veriyi tek sefer çeker                            │
-│  ├── Asset bazlı cache (gold, usd, eur, bist100, nasdaq100)     │
-│  └── Timeframe filtreleme client-side yapılır                   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              /api/market-series.php (cPanel)                    │
-├─────────────────────────────────────────────────────────────────┤
-│  ├── Query: ?asset=gold|usd|eur|bist100|nasdaq100               │
-│  ├── Stooq CSV fetch → JSON dönüşüm                             │
-│  ├── 30 dk file cache (asset bazlı)                             │
-│  └── Fallback: eski cache varsa döndür                          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              Stooq CSV (ücretsiz, API key yok)                  │
-│              https://stooq.com/q/d/l/?s={SYMBOL}&i=d            │
-└─────────────────────────────────────────────────────────────────┘
-```
+### 1. Desktop: İkonları Satırın En Sağına Taşıma
+Düzenleme (Pencil) ve Not (StickyNote) ikonları şu anda ilk sütunda. Bunları satırın en sağına, yeni bir sütun olarak ekleyeceğiz.
 
----
+**Değişiklikler:**
+- `TableHead` ve `TableCell` için ilk sütundaki ikon sütununu kaldır
+- Tablonun en sağına yeni bir "Aksiyon İkonları" sütunu ekle
+- Aktif işlemlerde "Kapat" butonunun yanında, kapalı işlemlerde "Sonuç" sütununun sağında olacak
 
-## Oluşturulacak Dosyalar
+### 2. Mobil: Düzenleme ve Not İkonlarını Yan Yana Sağa Yerleştirme
+Mobil kartlarda düzenleme ikonu sol üstte, şimdi sağ tarafa alınacak ve not ikonu yanına eklenecek.
 
-### 1. PHP Backend Endpoint
+**Değişiklikler:**
+- Kart üst satırında düzenleme ikonunu sağ tarafa, RR'nin yanına taşı
+- Not ikonu (varsa) düzenleme ikonunun hemen sağında olacak
+- İkonlar için uygun boyut ve padding
 
-**Dosya:** `api/market-series.php`
+### 3. Sebepler Metni: Mobilde Sarma, Desktop'ta Tooltip
+Mobilde "..." gösterimi yerine metin alt satırlara akacak. Desktop'ta hover ile tooltip gösterilecek.
 
-| Özellik | Detay |
-|---------|-------|
-| Cache süresi | 30 dakika |
-| Cache yolu | `api/cache/market-series-{asset}.json` |
-| Stooq formatı | CSV (Date, Open, High, Low, Close, Volume) |
-| Çıktı | JSON `{ asset, updatedAt, points: [{date, value}] }` |
-| Hata durumu | HTTP 502 + eski cache fallback |
+**Değişiklikler:**
+- **Mobil:** `line-clamp-1` sınıfını kaldır, metnin doğal akmasına izin ver
+- **Desktop:** Sebepler hücresine `Tooltip` ekle, hover'da tam listeyi göster
 
-**Asset → Stooq Symbol Mapping:**
-- `gold` → `xautry` (Ons Altın / TRY)
-- `usd` → `usdtry`
-- `eur` → `eurtry`
-- `bist100` → `^xu100`
-- `nasdaq100` → `^ndx`
+### 4. Çoklu Stop Sebep Seçimi
+`CloseTradeModal`'da stop seçildiğinde RadioGroup yerine Checkbox listesi kullanılacak.
 
-### 2. Supabase Edge Function (Geliştirme/Preview için)
-
-**Dosya:** `supabase/functions/market-series/index.ts`
-
-PHP ile aynı mantığı Deno'da implement edecek. Preview ortamında çalışması için gerekli.
-
-### 3. Market Series Context
-
-**Dosya:** `src/contexts/MarketSeriesContext.tsx`
-
-| Özellik | Detay |
-|---------|-------|
-| State | `Record<Asset, SeriesData>` |
-| Fetch stratejisi | Lazy load (asset seçilince fetch) |
-| Cache | localStorage + in-memory |
-| Polling | Yok (statik günlük veri) |
-
-### 4. Yeni Type Tanımları
-
-**Dosya:** `src/types/market.ts` (güncelleme)
-
-```typescript
-export type MarketAsset = 'gold' | 'usd' | 'eur' | 'bist100' | 'nasdaq100';
-
-export interface MarketSeriesPoint {
-  date: string; // YYYY-MM-DD
-  value: number; // Close price
-}
-
-export interface MarketSeriesData {
-  asset: MarketAsset;
-  updatedAt: string;
-  points: MarketSeriesPoint[];
-}
-```
-
----
-
-## Güncellenecek Dosyalar
-
-### 1. `src/components/reports/WinRateChart.tsx`
-
-| Değişiklik | Detay |
-|------------|-------|
-| Mock veri kaldır | Random gold/usd/eur değerleri yerine gerçek veri |
-| Context kullan | `useMarketSeries` hook'u ile veri al |
-| Normalize et | Tüm seriler 100 baz değerinden başlasın |
-| Timeframe filtre | 1y verisinden client-side kırp |
-
-### 2. `src/pages/Reports.tsx`
-
-| Değişiklik | Detay |
-|------------|-------|
-| Provider wrap | `MarketSeriesProvider` ekle (veya App.tsx'e) |
-| Loading state | Benchmark yüklenirken skeleton göster |
-
-### 3. `src/App.tsx`
-
-| Değişiklik | Detay |
-|------------|-------|
-| Provider ekle | `MarketSeriesProvider` sarmalayıcı ekle |
-
-### 4. `src/types/trade.ts`
-
-| Değişiklik | Detay |
-|------------|-------|
-| BENCHMARKS güncelle | id'leri market series asset'leriyle eşle |
-
----
-
-## Veri Akışı
-
-```text
-1. Kullanıcı "Altın" benchmark'ını seçer
-2. WinRateChart → useMarketSeries('gold') çağırır
-3. Context cache kontrol eder
-   ├── Cache varsa → direkt döndür
-   └── Cache yoksa → Edge Function fetch
-4. Edge Function → Stooq CSV çeker, parse eder
-5. JSON response → Context state'e yaz
-6. WinRateChart → 1y verisinden timeframe'e göre filtrele
-7. Grafikte göster (100 bazlı normalize edilmiş)
-```
-
----
-
-## Timeframe Filtreleme Mantığı
-
-Tüm veri 1 yıllık olarak çekilecek. Timeframe değiştiğinde yeniden fetch yapılmayacak:
-
-| Timeframe | Filtreleme |
-|-----------|------------|
-| 1 Hafta | Son 7 gün |
-| 1 Ay | Son 30 gün |
-| 3 Ay | Son 90 gün |
-| 6 Ay | Son 180 gün |
-| 1 Sene | Tüm veri |
-
----
-
-## Normalleştirme
-
-Benchmark karşılaştırması için tüm seriler 100 bazından başlayacak:
-
-```text
-normalizedValue = (currentPrice / firstPrice) * 100
-```
-
-Örnek: Altın 2000'den 2200'e çıktıysa → 100'den 110'a
-
----
-
-## Uygulama Adımları
-
-1. **Type güncellemeleri**
-   - `src/types/market.ts` dosyasına yeni interface'ler ekle
-
-2. **Edge Function oluştur**
-   - `supabase/functions/market-series/index.ts`
-   - Stooq CSV fetch ve parse
-   - 30 dk in-memory cache
-
-3. **PHP endpoint oluştur**
-   - `api/market-series.php`
-   - File-based cache
-   - cPanel uyumlu
-
-4. **Context oluştur**
-   - `src/contexts/MarketSeriesContext.tsx`
-   - Asset bazlı lazy loading
-   - localStorage persistence
-
-5. **WinRateChart güncelle**
-   - Mock data kaldır
-   - Gerçek veri entegrasyonu
-   - Normalize ve filtre mantığı
-
-6. **App.tsx güncelle**
-   - Provider ekle
+**Değişiklikler:**
+- `stopReason` state'ini `string[]` tipine dönüştür
+- `RadioGroup` yerine `Checkbox` listesi kullan
+- Veritabanına kaydetmeden önce sebepleri virgülle birleştir veya array olarak kaydet
+- Validation: en az bir sebep seçilmiş olmalı
 
 ---
 
 ## Teknik Detaylar
 
-### Stooq CSV Formatı
+### Dosya: `src/components/trade/TradeList.tsx`
 
-```csv
-Date,Open,High,Low,Close,Volume
-2024-01-15,32.5,33.1,32.2,33.0,1234567
-2024-01-16,33.0,33.5,32.8,33.2,1345678
-...
+**Desktop Tablo Yapısı (yeni sütun sırası):**
+```
+Hisse | Tür | Entry | [Anlık] | Target | Stop | Sebepler | RR | [Exit] | [Sonuç] | [Kapat] | İkonlar
 ```
 
-### Edge Function Örnek Response
+**Sebepler için Tooltip:**
+```tsx
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-```json
-{
-  "asset": "gold",
-  "updatedAt": "2025-01-26T10:30:00Z",
-  "points": [
-    { "date": "2024-01-26", "value": 2850.5 },
-    { "date": "2024-01-27", "value": 2865.2 },
-    ...
-  ]
-}
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <span className="text-xs text-muted-foreground line-clamp-2 cursor-default">
+        {getReasonLabels(trade.reasons)}
+      </span>
+    </TooltipTrigger>
+    <TooltipContent className="max-w-xs">
+      <p>{getReasonLabels(trade.reasons)}</p>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
 ```
 
-### Cache Dosya Yapısı (PHP)
+**Mobil Kart İkon Yerleşimi:**
+```tsx
+{/* Row 1: Sol taraf (hisse bilgisi) + Sağ taraf (tür, RR, ikonlar) */}
+<div className="flex items-center justify-between">
+  <div className="flex items-center gap-2">
+    {/* Hisse ikonu ve bilgisi */}
+  </div>
+  <div className="flex items-center gap-2">
+    {/* Tür badge, RR badge */}
+    <div className="flex items-center gap-0.5">
+      <button onClick={() => setEditingTrade(trade)}>
+        <Pencil className="w-5 h-5" />
+      </button>
+      {(trade.closing_note || trade.stop_reason) && (
+        <Popover>...</Popover>
+      )}
+    </div>
+  </div>
+</div>
+```
 
-```text
-api/
-├── market-series.php
-└── cache/
-    ├── market-series-gold.json
-    ├── market-series-usd.json
-    ├── market-series-eur.json
-    ├── market-series-bist100.json
-    └── market-series-nasdaq100.json
+**Mobil Sebepler (sarmalı):**
+```tsx
+<div className="text-[10px] text-muted-foreground mb-2">
+  <span className="font-medium">Sebepler:</span> {getReasonLabels(trade.reasons)}
+</div>
 ```
 
 ---
 
-## Hata Durumları
+### Dosya: `src/components/trade/CloseTradeModal.tsx`
 
-| Senaryo | Davranış |
-|---------|----------|
-| Stooq timeout | Eski cache döndür (varsa) |
-| Parse hatası | HTTP 502 + error message |
-| Asset bulunamadı | HTTP 400 + "Invalid asset" |
-| Cache eski | Stale data + background refresh |
+**State Değişikliği:**
+```tsx
+// Eski
+const [stopReason, setStopReason] = useState<StopReason | ''>('');
+
+// Yeni
+const [stopReasons, setStopReasons] = useState<StopReason[]>([]);
+```
+
+**Checkbox Listesi:**
+```tsx
+import { Checkbox } from '@/components/ui/checkbox';
+
+{closingType === 'stop' && (
+  <div>
+    <label className="text-sm font-medium text-muted-foreground mb-3 block">
+      Stop Sebepleri (birden fazla seçebilirsiniz)
+    </label>
+    <div className="grid gap-2">
+      {STOP_REASONS.map((reason) => (
+        <Label
+          key={reason.id}
+          htmlFor={`stop-${reason.id}`}
+          className={cn(
+            'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
+            stopReasons.includes(reason.id)
+              ? 'border-primary bg-primary/10'
+              : 'border-border hover:border-muted-foreground/50'
+          )}
+        >
+          <Checkbox
+            id={`stop-${reason.id}`}
+            checked={stopReasons.includes(reason.id)}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                setStopReasons([...stopReasons, reason.id]);
+              } else {
+                setStopReasons(stopReasons.filter(r => r !== reason.id));
+              }
+            }}
+          />
+          <span className="text-sm text-foreground">{reason.label}</span>
+        </Label>
+      ))}
+    </div>
+  </div>
+)}
+```
+
+**Validation Güncelleme:**
+```tsx
+const isValid = closingType !== null && 
+  progressPercent !== null && 
+  (closingType === 'kar_al' || (closingType === 'stop' && stopReasons.length > 0));
+```
+
+**handleConfirm Güncelleme:**
+```tsx
+const handleConfirm = () => {
+  if (!closingType || progressPercent === null) return;
+  if (closingType === 'stop' && stopReasons.length === 0) return;
+  
+  onConfirm(
+    parseFloat(exitPrice),
+    closingType,
+    closingType === 'stop' ? stopReasons.join(',') : undefined,
+    closingNote.trim() || undefined
+  );
+};
+```
 
 ---
 
-## Öneriler ve Notlar
+### Dosya: `src/components/trade/TradeList.tsx` - Stop Reason Görüntüleme
 
-1. **NASDAQ100 (`^ndx`)** USD cinsindendir, TRY karşılaştırması için döviz çevirisi gerekebilir. Şimdilik ham değer kullanılacak.
+Çoklu sebepler virgülle ayrıldığında bunları düzgün göstermek için:
 
-2. **Rate Limiting**: Stooq'un resmi rate limit'i yok ama aşırı istek atılmamalı. 30 dk cache yeterli.
+```tsx
+const getStopReasonLabels = (stopReasonIds: string | null) => {
+  if (!stopReasonIds) return null;
+  return stopReasonIds.split(',')
+    .map(id => STOP_REASONS.find((r) => r.id === id)?.label || id)
+    .join(', ');
+};
+```
 
-3. **Hafta sonu verisi**: Stooq sadece iş günleri için veri döndürür. Grafik bunu handle edecek.
+---
 
-4. **PHP endpoint**: Preview'da çalışmayacak, sadece cPanel deploy'unda aktif olacak. Bu nedenle Edge Function paralel tutulacak.
+## Etkilenen Dosyalar
+1. `src/components/trade/TradeList.tsx` - Desktop ve mobil görünüm güncellemeleri
+2. `src/components/trade/CloseTradeModal.tsx` - Çoklu stop sebep seçimi
