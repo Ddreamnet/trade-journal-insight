@@ -7,6 +7,7 @@ import { StockSelector } from '@/components/trade/StockSelector';
 import { TradeForm } from '@/components/trade/TradeForm';
 import { TradeList } from '@/components/trade/TradeList';
 import { Stock, ClosingType } from '@/types/trade';
+import { TradeUpdateData } from '@/components/trade/EditTradeModal';
 import { useTrades } from '@/hooks/useTrades';
 
 export default function Index() {
@@ -14,7 +15,7 @@ export default function Index() {
   const [selectedStock, setSelectedStock] = useState<(Stock & { logoUrl?: string }) | null>(null);
   const [highlightedTradeId, setHighlightedTradeId] = useState<string | null>(null);
 
-  const { activeTrades, closedTrades, createTrade, closeTrade, isLoading } = useTrades();
+  const { activeTrades, closedTrades, createTrade, closeTrade, updateTrade, deleteTrade, isLoading } = useTrades();
 
   const handleStockSelect = (stock: Stock & { logoUrl?: string }) => {
     setSelectedStock(stock);
@@ -48,6 +49,14 @@ export default function Index() {
     closingNote?: string
   ) => {
     await closeTrade.mutateAsync({ tradeId, exitPrice, closingType, stopReason, closingNote });
+  };
+
+  const handleUpdateTrade = async (tradeId: string, data: TradeUpdateData) => {
+    await updateTrade.mutateAsync({ tradeId, data });
+  };
+
+  const handleDeleteTrade = async (tradeId: string) => {
+    await deleteTrade.mutateAsync(tradeId);
   };
 
   return (
@@ -90,6 +99,8 @@ export default function Index() {
             trades={activeTrades}
             type="active"
             onCloseTrade={handleCloseTrade}
+            onUpdateTrade={handleUpdateTrade}
+            onDeleteTrade={handleDeleteTrade}
             highlightedTradeId={highlightedTradeId}
             isLoading={isLoading}
           />
@@ -98,7 +109,9 @@ export default function Index() {
         <TabsContent value="closed" className="mt-0">
           <TradeList 
             trades={closedTrades} 
-            type="closed" 
+            type="closed"
+            onUpdateTrade={handleUpdateTrade}
+            onDeleteTrade={handleDeleteTrade}
             isLoading={isLoading}
           />
         </TabsContent>
