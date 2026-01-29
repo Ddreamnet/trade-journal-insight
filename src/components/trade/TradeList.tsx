@@ -297,8 +297,8 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                 )}
 
                 {/* Edit + Note Icons (En Sağ) */}
-                <TableCell className="py-1 px-1 w-10">
-                  <div className="flex items-center justify-end gap-1">
+                <TableCell className="py-1 pl-0 pr-2 w-10">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => setEditingTrade(trade)}
                       className="p-1 rounded hover:bg-secondary transition-colors"
