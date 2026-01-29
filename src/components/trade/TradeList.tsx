@@ -152,15 +152,40 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                   highlightedTradeId === trade.id && 'highlight-new bg-primary/10'
                 )}
               >
-                {/* Edit Icon */}
-                <TableCell className="py-3 w-8">
-                  <button
-                    onClick={() => setEditingTrade(trade)}
-                    className="p-1.5 rounded-md hover:bg-secondary transition-colors"
-                    title="Düzenle"
-                  >
-                    <Pencil className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
-                  </button>
+                {/* Edit Icon + Note Icon */}
+                <TableCell className="py-3 w-12">
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      onClick={() => setEditingTrade(trade)}
+                      className="p-1.5 rounded-md hover:bg-secondary transition-colors"
+                      title="Düzenle"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+                    </button>
+                    {(trade.closing_note || trade.stop_reason) && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="p-1.5 rounded-md hover:bg-secondary transition-colors" title="Notlar">
+                            <StickyNote className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-3" side="bottom">
+                          {trade.stop_reason && (
+                            <div className="mb-2">
+                              <div className="text-xs text-muted-foreground mb-1 font-medium">Stop Sebebi</div>
+                              <p className="text-sm text-foreground">{getStopReasonLabel(trade.stop_reason)}</p>
+                            </div>
+                          )}
+                          {trade.closing_note && (
+                            <div>
+                              <div className="text-xs text-muted-foreground mb-1 font-medium">Not</div>
+                              <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
+                            </div>
+                          )}
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
                 </TableCell>
 
                 {/* Hisse */}
@@ -263,39 +288,14 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                       </span>
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <span
-                          className={cn(
-                            'text-xs font-semibold px-2 py-1 rounded-full',
-                            trade.closing_type === 'kar_al' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
-                          )}
-                        >
-                          {trade.closing_type === 'kar_al' ? 'Kâr Al' : 'Stop'}
-                        </span>
-                        {(trade.closing_note || trade.stop_reason) && (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button className="p-1 rounded hover:bg-secondary transition-colors">
-                                <StickyNote className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-64 p-3" side="left">
-                              {trade.stop_reason && (
-                                <div className="mb-2">
-                                  <div className="text-xs text-muted-foreground mb-1 font-medium">Stop Sebebi</div>
-                                  <p className="text-sm text-foreground">{getStopReasonLabel(trade.stop_reason)}</p>
-                                </div>
-                              )}
-                              {trade.closing_note && (
-                                <div>
-                                  <div className="text-xs text-muted-foreground mb-1 font-medium">Not</div>
-                                  <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
-                                </div>
-                              )}
-                            </PopoverContent>
-                          </Popover>
+                      <span
+                        className={cn(
+                          'text-xs font-semibold px-2 py-1 rounded-full',
+                          trade.closing_type === 'kar_al' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
                         )}
-                      </div>
+                      >
+                        {trade.closing_type === 'kar_al' ? 'Kâr Al' : 'Stop'}
+                      </span>
                     </TableCell>
                   </>
                 )}
