@@ -281,7 +281,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
               </div>
 
               {/* RR Display */}
-              <div className="pt-2">
+              <div className="pt-2 mb-6">
                 {rrRatio !== null && (
                   <div
                     className={cn(
