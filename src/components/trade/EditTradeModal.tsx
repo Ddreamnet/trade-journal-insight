@@ -1,12 +1,12 @@
-import { useState, useMemo } from 'react';
-import { X, Trash2, TrendingUp, TrendingDown } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { NumberInput } from '@/components/ui/number-input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Textarea } from '@/components/ui/textarea';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { useState, useMemo } from "react";
+import { X, Trash2, TrendingUp, TrendingDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { NumberInput } from "@/components/ui/number-input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,9 +16,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Trade, TradeType, TradeReason, TRADE_REASONS, STOP_REASONS, StopReason, ClosingType } from '@/types/trade';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/alert-dialog";
+import { Trade, TradeType, TradeReason, TRADE_REASONS, STOP_REASONS, StopReason, ClosingType } from "@/types/trade";
+import { cn } from "@/lib/utils";
 
 export interface TradeUpdateData {
   trade_type: TradeType;
@@ -43,7 +43,7 @@ interface EditTradeModalProps {
 }
 
 export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting = false }: EditTradeModalProps) {
-  const isClosed = trade.status === 'closed';
+  const isClosed = trade.status === "closed";
 
   // Form state
   const [tradeType, setTradeType] = useState<TradeType>(trade.trade_type);
@@ -51,13 +51,13 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
   const [entryPrice, setEntryPrice] = useState(trade.entry_price.toString());
   const [targetPrice, setTargetPrice] = useState(trade.target_price.toString());
   const [stopPrice, setStopPrice] = useState(trade.stop_price.toString());
-  const [positionAmount, setPositionAmount] = useState(trade.position_amount?.toString() || '');
-  
+  const [positionAmount, setPositionAmount] = useState(trade.position_amount?.toString() || "");
+
   // Closed trade fields
-  const [exitPrice, setExitPrice] = useState(trade.exit_price?.toString() || '');
+  const [exitPrice, setExitPrice] = useState(trade.exit_price?.toString() || "");
   const [closingType, setClosingType] = useState<ClosingType | null>(trade.closing_type || null);
-  const [stopReason, setStopReason] = useState<StopReason | ''>(trade.stop_reason as StopReason || '');
-  const [closingNote, setClosingNote] = useState(trade.closing_note || '');
+  const [stopReason, setStopReason] = useState<StopReason | "">((trade.stop_reason as StopReason) || "");
+  const [closingNote, setClosingNote] = useState(trade.closing_note || "");
 
   // Delete confirmation
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -87,11 +87,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
   }, [parsedEntry, parsedTarget, parsedStop]);
 
   const toggleReason = (reasonId: TradeReason) => {
-    setReasons((prev) =>
-      prev.includes(reasonId)
-        ? prev.filter((r) => r !== reasonId)
-        : [...prev, reasonId]
-    );
+    setReasons((prev) => (prev.includes(reasonId) ? prev.filter((r) => r !== reasonId) : [...prev, reasonId]));
   };
 
   const handleSave = async () => {
@@ -104,7 +100,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
     if (isClosed) {
       if (!exitPrice || isNaN(parsedExit)) return;
       if (!closingType) return;
-      if (closingType === 'stop' && !stopReason) return;
+      if (closingType === "stop" && !stopReason) return;
     }
 
     setIsSubmittingLocal(true);
@@ -121,7 +117,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
       if (isClosed) {
         updateData.exit_price = parsedExit;
         updateData.closing_type = closingType;
-        updateData.stop_reason = closingType === 'stop' ? stopReason : null;
+        updateData.stop_reason = closingType === "stop" ? stopReason : null;
         updateData.closing_note = closingNote.trim() || null;
       }
 
@@ -144,16 +140,13 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
     rrRatio !== null &&
     !hasEntryStopError &&
     !hasAnyNegativeError &&
-    (!isClosed || (exitPrice && closingType && (closingType === 'kar_al' || stopReason)));
+    (!isClosed || (exitPrice && closingType && (closingType === "kar_al" || stopReason)));
 
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
         {/* Backdrop */}
-        <div
-          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-          onClick={onClose}
-        />
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
         {/* Modal */}
         <div className="relative w-full max-w-lg max-h-[90vh] bg-background-secondary border border-border rounded-t-2xl sm:rounded-2xl overflow-hidden animate-fade-in flex flex-col">
@@ -177,24 +170,22 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
             <div className="p-4 space-y-5">
               {/* Trade Type Selection */}
               <div>
-                <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                  İşlem Türü
-                </label>
+                <label className="text-sm font-medium text-muted-foreground mb-2 block">İşlem Türü</label>
                 <div className="grid grid-cols-2 gap-3">
                   <Button
                     type="button"
-                    variant={tradeType === 'buy' ? 'buy' : 'outline'}
+                    variant={tradeType === "buy" ? "buy" : "outline"}
                     className="h-11"
-                    onClick={() => setTradeType('buy')}
+                    onClick={() => setTradeType("buy")}
                   >
                     <TrendingUp className="w-4 h-4 mr-2" />
                     AL
                   </Button>
                   <Button
                     type="button"
-                    variant={tradeType === 'sell' ? 'sell' : 'outline'}
+                    variant={tradeType === "sell" ? "sell" : "outline"}
                     className="h-11"
-                    onClick={() => setTradeType('sell')}
+                    onClick={() => setTradeType("sell")}
                   >
                     <TrendingDown className="w-4 h-4 mr-2" />
                     SAT
@@ -204,24 +195,19 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
 
               {/* Trade Reasons */}
               <div>
-                <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                  İşlem Sebepleri
-                </label>
+                <label className="text-sm font-medium text-muted-foreground mb-2 block">İşlem Sebepleri</label>
                 <div className="grid grid-cols-2 gap-2">
                   {TRADE_REASONS.map((reason) => (
                     <label
                       key={reason.id}
                       className={cn(
-                        'flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all text-sm',
+                        "flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all text-sm",
                         reasons.includes(reason.id)
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-muted-foreground/50'
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:border-muted-foreground/50",
                       )}
                     >
-                      <Checkbox
-                        checked={reasons.includes(reason.id)}
-                        onCheckedChange={() => toggleReason(reason.id)}
-                      />
+                      <Checkbox checked={reasons.includes(reason.id)} onCheckedChange={() => toggleReason(reason.id)} />
                       <span className="text-foreground">{reason.label}</span>
                     </label>
                   ))}
@@ -238,7 +224,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
                     placeholder="0.00"
                     value={entryPrice}
                     onChange={(e) => setEntryPrice(e.target.value)}
-                    className={cn('font-mono text-sm', hasNegativeEntry && 'border-loss')}
+                    className={cn("font-mono text-sm", hasNegativeEntry && "border-loss")}
                   />
                 </div>
                 <div>
@@ -249,7 +235,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
                     placeholder="0.00"
                     value={targetPrice}
                     onChange={(e) => setTargetPrice(e.target.value)}
-                    className={cn('font-mono text-sm', hasNegativeTarget && 'border-loss')}
+                    className={cn("font-mono text-sm", hasNegativeTarget && "border-loss")}
                   />
                 </div>
                 <div>
@@ -260,7 +246,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
                     placeholder="0.00"
                     value={stopPrice}
                     onChange={(e) => setStopPrice(e.target.value)}
-                    className={cn('font-mono text-sm', (hasNegativeStop || hasEntryStopError) && 'border-loss')}
+                    className={cn("font-mono text-sm", (hasNegativeStop || hasEntryStopError) && "border-loss")}
                   />
                 </div>
               </div>
@@ -275,16 +261,14 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
 
               {/* Position Amount */}
               <div>
-                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">
-                  İşlem Tutarı (₺) - Opsiyonel
-                </label>
+                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">İşlem Tutarı (₺)</label>
                 <NumberInput
                   step="1"
                   min="1"
                   placeholder="Örn: 10000"
                   value={positionAmount}
                   onChange={(e) => setPositionAmount(e.target.value)}
-                  className={cn('font-mono', hasNegativePosition && 'border-loss')}
+                  className={cn("font-mono", hasNegativePosition && "border-loss")}
                 />
               </div>
 
@@ -292,12 +276,12 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
               {rrRatio !== null && (
                 <div
                   className={cn(
-                    'p-3 rounded-lg border text-center',
-                    rrRatio >= 3 ? 'border-profit/50 bg-profit/10' : 'border-loss/50 bg-loss/10'
+                    "p-3 rounded-lg border text-center",
+                    rrRatio >= 3 ? "border-profit/50 bg-profit/10" : "border-loss/50 bg-loss/10",
                   )}
                 >
                   <span className="text-sm text-muted-foreground">RR: </span>
-                  <span className={cn('font-mono font-bold', rrRatio >= 3 ? 'text-profit' : 'text-loss')}>
+                  <span className={cn("font-mono font-bold", rrRatio >= 3 ? "text-profit" : "text-loss")}>
                     {rrRatio.toFixed(2)}
                   </span>
                 </div>
@@ -308,7 +292,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
                 <>
                   <div className="border-t border-border pt-4">
                     <h3 className="text-sm font-semibold text-foreground mb-3">Kapanış Bilgileri</h3>
-                    
+
                     {/* Exit Price */}
                     <div className="mb-3">
                       <label className="text-sm font-medium text-muted-foreground mb-1.5 block">
@@ -326,26 +310,24 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
 
                     {/* Closing Type */}
                     <div className="mb-3">
-                      <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                        Kapanış Türü
-                      </label>
+                      <label className="text-sm font-medium text-muted-foreground mb-2 block">Kapanış Türü</label>
                       <div className="grid grid-cols-2 gap-3">
                         <Button
                           type="button"
-                          variant={closingType === 'kar_al' ? 'buy' : 'outline'}
+                          variant={closingType === "kar_al" ? "buy" : "outline"}
                           className="h-10"
                           onClick={() => {
-                            setClosingType('kar_al');
-                            setStopReason('');
+                            setClosingType("kar_al");
+                            setStopReason("");
                           }}
                         >
                           Kâr Al
                         </Button>
                         <Button
                           type="button"
-                          variant={closingType === 'stop' ? 'sell' : 'outline'}
+                          variant={closingType === "stop" ? "sell" : "outline"}
                           className="h-10"
-                          onClick={() => setClosingType('stop')}
+                          onClick={() => setClosingType("stop")}
                         >
                           Stop
                         </Button>
@@ -353,11 +335,9 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
                     </div>
 
                     {/* Stop Reasons */}
-                    {closingType === 'stop' && (
+                    {closingType === "stop" && (
                       <div className="mb-3">
-                        <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                          Stop Sebebi
-                        </label>
+                        <label className="text-sm font-medium text-muted-foreground mb-2 block">Stop Sebebi</label>
                         <RadioGroup
                           value={stopReason}
                           onValueChange={(value) => setStopReason(value as StopReason)}
@@ -368,10 +348,10 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
                               key={reason.id}
                               htmlFor={`edit-${reason.id}`}
                               className={cn(
-                                'flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all text-sm',
+                                "flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all text-sm",
                                 stopReason === reason.id
-                                  ? 'border-primary bg-primary/10'
-                                  : 'border-border hover:border-muted-foreground/50'
+                                  ? "border-primary bg-primary/10"
+                                  : "border-border hover:border-muted-foreground/50",
                               )}
                             >
                               <RadioGroupItem value={reason.id} id={`edit-${reason.id}`} />
@@ -384,9 +364,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
 
                     {/* Closing Note */}
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground mb-1.5 block">
-                        Not (Opsiyonel)
-                      </label>
+                      <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Not (Opsiyonel)</label>
                       <Textarea
                         placeholder="İşlem hakkında notlarınız..."
                         value={closingNote}
@@ -419,12 +397,8 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
             <Button variant="outline" className="flex-1" onClick={onClose}>
               İptal
             </Button>
-            <Button
-              className="flex-1"
-              onClick={handleSave}
-              disabled={!isValid || isSubmitting || isSubmittingLocal}
-            >
-              {(isSubmitting || isSubmittingLocal) ? 'Kaydediliyor...' : 'Kaydet'}
+            <Button className="flex-1" onClick={handleSave} disabled={!isValid || isSubmitting || isSubmittingLocal}>
+              {isSubmitting || isSubmittingLocal ? "Kaydediliyor..." : "Kaydet"}
             </Button>
           </div>
         </div>
@@ -436,15 +410,13 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
           <AlertDialogHeader>
             <AlertDialogTitle>İşlemi silmek istediğinize emin misiniz?</AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="font-semibold">{trade.stock_symbol}</span> işlemi kalıcı olarak silinecek. Bu işlem geri alınamaz.
+              <span className="font-semibold">{trade.stock_symbol}</span> işlemi kalıcı olarak silinecek. Bu işlem geri
+              alınamaz.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>İptal</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-loss hover:bg-loss/90"
-              onClick={handleDelete}
-            >
+            <AlertDialogAction className="bg-loss hover:bg-loss/90" onClick={handleDelete}>
               Sil
             </AlertDialogAction>
           </AlertDialogFooter>
