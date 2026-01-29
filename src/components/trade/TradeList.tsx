@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, X, StickyNote } from 'lucide-react';
+import { TrendingUp, TrendingDown, X, StickyNote, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Trade, TRADE_REASONS, STOP_REASONS, ClosingType } from '@/types/trade';
 import { CloseTradeModal } from './CloseTradeModal';
+import { EditTradeModal, TradeUpdateData } from './EditTradeModal';
 import { useMarketData } from '@/contexts/MarketDataContext';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,18 +25,35 @@ interface TradeListProps {
   trades: Trade[];
   type: 'active' | 'closed';
   onCloseTrade?: (tradeId: string, exitPrice: number, closingType: ClosingType, stopReason?: string, closingNote?: string) => void;
+  onUpdateTrade?: (tradeId: string, data: TradeUpdateData) => void;
+  onDeleteTrade?: (tradeId: string) => void;
   highlightedTradeId?: string | null;
   isLoading?: boolean;
 }
 
-export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLoading = false }: TradeListProps) {
+export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteTrade, highlightedTradeId, isLoading = false }: TradeListProps) {
   const [closingTrade, setClosingTrade] = useState<Trade | null>(null);
+  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const { getStockBySymbol } = useMarketData();
 
   const handleCloseConfirm = (exitPrice: number, closingType: ClosingType, stopReason?: string, closingNote?: string) => {
     if (closingTrade && onCloseTrade) {
       onCloseTrade(closingTrade.id, exitPrice, closingType, stopReason, closingNote);
       setClosingTrade(null);
+    }
+  };
+
+  const handleEditSave = (tradeId: string, data: TradeUpdateData) => {
+    if (onUpdateTrade) {
+      onUpdateTrade(tradeId, data);
+      setEditingTrade(null);
+    }
+  };
+
+  const handleDelete = (tradeId: string) => {
+    if (onDeleteTrade) {
+      onDeleteTrade(tradeId);
+      setEditingTrade(null);
     }
   };
 
@@ -100,6 +118,7 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
       <Table>
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
+            <TableHead className="text-muted-foreground font-medium w-8"></TableHead>
             <TableHead className="text-muted-foreground font-medium">Hisse</TableHead>
             <TableHead className="text-muted-foreground font-medium text-center">Tür</TableHead>
             <TableHead className="text-muted-foreground font-medium text-center">Entry</TableHead>
@@ -133,6 +152,17 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
                   highlightedTradeId === trade.id && 'highlight-new bg-primary/10'
                 )}
               >
+                {/* Edit Icon */}
+                <TableCell className="py-3 w-8">
+                  <button
+                    onClick={() => setEditingTrade(trade)}
+                    className="p-1.5 rounded-md hover:bg-secondary transition-colors"
+                    title="Düzenle"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+                  </button>
+                </TableCell>
+
                 {/* Hisse */}
                 <TableCell className="py-3">
                   <div className="flex items-center gap-2">
@@ -306,9 +336,17 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
               highlightedTradeId === trade.id && 'highlight-new bg-primary/10'
             )}
           >
-            {/* Row 1: Hisse + Tür + RR */}
+            {/* Row 1: Hisse + Tür + RR + Edit */}
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
+                {/* Edit button */}
+                <button
+                  onClick={() => setEditingTrade(trade)}
+                  className="p-1.5 rounded-md hover:bg-secondary transition-colors shrink-0"
+                  title="Düzenle"
+                >
+                  <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
                 <div
                   className={cn(
                     'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
@@ -463,6 +501,16 @@ export function TradeList({ trades, type, onCloseTrade, highlightedTradeId, isLo
           trade={closingTrade}
           onClose={() => setClosingTrade(null)}
           onConfirm={handleCloseConfirm}
+        />
+      )}
+
+      {/* Edit Trade Modal */}
+      {editingTrade && (
+        <EditTradeModal
+          trade={editingTrade}
+          onClose={() => setEditingTrade(null)}
+          onSave={handleEditSave}
+          onDelete={handleDelete}
         />
       )}
     </>

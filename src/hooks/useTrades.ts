@@ -141,6 +141,36 @@ export function useTrades() {
     },
   });
 
+  const updateTrade = useMutation({
+    mutationFn: async ({ tradeId, data }: { tradeId: string; data: Partial<TradeRow> }) => {
+      const { data: updatedData, error } = await supabase
+        .from('trades')
+        .update(data)
+        .eq('id', tradeId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return updatedData as TradeRow;
+    },
+    onSuccess: (updatedTrade) => {
+      queryClient.setQueryData(['trades', user?.id], (old: TradeRow[] = []) =>
+        old.map((t) => (t.id === updatedTrade.id ? updatedTrade : t))
+      );
+      toast({
+        title: 'İşlem güncellendi',
+        description: `${updatedTrade.stock_symbol} işlemi başarıyla güncellendi.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Hata',
+        description: 'İşlem güncellenemedi: ' + error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const deleteTrade = useMutation({
     mutationFn: async (tradeId: string) => {
       const { error } = await supabase
@@ -180,6 +210,7 @@ export function useTrades() {
     error,
     createTrade,
     closeTrade,
+    updateTrade,
     deleteTrade,
   };
 }
