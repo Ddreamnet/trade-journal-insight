@@ -242,26 +242,20 @@ export function MarketSeriesProvider({ children }: { children: React.ReactNode }
       let cutoffDate: Date;
 
       switch (timeRange) {
-        case '1w':
-          cutoffDate = subDays(now, 7);
-          break;
         case '1m':
           cutoffDate = subMonths(now, 1);
           break;
         case '3m':
           cutoffDate = subMonths(now, 3);
           break;
-        case '6m':
-          cutoffDate = subMonths(now, 6);
-          break;
         case '1y':
           cutoffDate = subMonths(now, 12);
           break;
-        case '3y':
-          cutoffDate = subMonths(now, 36);
+        case 'ytd':
+          cutoffDate = new Date(now.getFullYear(), 0, 1); // Jan 1 of current year
           break;
         default:
-          cutoffDate = subMonths(now, 12); // Default to 1 year
+          cutoffDate = subMonths(now, 1);
       }
 
       return points.filter((point) => {
