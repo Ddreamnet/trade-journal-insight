@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState } from 'react';
+import { useMemo, useEffect } from 'react';
 import {
   LineChart,
   Line,
@@ -7,22 +7,23 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
   ReferenceLine,
 } from 'recharts';
-import { TimeRange, BenchmarkData } from '@/types/trade';
+import { TimeRange, BenchmarkData, Trade } from '@/types/trade';
 import { MarketAsset, MarketSeriesPoint } from '@/types/market';
-import { PortfolioSnapshot, RelativeChartPoint, CurrentValueData } from '@/types/portfolio';
 import { useMarketSeries } from '@/contexts/MarketSeriesContext';
-import { CurrentValuePanel } from './CurrentValuePanel';
 import {
   format,
   parseISO,
+  subDays,
   subMonths,
-  subYears,
-  startOfYear,
   eachDayOfInterval,
   eachWeekOfInterval,
+  eachMonthOfInterval,
+  startOfDay,
   startOfWeek,
+  startOfMonth,
   isAfter,
   isEqual,
   isBefore,
@@ -34,254 +35,257 @@ interface EquityCurveChartProps {
   timeRange: TimeRange;
   selectedBenchmarks: string[];
   benchmarks: BenchmarkData[];
-  snapshots: PortfolioSnapshot[];
-  isLoading?: boolean;
+  filteredTrades: Trade[];
+  startingBalance?: number;
 }
 
-// Get cutoff date based on time range
-function getCutoffDate(timeRange: TimeRange): Date {
-  const now = new Date();
-  switch (timeRange) {
-    case '1m':
-      return subMonths(now, 1);
-    case '3m':
-      return subMonths(now, 3);
-    case '1y':
-      return subYears(now, 1);
-    case 'ytd':
-      return startOfYear(now);
-    default:
-      return subMonths(now, 1);
-  }
+interface ChartDataPoint {
+  date: string;
+  rawDate: string;
+  balance: number | null;
+  gold?: number;
+  usd?: number;
+  eur?: number;
+  bist100?: number;
+  nasdaq100?: number;
+  inflation_tr?: number;
 }
 
-// Generate date intervals for the chart
-function generateIntervals(timeRange: TimeRange): Date[] {
-  const now = new Date();
-  const start = getCutoffDate(timeRange);
-
-  switch (timeRange) {
-    case '1m':
-      return eachDayOfInterval({ start, end: now });
-    case '3m':
-      return eachWeekOfInterval({ start: startOfWeek(start, { weekStartsOn: 1 }), end: now }, { weekStartsOn: 1 });
-    case '1y':
-    case 'ytd':
-      return eachWeekOfInterval({ start: startOfWeek(start, { weekStartsOn: 1 }), end: now }, { weekStartsOn: 1 });
-    default:
-      return eachDayOfInterval({ start, end: now });
-  }
-}
-
-// Find the latest value from a sorted array up to a target date
-function findLatestValue(
-  points: { date: Date; value: number }[],
-  targetDate: Date
-): number | undefined {
-  let latest: number | undefined;
-  for (const p of points) {
-    if (isAfter(p.date, targetDate) && !isEqual(p.date, targetDate)) break;
-    latest = p.value;
-  }
-  return latest;
-}
-
-// Find snapshot for a specific date (carry-forward)
-function findSnapshotForDate(
-  snapshots: PortfolioSnapshot[],
-  targetDate: Date
-): PortfolioSnapshot | undefined {
-  let latest: PortfolioSnapshot | undefined;
-  for (const s of snapshots) {
-    const snapDate = parseISO(s.snapshot_date);
-    if (isAfter(snapDate, targetDate) && !isEqual(snapDate, targetDate)) break;
-    latest = s;
-  }
-  return latest;
-}
-
-// Calculate relative baseline chart data
-function calculateRelativeData(
-  snapshots: PortfolioSnapshot[],
-  benchmarkData: Record<string, { date: Date; value: number }[]>,
-  timeRange: TimeRange
-): RelativeChartPoint[] {
-  const intervals = generateIntervals(timeRange);
-  const cutoffDate = getCutoffDate(timeRange);
+// Calculate PnL for a trade
+function calculateTradePnL(trade: Trade): number {
+  if (!trade.exit_price || !trade.position_amount) return 0;
   
-  // Filter snapshots within range
-  const filteredSnapshots = snapshots.filter(s => {
-    const snapDate = parseISO(s.snapshot_date);
-    return !isBefore(snapDate, cutoffDate);
+  const entry = trade.entry_price;
+  const exit = trade.exit_price;
+  const positionAmount = trade.position_amount;
+  
+  let returnPercent: number;
+  
+  if (trade.trade_type === 'buy') {
+    // Long: profit if exit > entry
+    returnPercent = (exit - entry) / entry;
+  } else {
+    // Short: profit if exit < entry
+    returnPercent = (entry - exit) / entry;
+  }
+  
+  return positionAmount * returnPercent;
+}
+
+// Generate equity curve data based on filtered trades
+function generateEquityCurveData(filteredTrades: Trade[], timeRange: TimeRange, startingBalance: number) {
+  const now = new Date();
+  let intervals: Date[];
+  let groupBy: 'day' | 'week' | 'month';
+
+  switch (timeRange) {
+    case '1w':
+      intervals = eachDayOfInterval({ start: subDays(now, 6), end: now });
+      groupBy = 'day';
+      break;
+    case '1m':
+      intervals = eachDayOfInterval({ start: subDays(now, 29), end: now });
+      groupBy = 'day';
+      break;
+    case '3m':
+      intervals = eachWeekOfInterval(
+        {
+          start: startOfWeek(subMonths(now, 3), { weekStartsOn: 1 }),
+          end: now,
+        },
+        { weekStartsOn: 1 }
+      );
+      groupBy = 'week';
+      break;
+    case '6m':
+      intervals = eachWeekOfInterval(
+        {
+          start: startOfWeek(subMonths(now, 6), { weekStartsOn: 1 }),
+          end: now,
+        },
+        { weekStartsOn: 1 }
+      );
+      groupBy = 'week';
+      break;
+    case '1y':
+      intervals = eachMonthOfInterval({ start: subMonths(now, 11), end: now });
+      groupBy = 'month';
+      break;
+    case '3y':
+      intervals = eachMonthOfInterval({ start: subMonths(now, 35), end: now });
+      groupBy = 'month';
+      break;
+    default:
+      intervals = eachDayOfInterval({ start: subDays(now, 29), end: now });
+      groupBy = 'day';
+  }
+
+  // Sort trades by closed_at
+  const sortedTrades = [...filteredTrades]
+    .filter((t) => t.closed_at && t.position_amount)
+    .sort((a, b) => {
+      const dateA = parseISO(a.closed_at!);
+      const dateB = parseISO(b.closed_at!);
+      return dateA.getTime() - dateB.getTime();
+    });
+
+  // Group trades by interval and calculate cumulative PnL
+  const tradesByInterval = new Map<string, Trade[]>();
+
+  sortedTrades.forEach((trade) => {
+    if (!trade.closed_at) return;
+    const closedDate = parseISO(trade.closed_at);
+    let key: string;
+
+    if (groupBy === 'day') {
+      key = format(startOfDay(closedDate), 'yyyy-MM-dd');
+    } else if (groupBy === 'week') {
+      key = format(startOfWeek(closedDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    } else {
+      key = format(startOfMonth(closedDate), 'yyyy-MM');
+    }
+
+    const existing = tradesByInterval.get(key) || [];
+    existing.push(trade);
+    tradesByInterval.set(key, existing);
   });
 
-  if (filteredSnapshots.length === 0) return [];
+  // Calculate cumulative balance
+  let cumulativeBalance = startingBalance;
 
-  // Find start values
-  const startSnapshot = findSnapshotForDate(snapshots, cutoffDate) || filteredSnapshots[0];
-  const startUnitPrice = Number(startSnapshot.unit_price);
-
-  const startBenchmarkPrices: Record<string, number> = {};
-  for (const [asset, points] of Object.entries(benchmarkData)) {
-    const startValue = findLatestValue(points, cutoffDate);
-    if (startValue !== undefined) {
-      startBenchmarkPrices[asset] = startValue;
-    }
-  }
-
-  // Generate chart points
   return intervals.map((interval) => {
-    const dateLabel = timeRange === '1m' 
-      ? format(interval, 'd MMM', { locale: tr })
-      : format(interval, 'd MMM', { locale: tr });
-    const rawDate = format(interval, 'yyyy-MM-dd');
+    let key: string;
+    let dateLabel: string;
+    let rawDate: string;
 
-    // Find portfolio value for this date
-    const snapshot = findSnapshotForDate(snapshots, interval);
-    const currentUnitPrice = snapshot ? Number(snapshot.unit_price) : startUnitPrice;
-    const portfolioReturnPct = ((currentUnitPrice / startUnitPrice) - 1) * 100;
+    if (groupBy === 'day') {
+      key = format(interval, 'yyyy-MM-dd');
+      rawDate = key;
+      dateLabel = format(interval, 'd MMM', { locale: tr });
+    } else if (groupBy === 'week') {
+      key = format(startOfWeek(interval, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      rawDate = key;
+      dateLabel = format(interval, 'd MMM', { locale: tr });
+    } else {
+      key = format(interval, 'yyyy-MM');
+      rawDate = format(interval, 'yyyy-MM-dd');
+      dateLabel = format(interval, 'MMM yy', { locale: tr });
+    }
 
-    const result: RelativeChartPoint = {
+    const tradesInInterval = tradesByInterval.get(key) || [];
+    
+    // Calculate PnL for this interval
+    const intervalPnL = tradesInInterval.reduce((sum, trade) => {
+      return sum + calculateTradePnL(trade);
+    }, 0);
+    
+    cumulativeBalance += intervalPnL;
+
+    return {
       date: dateLabel,
       rawDate,
-      portfolioReturnPct,
+      balance: parseFloat(cumulativeBalance.toFixed(2)),
+    };
+  });
+}
+
+// Merge benchmark data into chart data
+function mergeBenchmarkData(
+  baseData: { date: string; rawDate: string; balance: number | null }[],
+  benchmarkData: Record<MarketAsset, MarketSeriesPoint[]>
+): ChartDataPoint[] {
+  const prepared: Record<string, { date: Date; value: number }[]> = {};
+
+  for (const [asset, points] of Object.entries(benchmarkData)) {
+    prepared[asset] = (points || [])
+      .map((p) => ({ date: parseISO(p.date), value: p.value }))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+  }
+
+  const findLatestValue = (asset: string, targetIso: string): number | undefined => {
+    const list = prepared[asset];
+    if (!list || list.length === 0) return undefined;
+
+    const target = parseISO(targetIso);
+    let latest: number | undefined;
+    for (const p of list) {
+      if (isAfter(p.date, target) && !isEqual(p.date, target)) break;
+      latest = p.value;
+    }
+    return latest;
+  };
+
+  return baseData.map((point) => {
+    const result: ChartDataPoint = {
+      date: point.date,
+      rawDate: point.rawDate,
+      balance: point.balance,
     };
 
-    // Calculate relative diff for each benchmark
-    for (const [asset, points] of Object.entries(benchmarkData)) {
-      const startPrice = startBenchmarkPrices[asset];
-      if (!startPrice) continue;
-
-      const currentPrice = findLatestValue(points, interval);
-      if (currentPrice === undefined) continue;
-
-      const assetReturnPct = ((currentPrice / startPrice) - 1) * 100;
-      // Relative difference: positive means asset outperformed portfolio
-      result[asset as keyof RelativeChartPoint] = assetReturnPct - portfolioReturnPct;
+    for (const asset of Object.keys(benchmarkData)) {
+      const v = findLatestValue(asset, point.rawDate);
+      if (v !== undefined) {
+        result[asset as MarketAsset] = v;
+      }
     }
 
     return result;
   });
 }
 
-// Calculate inflation text "100 TL → X TL"
-function calculateInflationText(
-  benchmarkData: Record<string, { date: Date; value: number }[]>,
-  timeRange: TimeRange
-): string | null {
-  const inflationPoints = benchmarkData['inflation_tr'];
-  if (!inflationPoints || inflationPoints.length === 0) return null;
-
-  const cutoffDate = getCutoffDate(timeRange);
-  const now = new Date();
-
-  const startValue = findLatestValue(inflationPoints, cutoffDate);
-  const endValue = findLatestValue(inflationPoints, now);
-
-  if (!startValue || !endValue) return null;
-
-  const factor = endValue / startValue;
-  const resultValue = Math.round(100 * factor);
-
-  return `100 TL → ${resultValue} TL`;
-}
-
-export function EquityCurveChart({
-  timeRange,
-  selectedBenchmarks,
-  benchmarks,
-  snapshots,
-  isLoading: portfolioLoading = false,
+export function EquityCurveChart({ 
+  timeRange, 
+  selectedBenchmarks, 
+  benchmarks, 
+  filteredTrades,
+  startingBalance = 100,
 }: EquityCurveChartProps) {
-  const { getSeriesData, fetchSeries, isLoading: isMarketLoading, filterByTimeRange } = useMarketSeries();
-  const [hoveredData, setHoveredData] = useState<CurrentValueData | null>(null);
+  const { getSeriesData, fetchSeries, isLoading, filterByTimeRange, normalizeData } = useMarketSeries();
 
   // Fetch data for selected benchmarks
   useEffect(() => {
     selectedBenchmarks.forEach((benchmarkId) => {
       fetchSeries(benchmarkId as MarketAsset);
     });
-    // Always fetch inflation for the side panel text
-    fetchSeries('inflation_tr');
   }, [selectedBenchmarks, fetchSeries]);
 
-  // Prepare benchmark data
-  const benchmarkSeriesData = useMemo(() => {
-    const result: Record<string, { date: Date; value: number }[]> = {};
-    const allBenchmarks = [...new Set([...selectedBenchmarks, 'inflation_tr'])];
+  // Generate base equity curve data
+  const baseData = useMemo(
+    () => generateEquityCurveData(filteredTrades, timeRange, startingBalance),
+    [filteredTrades, timeRange, startingBalance]
+  );
 
-    allBenchmarks.forEach((benchmarkId) => {
+  // Get and process benchmark data
+  const benchmarkSeriesData = useMemo(() => {
+    const result: Record<MarketAsset, MarketSeriesPoint[]> = {} as Record<MarketAsset, MarketSeriesPoint[]>;
+
+    selectedBenchmarks.forEach((benchmarkId) => {
       const seriesData = getSeriesData(benchmarkId as MarketAsset);
       if (seriesData?.points) {
         const filtered = filterByTimeRange(seriesData.points, timeRange);
-        result[benchmarkId] = filtered
-          .map((p) => ({ date: parseISO(p.date), value: p.value }))
-          .sort((a, b) => a.date.getTime() - b.date.getTime());
+        const normalized = normalizeData(filtered);
+        result[benchmarkId as MarketAsset] = normalized;
       }
     });
 
     return result;
-  }, [selectedBenchmarks, getSeriesData, timeRange, filterByTimeRange]);
+  }, [selectedBenchmarks, getSeriesData, timeRange, filterByTimeRange, normalizeData]);
 
-  // Calculate chart data with relative baseline
-  const chartData = useMemo(() => {
-    if (snapshots.length === 0) return [];
-    return calculateRelativeData(snapshots, benchmarkSeriesData, timeRange);
-  }, [snapshots, benchmarkSeriesData, timeRange]);
+  // Merge all data
+  const chartData = useMemo(() => mergeBenchmarkData(baseData, benchmarkSeriesData), [baseData, benchmarkSeriesData]);
 
-  // Current value data for side panel
-  const currentValueData = useMemo((): CurrentValueData | null => {
-    if (hoveredData) return hoveredData;
-    if (chartData.length === 0 || snapshots.length === 0) return null;
+  // Check if any benchmark is loading
+  const anyLoading = selectedBenchmarks.some((id) => isLoading(id as MarketAsset));
 
-    const lastPoint = chartData[chartData.length - 1];
-    const latestSnapshot = snapshots[snapshots.length - 1];
+  // Check if there's any equity data with position amounts
+  const hasEquityData = filteredTrades.some((t) => t.position_amount && t.closed_at);
+  
+  // Calculate final balance for display
+  const finalBalance = chartData.length > 0 ? chartData[chartData.length - 1].balance : startingBalance;
+  const totalChange = finalBalance !== null ? finalBalance - startingBalance : 0;
+  const totalChangePercent = ((totalChange / startingBalance) * 100).toFixed(1);
 
-    const benchmarkDiffs: Record<string, number> = {};
-    selectedBenchmarks.forEach((id) => {
-      const value = lastPoint[id as keyof RelativeChartPoint];
-      if (typeof value === 'number') {
-        benchmarkDiffs[id] = value;
-      }
-    });
-
-    return {
-      date: format(new Date(), 'd MMMM yyyy', { locale: tr }),
-      unitPrice: Number(latestSnapshot.unit_price),
-      portfolioReturnPct: lastPoint.portfolioReturnPct,
-      benchmarkDiffs,
-      inflationText: calculateInflationText(benchmarkSeriesData, timeRange),
-    };
-  }, [chartData, snapshots, hoveredData, selectedBenchmarks, benchmarkSeriesData, timeRange]);
-
-  // Handle tooltip hover
-  const handleTooltipHover = (data: RelativeChartPoint | null, snapshot: PortfolioSnapshot | null) => {
-    if (!data || !snapshot) {
-      setHoveredData(null);
-      return;
-    }
-
-    const benchmarkDiffs: Record<string, number> = {};
-    selectedBenchmarks.forEach((id) => {
-      const value = data[id as keyof RelativeChartPoint];
-      if (typeof value === 'number') {
-        benchmarkDiffs[id] = value;
-      }
-    });
-
-    setHoveredData({
-      date: format(parseISO(data.rawDate), 'd MMMM yyyy', { locale: tr }),
-      unitPrice: Number(snapshot.unit_price),
-      portfolioReturnPct: data.portfolioReturnPct,
-      benchmarkDiffs,
-      inflationText: calculateInflationText(benchmarkSeriesData, timeRange),
-    });
-  };
-
-  const anyLoading = portfolioLoading || selectedBenchmarks.some((id) => isMarketLoading(id as MarketAsset));
-  const hasData = snapshots.length > 0;
-
-  const benchmarkKeyMap: Record<string, keyof RelativeChartPoint> = {
+  const benchmarkKeyMap: { [key: string]: keyof ChartDataPoint } = {
     gold: 'gold',
     usd: 'usd',
     eur: 'eur',
@@ -290,187 +294,113 @@ export function EquityCurveChart({
     inflation_tr: 'inflation_tr',
   };
 
-  // Custom tooltip
-  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { dataKey: string; value: number; color: string }[]; label?: string }) => {
-    if (!active || !payload || payload.length === 0) return null;
-
-    const dataPoint = chartData.find((d) => d.date === label);
-    if (!dataPoint) return null;
-
-    const snapshot = findSnapshotForDate(snapshots, parseISO(dataPoint.rawDate));
-
-    // Update side panel on hover
-    if (snapshot) {
-      // Trigger side panel update (we use effect for this)
-    }
-
-    const portfolioValue = payload.find((p) => p.dataKey === 'portfolioBaseline');
-
-    return (
-      <div className="bg-popover border border-border rounded-lg p-3 shadow-lg">
-        <p className="text-sm font-medium text-foreground mb-2">{label}</p>
-        
-        <div className="space-y-1">
-          {/* Portfolio return */}
-          {dataPoint && (
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-sm text-muted-foreground">Portföy</span>
-              <span className={`text-sm font-mono font-semibold ${
-                dataPoint.portfolioReturnPct >= 0 ? 'text-profit' : 'text-loss'
-              }`}>
-                {dataPoint.portfolioReturnPct >= 0 ? '+' : ''}{dataPoint.portfolioReturnPct.toFixed(1)}%
-              </span>
-            </div>
-          )}
-
-          {/* Benchmark diffs */}
-          {payload
-            .filter((p) => p.dataKey !== 'portfolioBaseline')
-            .map((entry) => {
-              const benchmark = benchmarks.find((b) => benchmarkKeyMap[b.id] === entry.dataKey);
-              const isInflation = entry.dataKey === 'inflation_tr';
-              
-              return (
-                <div key={entry.dataKey} className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                    <span className="text-sm text-muted-foreground">
-                      {benchmark?.name || (isInflation ? 'Enflasyon' : entry.dataKey)}
-                    </span>
-                  </div>
-                  <span className={`text-sm font-mono font-semibold ${
-                    entry.value > 0 ? 'text-profit' : entry.value < 0 ? 'text-loss' : 'text-muted-foreground'
-                  }`}>
-                    {entry.value > 0 ? '+' : ''}{entry.value.toFixed(1)}%
-                  </span>
-                </div>
-              );
-            })}
-        </div>
-
-        {/* Net difference text */}
-        {selectedBenchmarks.length > 0 && dataPoint && (
-          <div className="mt-2 pt-2 border-t border-border">
-            {selectedBenchmarks.map((id) => {
-              const diff = dataPoint[id as keyof RelativeChartPoint];
-              if (typeof diff !== 'number') return null;
-              const benchmark = benchmarks.find((b) => b.id === id);
-              if (!benchmark) return null;
-
-              const isAhead = diff > 0;
-              return (
-                <p key={id} className="text-xs text-muted-foreground">
-                  {isAhead 
-                    ? `${benchmark.name}'ın %${Math.abs(diff).toFixed(1)} gerisinde`
-                    : `${benchmark.name}'ı %${Math.abs(diff).toFixed(1)} geçtiniz`
-                  }
-                </p>
-              );
-            })}
+  return (
+    <div className="w-full">
+      {/* Summary */}
+      {hasEquityData && (
+        <div className="mb-4 p-3 rounded-lg bg-secondary/50 flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Başlangıç: <span className="font-mono font-semibold text-foreground">₺{startingBalance}</span>
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Son:</span>
+            <span className="font-mono font-semibold text-foreground">
+              ₺{finalBalance?.toFixed(2)}
+            </span>
+            <span className={`font-mono text-sm font-semibold ${totalChange >= 0 ? 'text-profit' : 'text-loss'}`}>
+              ({totalChange >= 0 ? '+' : ''}{totalChangePercent}%)
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div className="h-[300px] sm:h-[400px]">
+        {anyLoading && selectedBenchmarks.length > 0 ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <Skeleton className="w-full h-full" />
+          </div>
+        ) : !hasEquityData ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-center">
+              <p className="text-muted-foreground text-sm mb-2">
+                Equity grafiği için işlem tutarı girilen kapatılmış işlem bulunmuyor
+              </p>
+              <p className="text-xs text-muted-foreground">
+                💡 İşlem açarken "İşlem Tutarı" alanını doldurun
+              </p>
+            </div>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ top: 5, right: 5, left: -10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis
+                dataKey="date"
+                stroke="hsl(var(--muted-foreground))"
+                fontSize={12}
+                tickLine={false}
+              />
+              <YAxis
+                stroke="hsl(var(--muted-foreground))"
+                fontSize={12}
+                tickLine={false}
+                tickFormatter={(value) => `₺${value}`}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'hsl(var(--popover))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px',
+                  color: 'hsl(var(--foreground))',
+                }}
+                labelStyle={{ color: 'hsl(var(--foreground))' }}
+                formatter={(value: number | null, name: string) => {
+                  if (value === null || value === undefined) return ['Veri yok', name];
+                  if (name === 'Bakiye') return [`₺${value.toFixed(2)}`, name];
+                  return [value.toFixed(2), name];
+                }}
+              />
+              <Legend />
+              {/* Reference line at starting balance */}
+              <ReferenceLine 
+                y={startingBalance} 
+                stroke="hsl(var(--muted-foreground))" 
+                strokeDasharray="3 3"
+                strokeOpacity={0.5}
+              />
+              {/* Equity curve */}
+              <Line
+                type="monotone"
+                dataKey="balance"
+                name="Bakiye"
+                stroke="hsl(var(--primary))"
+                strokeWidth={3}
+                dot={false}
+                activeDot={{ r: 6, fill: 'hsl(var(--primary))' }}
+                connectNulls
+              />
+              {/* Benchmark lines */}
+              {selectedBenchmarks.map((benchmarkId) => {
+                const benchmark = benchmarks.find((b) => b.id === benchmarkId);
+                if (!benchmark) return null;
+                return (
+                  <Line
+                    key={benchmarkId}
+                    type="monotone"
+                    dataKey={benchmarkKeyMap[benchmarkId]}
+                    name={benchmark.name}
+                    stroke={benchmark.color}
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    dot={false}
+                    connectNulls
+                  />
+                );
+              })}
+            </LineChart>
+          </ResponsiveContainer>
         )}
       </div>
-    );
-  };
-
-  return (
-    <div className="w-full flex flex-col lg:flex-row gap-4">
-      {/* Chart */}
-      <div className="flex-1">
-        <div className="h-[300px] sm:h-[400px]">
-          {anyLoading ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <Skeleton className="w-full h-full" />
-            </div>
-          ) : !hasData ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="text-center">
-                <p className="text-muted-foreground text-sm mb-2">
-                  Henüz portföy verisi yok
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  💡 "Nakit Ekle" butonuyla portföyünüze para ekleyerek başlayın
-                </p>
-              </div>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart 
-                data={chartData} 
-                margin={{ top: 20, right: 10, left: -10, bottom: 5 }}
-                onMouseLeave={() => setHoveredData(null)}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis
-                  dataKey="date"
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={11}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={11}
-                  tickLine={false}
-                  tickFormatter={(value) => `${value > 0 ? '+' : ''}${value}%`}
-                  domain={['auto', 'auto']}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                
-                {/* Zero baseline (Portfolio) */}
-                <ReferenceLine 
-                  y={0} 
-                  stroke="hsl(var(--primary))" 
-                  strokeWidth={2}
-                  label={{ 
-                    value: 'Portföy', 
-                    position: 'right',
-                    fill: 'hsl(var(--primary))',
-                    fontSize: 11,
-                  }}
-                />
-
-                {/* Invisible line for portfolio tooltip */}
-                <Line
-                  type="monotone"
-                  dataKey={() => 0}
-                  name="portfolioBaseline"
-                  stroke="transparent"
-                  dot={false}
-                  activeDot={false}
-                />
-
-                {/* Benchmark lines */}
-                {selectedBenchmarks.map((benchmarkId) => {
-                  const benchmark = benchmarks.find((b) => b.id === benchmarkId);
-                  if (!benchmark) return null;
-                  return (
-                    <Line
-                      key={benchmarkId}
-                      type="monotone"
-                      dataKey={benchmarkKeyMap[benchmarkId]}
-                      name={benchmark.name}
-                      stroke={benchmark.color}
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 4, fill: benchmark.color }}
-                      connectNulls
-                    />
-                  );
-                })}
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-
-      {/* Side Panel */}
-      <CurrentValuePanel
-        data={currentValueData}
-        selectedBenchmarks={selectedBenchmarks}
-        benchmarks={benchmarks}
-        isLoading={anyLoading}
-      />
     </div>
   );
 }
