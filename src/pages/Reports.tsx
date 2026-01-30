@@ -1,12 +1,15 @@
 import { useState, useMemo } from 'react';
-import { TrendingUp, Trophy, Target, BarChart3, Wallet } from 'lucide-react';
+import { TrendingUp, Trophy, BarChart3, Wallet, PlusCircle, MinusCircle } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { EquityCurveChart } from '@/components/reports/EquityCurveChart';
 import { TimeRangeSelector } from '@/components/reports/TimeRangeSelector';
 import { BenchmarkSelector } from '@/components/reports/BenchmarkSelector';
+import { CashFlowModal } from '@/components/reports/CashFlowModal';
 import { TimeRange, BENCHMARKS, Trade } from '@/types/trade';
 import { useTrades } from '@/hooks/useTrades';
-import { subDays, subMonths, subYears, parseISO, isAfter } from 'date-fns';
+import { usePortfolioEvents } from '@/hooks/usePortfolioEvents';
+import { subMonths, subYears, startOfYear, parseISO, isAfter } from 'date-fns';
+import { Button } from '@/components/ui/button';
 
 // Calculate PnL for a trade
 function calculateTradePnL(trade: Trade): number {
@@ -33,23 +36,17 @@ function filterTradesByTimeRange(trades: Trade[], timeRange: TimeRange): Trade[]
   let cutoffDate: Date;
 
   switch (timeRange) {
-    case '1w':
-      cutoffDate = subDays(now, 7);
-      break;
     case '1m':
       cutoffDate = subMonths(now, 1);
       break;
     case '3m':
       cutoffDate = subMonths(now, 3);
       break;
-    case '6m':
-      cutoffDate = subMonths(now, 6);
-      break;
     case '1y':
       cutoffDate = subYears(now, 1);
       break;
-    case '3y':
-      cutoffDate = subYears(now, 3);
+    case 'ytd':
+      cutoffDate = startOfYear(now);
       break;
     default:
       cutoffDate = subMonths(now, 1);
@@ -64,8 +61,18 @@ function filterTradesByTimeRange(trades: Trade[], timeRange: TimeRange): Trade[]
 export default function Reports() {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('1m');
   const [selectedBenchmarks, setSelectedBenchmarks] = useState<string[]>([]);
+  const [cashFlowModalOpen, setCashFlowModalOpen] = useState(false);
+  const [cashFlowType, setCashFlowType] = useState<'deposit' | 'withdraw'>('deposit');
   
-  const { closedTrades, isLoading } = useTrades();
+  const { closedTrades, isLoading: tradesLoading } = useTrades();
+  const { 
+    snapshots, 
+    isLoading: portfolioLoading, 
+    addDeposit, 
+    addWithdraw,
+    getPortfolioState,
+    hasPortfolio 
+  } = usePortfolioEvents();
 
   const toggleBenchmark = (benchmarkId: string) => {
     setSelectedBenchmarks((prev) =>
@@ -73,6 +80,19 @@ export default function Reports() {
         ? prev.filter((id) => id !== benchmarkId)
         : [...prev, benchmarkId]
     );
+  };
+
+  const openCashFlowModal = (type: 'deposit' | 'withdraw') => {
+    setCashFlowType(type);
+    setCashFlowModalOpen(true);
+  };
+
+  const handleCashFlowSubmit = async (amount: number, note?: string) => {
+    if (cashFlowType === 'deposit') {
+      return await addDeposit(amount, note);
+    } else {
+      return await addWithdraw(amount, note);
+    }
   };
 
   // Filter closed trades by selected time range
@@ -119,14 +139,45 @@ export default function Reports() {
     };
   }, [filteredTrades]);
 
+  // Get current portfolio state for max withdraw
+  const portfolioState = getPortfolioState();
+  const maxWithdraw = portfolioState?.portfolioValue || 0;
+
+  const isLoading = tradesLoading || portfolioLoading;
+
   return (
     <MainLayout>
       {/* Page Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Raporlarım</h1>
-        <p className="text-muted-foreground">
-          İşlem performansınızı analiz edin
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Raporlarım</h1>
+          <p className="text-muted-foreground">
+            Portföy performansınızı analiz edin
+          </p>
+        </div>
+        
+        {/* Cash Flow Buttons */}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => openCashFlowModal('deposit')}
+            className="border-profit/50 text-profit hover:bg-profit/10"
+          >
+            <PlusCircle className="w-4 h-4 mr-2" />
+            Nakit Ekle
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => openCashFlowModal('withdraw')}
+            disabled={!hasPortfolio}
+            className="border-loss/50 text-loss hover:bg-loss/10 disabled:opacity-50"
+          >
+            <MinusCircle className="w-4 h-4 mr-2" />
+            Nakit Çek
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -176,7 +227,7 @@ export default function Reports() {
       <div className="rounded-xl bg-card border border-border p-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <h2 className="text-lg font-semibold text-foreground">
-            Equity Curve
+            Performans Grafiği
           </h2>
           <TimeRangeSelector
             selectedRange={selectedTimeRange}
@@ -188,8 +239,8 @@ export default function Reports() {
           timeRange={selectedTimeRange}
           selectedBenchmarks={selectedBenchmarks}
           benchmarks={BENCHMARKS}
-          filteredTrades={filteredTrades}
-          startingBalance={100}
+          snapshots={snapshots}
+          isLoading={portfolioLoading}
         />
       </div>
 
@@ -201,10 +252,19 @@ export default function Reports() {
           onToggle={toggleBenchmark}
         />
         <p className="text-xs text-muted-foreground mt-3">
-          💡 Piyasa verileri Stooq ve TCMB EVDS'den çekilmektedir. Tüm değerler
-          100 bazından normalize edilmiştir.
+          💡 Portföy 0 çizgisinde sabit kalır. Benchmarklar portföye göre göreli fark olarak gösterilir.
+          Pozitif değer = varlık portföyün önünde, negatif = portföy varlığın önünde.
         </p>
       </div>
+
+      {/* Cash Flow Modal */}
+      <CashFlowModal
+        open={cashFlowModalOpen}
+        onOpenChange={setCashFlowModalOpen}
+        type={cashFlowType}
+        onSubmit={handleCashFlowSubmit}
+        maxWithdraw={cashFlowType === 'withdraw' ? maxWithdraw : undefined}
+      />
     </MainLayout>
   );
 }
