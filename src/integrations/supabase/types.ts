@@ -14,85 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      portfolio_events: {
-        Row: {
-          amount_tl: number
-          created_at: string
-          event_type: Database["public"]["Enums"]["portfolio_event_type"]
-          id: string
-          note: string | null
-          trade_id: string | null
-          user_id: string
-        }
-        Insert: {
-          amount_tl: number
-          created_at?: string
-          event_type: Database["public"]["Enums"]["portfolio_event_type"]
-          id?: string
-          note?: string | null
-          trade_id?: string | null
-          user_id: string
-        }
-        Update: {
-          amount_tl?: number
-          created_at?: string
-          event_type?: Database["public"]["Enums"]["portfolio_event_type"]
-          id?: string
-          note?: string | null
-          trade_id?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "portfolio_events_trade_id_fkey"
-            columns: ["trade_id"]
-            isOneToOne: false
-            referencedRelation: "trades"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      portfolio_snapshots: {
-        Row: {
-          created_at: string
-          event_id: string
-          id: string
-          portfolio_value: number
-          shares_total: number
-          snapshot_date: string
-          unit_price: number
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          event_id: string
-          id?: string
-          portfolio_value: number
-          shares_total: number
-          snapshot_date: string
-          unit_price: number
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          event_id?: string
-          id?: string
-          portfolio_value?: number
-          shares_total?: number
-          snapshot_date?: string
-          unit_price?: number
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "portfolio_snapshots_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "portfolio_events"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       trades: {
         Row: {
           closed_at: string | null
@@ -190,7 +111,6 @@ export type Database = {
       }
     }
     Enums: {
-      portfolio_event_type: "deposit" | "withdraw" | "pnl"
       trade_status: "active" | "closed"
       trade_type: "buy" | "sell"
     }
@@ -320,7 +240,6 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      portfolio_event_type: ["deposit", "withdraw", "pnl"],
       trade_status: ["active", "closed"],
       trade_type: ["buy", "sell"],
     },

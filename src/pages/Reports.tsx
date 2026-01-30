@@ -1,30 +1,29 @@
 import { useState, useMemo } from 'react';
-import { TrendingUp, Trophy, BarChart3, Wallet } from 'lucide-react';
+import { TrendingUp, Trophy, Target, BarChart3, Wallet } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { EquityCurveChart } from '@/components/reports/EquityCurveChart';
 import { TimeRangeSelector } from '@/components/reports/TimeRangeSelector';
 import { BenchmarkSelector } from '@/components/reports/BenchmarkSelector';
 import { TimeRange, BENCHMARKS, Trade } from '@/types/trade';
-import { MarketAsset } from '@/types/market';
 import { useTrades } from '@/hooks/useTrades';
-import { subMonths, startOfYear, parseISO, isAfter } from 'date-fns';
+import { subDays, subMonths, subYears, parseISO, isAfter } from 'date-fns';
 
 // Calculate PnL for a trade
 function calculateTradePnL(trade: Trade): number {
   if (!trade.exit_price || !trade.position_amount) return 0;
-
+  
   const entry = trade.entry_price;
   const exit = trade.exit_price;
   const positionAmount = trade.position_amount;
-
+  
   let returnPercent: number;
-
+  
   if (trade.trade_type === 'buy') {
     returnPercent = (exit - entry) / entry;
   } else {
     returnPercent = (entry - exit) / entry;
   }
-
+  
   return positionAmount * returnPercent;
 }
 
@@ -34,17 +33,23 @@ function filterTradesByTimeRange(trades: Trade[], timeRange: TimeRange): Trade[]
   let cutoffDate: Date;
 
   switch (timeRange) {
+    case '1w':
+      cutoffDate = subDays(now, 7);
+      break;
     case '1m':
       cutoffDate = subMonths(now, 1);
       break;
     case '3m':
       cutoffDate = subMonths(now, 3);
       break;
-    case '1y':
-      cutoffDate = subMonths(now, 12);
+    case '6m':
+      cutoffDate = subMonths(now, 6);
       break;
-    case 'ytd':
-      cutoffDate = startOfYear(now);
+    case '1y':
+      cutoffDate = subYears(now, 1);
+      break;
+    case '3y':
+      cutoffDate = subYears(now, 3);
       break;
     default:
       cutoffDate = subMonths(now, 1);
@@ -58,15 +63,15 @@ function filterTradesByTimeRange(trades: Trade[], timeRange: TimeRange): Trade[]
 
 export default function Reports() {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('1m');
-  const [selectedBenchmarks, setSelectedBenchmarks] = useState<MarketAsset[]>([]);
-
+  const [selectedBenchmarks, setSelectedBenchmarks] = useState<string[]>([]);
+  
   const { closedTrades, isLoading } = useTrades();
 
   const toggleBenchmark = (benchmarkId: string) => {
     setSelectedBenchmarks((prev) =>
-      prev.includes(benchmarkId as MarketAsset)
+      prev.includes(benchmarkId)
         ? prev.filter((id) => id !== benchmarkId)
-        : [...prev, benchmarkId as MarketAsset]
+        : [...prev, benchmarkId]
     );
   };
 
@@ -80,12 +85,13 @@ export default function Reports() {
     const totalTrades = filteredTrades.length;
     const karAlTrades = filteredTrades.filter((t) => t.closing_type === 'kar_al').length;
     const winRate = totalTrades > 0 ? (karAlTrades / totalTrades) * 100 : 0;
-
+    
     const rrValues = filteredTrades
       .filter((t) => t.rr_ratio !== null)
       .map((t) => t.rr_ratio as number);
-    const avgRR =
-      rrValues.length > 0 ? rrValues.reduce((a, b) => a + b, 0) / rrValues.length : 0;
+    const avgRR = rrValues.length > 0 
+      ? rrValues.reduce((a, b) => a + b, 0) / rrValues.length 
+      : 0;
 
     // Calculate total PnL
     const totalPnL = filteredTrades.reduce((sum, trade) => {
@@ -118,7 +124,9 @@ export default function Reports() {
       {/* Page Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground mb-2">Raporlarım</h1>
-        <p className="text-muted-foreground">İşlem performansınızı analiz edin</p>
+        <p className="text-muted-foreground">
+          İşlem performansınızı analiz edin
+        </p>
       </div>
 
       {/* Stats Cards */}
@@ -148,14 +156,8 @@ export default function Reports() {
             <Wallet className="w-4 h-4 text-primary" />
             <span className="text-xs text-muted-foreground">Toplam K/Z</span>
           </div>
-          <div
-            className={`text-2xl font-bold font-mono ${
-              stats.totalPnL >= 0 ? 'text-profit' : 'text-loss'
-            }`}
-          >
-            {isLoading
-              ? '-'
-              : `${stats.totalPnL >= 0 ? '+' : ''}₺${stats.totalPnL.toFixed(0)}`}
+          <div className={`text-2xl font-bold font-mono ${stats.totalPnL >= 0 ? 'text-profit' : 'text-loss'}`}>
+            {isLoading ? '-' : `${stats.totalPnL >= 0 ? '+' : ''}₺${stats.totalPnL.toFixed(0)}`}
           </div>
         </div>
 
@@ -173,7 +175,9 @@ export default function Reports() {
       {/* Chart Section */}
       <div className="rounded-xl bg-card border border-border p-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <h2 className="text-lg font-semibold text-foreground">Equity Curve</h2>
+          <h2 className="text-lg font-semibold text-foreground">
+            Equity Curve
+          </h2>
           <TimeRangeSelector
             selectedRange={selectedTimeRange}
             onSelect={setSelectedTimeRange}
@@ -183,8 +187,9 @@ export default function Reports() {
         <EquityCurveChart
           timeRange={selectedTimeRange}
           selectedBenchmarks={selectedBenchmarks}
+          benchmarks={BENCHMARKS}
           filteredTrades={filteredTrades}
-          initialCapital={1000}
+          startingBalance={100}
         />
       </div>
 
@@ -196,8 +201,8 @@ export default function Reports() {
           onToggle={toggleBenchmark}
         />
         <p className="text-xs text-muted-foreground mt-3">
-          💡 Benchmark'lar, işlemlerinizin aynı tutarlarla ve aynı tarihlerde ilgili enstrümana
-          yatırılmış olsaydı ne olacağını simüle eder. Portföyünüze göre yüzdesel fark gösterilir.
+          💡 Piyasa verileri Stooq ve TCMB EVDS'den çekilmektedir. Tüm değerler
+          100 bazından normalize edilmiştir.
         </p>
       </div>
     </MainLayout>

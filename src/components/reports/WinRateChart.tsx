@@ -17,7 +17,6 @@ import {
   parseISO,
   subDays,
   subMonths,
-  startOfYear,
   eachDayOfInterval,
   eachWeekOfInterval,
   eachMonthOfInterval,
@@ -56,6 +55,10 @@ function generateWinRateData(filteredTrades: Trade[], timeRange: TimeRange) {
   let groupBy: 'day' | 'week' | 'month';
 
   switch (timeRange) {
+    case '1w':
+      intervals = eachDayOfInterval({ start: subDays(now, 6), end: now });
+      groupBy = 'day';
+      break;
     case '1m':
       intervals = eachDayOfInterval({ start: subDays(now, 29), end: now });
       groupBy = 'day';
@@ -70,19 +73,23 @@ function generateWinRateData(filteredTrades: Trade[], timeRange: TimeRange) {
       );
       groupBy = 'week';
       break;
-    case '1y':
-      intervals = eachMonthOfInterval({ start: subMonths(now, 11), end: now });
-      groupBy = 'month';
-      break;
-    case 'ytd':
+    case '6m':
       intervals = eachWeekOfInterval(
         {
-          start: startOfWeek(startOfYear(now), { weekStartsOn: 1 }),
+          start: startOfWeek(subMonths(now, 6), { weekStartsOn: 1 }),
           end: now,
         },
         { weekStartsOn: 1 }
       );
       groupBy = 'week';
+      break;
+    case '1y':
+      intervals = eachMonthOfInterval({ start: subMonths(now, 11), end: now });
+      groupBy = 'month';
+      break;
+    case '3y':
+      intervals = eachMonthOfInterval({ start: subMonths(now, 35), end: now });
+      groupBy = 'month';
       break;
     default:
       intervals = eachDayOfInterval({ start: subDays(now, 29), end: now });
