@@ -131,7 +131,7 @@ export const BENCHMARKS: BenchmarkData[] = [
   { id: 'inflation_tr', name: 'Enflasyon (TR)', symbol: 'TÜFE', color: '#FF6B35' },
 ];
 
-export type TimeRange = '1w' | '1m' | '3m' | '6m' | '1y' | '3y';
+export type TimeRange = '1m' | '3m' | '1y' | 'ytd';
 
 export interface TimeRangeOption {
   id: TimeRange;
@@ -139,10 +139,40 @@ export interface TimeRangeOption {
 }
 
 export const TIME_RANGES: TimeRangeOption[] = [
-  { id: '1w', label: '1 Hafta' },
-  { id: '1m', label: '1 Ay' },
-  { id: '3m', label: '3 Ay' },
-  { id: '6m', label: '6 Ay' },
-  { id: '1y', label: '1 Sene' },
-  { id: '3y', label: '3 Sene' },
+  { id: '1m', label: '1A' },
+  { id: '3m', label: '3A' },
+  { id: '1y', label: '1Y' },
+  { id: 'ytd', label: 'YB' },
 ];
+
+// Chart data point interface for equity curve
+export interface EquityChartPoint {
+  date: string;
+  rawDate: string;
+  portfolioEquity: number;
+  portfolioReturnPct: number;
+  // Benchmark relative diffs (benchmark return - portfolio return)
+  gold?: number;
+  usd?: number;
+  eur?: number;
+  bist100?: number;
+  nasdaq100?: number;
+  inflation_tr?: number;
+  // Benchmark absolute values (TL)
+  goldValue?: number;
+  usdValue?: number;
+  eurValue?: number;
+  bist100Value?: number;
+  nasdaq100Value?: number;
+  inflationPurchasingPower?: number;
+}
+
+// Summary statistics for equity panel
+export interface EquitySummary {
+  initialCapital: number;
+  currentPortfolioValue: number;
+  portfolioReturnPct: number;
+  benchmarkDiffs: Partial<Record<MarketAsset, number>>;
+  benchmarkValues: Partial<Record<MarketAsset, number>>;
+  inflationPurchasingPower: { from: number; to: number };
+}
