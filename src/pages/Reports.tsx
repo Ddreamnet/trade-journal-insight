@@ -79,29 +79,36 @@ export default function Reports() {
   });
   const [tempCapital, setTempCapital] = useState<string>(startingCapital.toString());
   
+  // Track if user has manually saved starting capital (localStorage has value)
+  const [hasUserSavedCapital, setHasUserSavedCapital] = useState<boolean>(() => {
+    return localStorage.getItem(STARTING_CAPITAL_KEY) !== null;
+  });
+  
   const { trades, closedTrades, isLoading } = useTrades();
 
-  // Set default starting capital from first trade's position_amount
+  // Auto-set starting capital from first trade's position_amount
+  // ONLY if user hasn't manually saved a value (no localStorage entry)
   useEffect(() => {
-    const savedCapital = localStorage.getItem(STARTING_CAPITAL_KEY);
-    if (!savedCapital && trades.length > 0) {
-      const sortedTrades = [...trades].sort(
-        (a, b) => parseISO(a.created_at).getTime() - parseISO(b.created_at).getTime()
-      );
-      const firstTrade = sortedTrades[0];
-      if (firstTrade?.position_amount) {
-        const newCapital = firstTrade.position_amount;
-        setStartingCapital(newCapital);
-        setTempCapital(newCapital.toString());
-        localStorage.setItem(STARTING_CAPITAL_KEY, newCapital.toString());
-      }
+    if (hasUserSavedCapital) return; // User explicitly saved, don't override
+    if (trades.length === 0) return;
+    
+    const sortedTrades = [...trades].sort(
+      (a, b) => parseISO(a.created_at).getTime() - parseISO(b.created_at).getTime()
+    );
+    const firstTrade = sortedTrades[0];
+    if (firstTrade?.position_amount) {
+      const newCapital = firstTrade.position_amount;
+      setStartingCapital(newCapital);
+      setTempCapital(newCapital.toString());
+      // DO NOT save to localStorage - only display in UI
     }
-  }, [trades]);
+  }, [trades, hasUserSavedCapital]);
 
   const handleCapitalSave = () => {
     const value = Math.max(100, Number(tempCapital) || 1000);
     setStartingCapital(value);
     setTempCapital(value.toString());
+    setHasUserSavedCapital(true); // User explicitly saved
     localStorage.setItem(STARTING_CAPITAL_KEY, value.toString());
   };
 
