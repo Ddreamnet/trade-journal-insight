@@ -556,8 +556,7 @@ export function EquityCurveChart({
     };
   }, [chartData, hoveredData, selectedBenchmarks]);
 
-  // Check if any benchmark is loading
-  const anyLoading = selectedBenchmarks.some((id) => isLoading(id as MarketAsset));
+  // Note: Removed loading skeleton - chart shows immediately with available data
 
   // Benchmark key map
   const benchmarkKeyMap: Record<string, keyof ChartDataPoint> = {
@@ -611,12 +610,7 @@ export function EquityCurveChart({
 
   return (
     <div className="w-full h-[300px] sm:h-[400px]">
-      {anyLoading && selectedBenchmarks.length > 0 ? (
-        <div className="w-full h-full flex items-center justify-center">
-          <Skeleton className="w-full h-full" />
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={chartData}
             margin={{ top: 5, right: 45, left: -10, bottom: 5 }}
@@ -707,7 +701,6 @@ export function EquityCurveChart({
             })}
           </LineChart>
         </ResponsiveContainer>
-      )}
     </div>
   );
 }
