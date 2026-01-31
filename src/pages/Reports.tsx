@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { TrendingUp, Trophy, Target, BarChart3, Wallet } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { TrendingUp, Trophy, BarChart3, Wallet, Settings } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { EquityCurveChart } from '@/components/reports/EquityCurveChart';
 import { TimeRangeSelector } from '@/components/reports/TimeRangeSelector';
@@ -7,6 +7,13 @@ import { BenchmarkSelector } from '@/components/reports/BenchmarkSelector';
 import { TimeRange, BENCHMARKS, Trade } from '@/types/trade';
 import { useTrades } from '@/hooks/useTrades';
 import { subDays, subMonths, subYears, parseISO, isAfter } from 'date-fns';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 // Calculate PnL for a trade
 function calculateTradePnL(trade: Trade): number {
@@ -61,11 +68,42 @@ function filterTradesByTimeRange(trades: Trade[], timeRange: TimeRange): Trade[]
   });
 }
 
+const STARTING_CAPITAL_KEY = 'reports-starting-capital';
+
 export default function Reports() {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('1m');
   const [selectedBenchmarks, setSelectedBenchmarks] = useState<string[]>([]);
+  const [startingCapital, setStartingCapital] = useState<number>(() => {
+    const saved = localStorage.getItem(STARTING_CAPITAL_KEY);
+    return saved ? Number(saved) : 1000;
+  });
+  const [tempCapital, setTempCapital] = useState<string>(startingCapital.toString());
   
-  const { closedTrades, isLoading } = useTrades();
+  const { trades, closedTrades, isLoading } = useTrades();
+
+  // Set default starting capital from first trade's position_amount
+  useEffect(() => {
+    const savedCapital = localStorage.getItem(STARTING_CAPITAL_KEY);
+    if (!savedCapital && trades.length > 0) {
+      const sortedTrades = [...trades].sort(
+        (a, b) => parseISO(a.created_at).getTime() - parseISO(b.created_at).getTime()
+      );
+      const firstTrade = sortedTrades[0];
+      if (firstTrade?.position_amount) {
+        const newCapital = firstTrade.position_amount;
+        setStartingCapital(newCapital);
+        setTempCapital(newCapital.toString());
+        localStorage.setItem(STARTING_CAPITAL_KEY, newCapital.toString());
+      }
+    }
+  }, [trades]);
+
+  const handleCapitalSave = () => {
+    const value = Math.max(100, Number(tempCapital) || 1000);
+    setStartingCapital(value);
+    setTempCapital(value.toString());
+    localStorage.setItem(STARTING_CAPITAL_KEY, value.toString());
+  };
 
   const toggleBenchmark = (benchmarkId: string) => {
     setSelectedBenchmarks((prev) =>
@@ -175,9 +213,39 @@ export default function Reports() {
       {/* Chart Section */}
       <div className="rounded-xl bg-card border border-border p-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <h2 className="text-lg font-semibold text-foreground">
-            Equity Curve
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-foreground">
+              Equity Curve
+            </h2>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7">
+                  <Settings className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56" align="start">
+                <div className="space-y-3">
+                  <div className="text-sm font-medium">Başlangıç Sermayesi</div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      value={tempCapital}
+                      onChange={(e) => setTempCapital(e.target.value)}
+                      className="h-8 text-sm"
+                      min={100}
+                    />
+                    <span className="text-sm text-muted-foreground">TL</span>
+                  </div>
+                  <Button size="sm" onClick={handleCapitalSave} className="w-full">
+                    Kaydet
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Bu değer 100 bazlı endeks hesaplamasında kullanılır.
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
           <TimeRangeSelector
             selectedRange={selectedTimeRange}
             onSelect={setSelectedTimeRange}
@@ -188,8 +256,9 @@ export default function Reports() {
           timeRange={selectedTimeRange}
           selectedBenchmarks={selectedBenchmarks}
           benchmarks={BENCHMARKS}
-          filteredTrades={filteredTrades}
-          startingBalance={100}
+          allTrades={trades}
+          closedTrades={filteredTrades}
+          startingCapital={startingCapital}
         />
       </div>
 
@@ -202,7 +271,7 @@ export default function Reports() {
         />
         <p className="text-xs text-muted-foreground mt-3">
           💡 Piyasa verileri Stooq ve TCMB EVDS'den çekilmektedir. Tüm değerler
-          100 bazından normalize edilmiştir.
+          ilk işlem tarihinden itibaren 100 bazından normalize edilmiştir.
         </p>
       </div>
     </MainLayout>
