@@ -188,8 +188,8 @@ export default function Reports() {
           timeRange={selectedTimeRange}
           selectedBenchmarks={selectedBenchmarks}
           benchmarks={BENCHMARKS}
-          filteredTrades={filteredTrades}
-          startingBalance={100}
+          filteredTrades={closedTrades}
+          startingCapital={1000}
         />
       </div>
 
