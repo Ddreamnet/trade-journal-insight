@@ -18,11 +18,10 @@ import {
   startOfDay,
   addDays,
   differenceInDays,
-  isAfter,
   isBefore,
-  isEqual,
   subDays,
   subMonths,
+  startOfYear,
 } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -39,24 +38,63 @@ interface EquityCurveChartProps {
 interface ChartDataPoint {
   date: string;
   rawDate: string;
-  portfolioIndex: number;
-  portfolioTL: number;
-  gold?: number;
-  usd?: number;
-  eur?: number;
-  bist100?: number;
-  nasdaq100?: number;
-  inflation_tr?: number;
+  portfolioIndex: number | null;  // null for days before t0
+  portfolioTL: number | null;
+  gold?: number | null;
+  usd?: number | null;
+  eur?: number | null;
+  bist100?: number | null;
+  nasdaq100?: number | null;
+  inflation_tr?: number | null;
 }
 
-// Calculate t0 from ALL trades (not just closed)
-function calculateT0(allTrades: Trade[]): Date | null {
-  if (allTrades.length === 0) return null;
+/**
+ * Calculate t0 from CLOSED trades only (earliest created_at among closed trades)
+ * t0 = the opening date of the first trade that has been closed
+ */
+function calculateT0FromClosedTrades(closedTrades: Trade[]): Date | null {
+  const validTrades = closedTrades.filter((t) => t.closed_at && t.created_at);
+  if (validTrades.length === 0) return null;
   
-  return allTrades.reduce((earliest, trade) => {
+  return validTrades.reduce((earliest, trade) => {
     const d = startOfDay(parseISO(trade.created_at));
     return d < earliest ? d : earliest;
-  }, startOfDay(parseISO(allTrades[0].created_at)));
+  }, startOfDay(parseISO(validTrades[0].created_at)));
+}
+
+/**
+ * Calculate view window dates based on time range
+ * Returns startDate and endDate for the X-axis window
+ * endDate = today, startDate = today - rangeDays
+ */
+function getTimeRangeDates(timeRange: TimeRange, today: Date): { startDate: Date; endDate: Date } {
+  const endDate = startOfDay(today);
+  let startDate: Date;
+  
+  switch (timeRange) {
+    case '1w':
+      startDate = subDays(endDate, 7);
+      break;
+    case '1m':
+      startDate = subMonths(endDate, 1);
+      break;
+    case '3m':
+      startDate = subMonths(endDate, 3);
+      break;
+    case '6m':
+      startDate = subMonths(endDate, 6);
+      break;
+    case '1y':
+      startDate = subMonths(endDate, 12);
+      break;
+    case '3y':
+      startDate = subMonths(endDate, 36);
+      break;
+    default:
+      startDate = subMonths(endDate, 1);
+  }
+  
+  return { startDate: startOfDay(startDate), endDate };
 }
 
 // Calculate daily PnL contributions from closed trades with same-day fix
@@ -157,9 +195,11 @@ function normalizeBenchmarkFromT0WithCarryForward(
   return result;
 }
 
-// Convert inflation monthly rates to compound index starting from t0
-// Rule: t0 month = 100 (no compounding), first rate applied from month AFTER t0
-// Result includes daily carry-forward for the entire t0 month
+/**
+ * Convert inflation monthly rates to compound index starting from t0
+ * Rule: t0 month = 100 (no compounding), first rate applied from month AFTER t0
+ * Returns monthly map (yyyy-MM-dd format for first day of month)
+ */
 function convertInflationToCompoundIndex(
   monthlyRates: MarketSeriesPoint[],
   t0: Date,
@@ -207,25 +247,38 @@ function convertInflationToCompoundIndex(
   return result;
 }
 
-// Get time range cutoff
-function getTimeRangeCutoff(timeRange: TimeRange): Date {
-  const now = new Date();
-  switch (timeRange) {
-    case '1w':
-      return subDays(now, 7);
-    case '1m':
-      return subMonths(now, 1);
-    case '3m':
-      return subMonths(now, 3);
-    case '6m':
-      return subMonths(now, 6);
-    case '1y':
-      return subMonths(now, 12);
-    case '3y':
-      return subMonths(now, 36);
-    default:
-      return subMonths(now, 1);
+/**
+ * Convert monthly inflation map to daily map with carry-forward
+ */
+function inflationMonthlyToDailyWithCarryForward(
+  monthlyMap: Map<string, number>,
+  startDate: Date,
+  endDate: Date
+): Map<string, number> {
+  const result = new Map<string, number>();
+  let lastKnownValue: number | null = null;
+  let currentDay = startDate;
+
+  while (currentDay <= endDate) {
+    const key = format(currentDay, 'yyyy-MM-dd');
+    const monthKey = format(currentDay, 'yyyy-MM');
+    
+    // Look for any entry in this month
+    for (const [dateKey, value] of monthlyMap.entries()) {
+      if (dateKey.startsWith(monthKey)) {
+        lastKnownValue = value;
+        break;
+      }
+    }
+    
+    if (lastKnownValue !== null) {
+      result.set(key, lastKnownValue);
+    }
+    
+    currentDay = addDays(currentDay, 1);
   }
+
+  return result;
 }
 
 // Value Panel Component
@@ -237,9 +290,9 @@ function ValuePanel({
   selectedBenchmarks,
   hoveredDate,
 }: {
-  portfolioValue: number;
-  benchmarkValues: Record<string, number>;
-  inflationValue: number;
+  portfolioValue: number | null;
+  benchmarkValues: Record<string, number | null>;
+  inflationValue: number | null;
   benchmarks: BenchmarkData[];
   selectedBenchmarks: string[];
   hoveredDate?: string;
@@ -256,7 +309,7 @@ function ValuePanel({
       <div>
         <div className="text-xs text-muted-foreground">Portföy</div>
         <div className="text-lg font-bold text-primary font-mono">
-          {portfolioValue.toFixed(1)}
+          {portfolioValue !== null ? portfolioValue.toFixed(1) : '-'}
         </div>
       </div>
 
@@ -266,7 +319,7 @@ function ValuePanel({
         .map((id) => {
           const benchmark = benchmarks.find((b) => b.id === id);
           const value = benchmarkValues[id];
-          if (!benchmark || value === undefined) return null;
+          if (!benchmark) return null;
 
           return (
             <div key={id}>
@@ -275,18 +328,20 @@ function ValuePanel({
                 className="text-sm font-semibold font-mono"
                 style={{ color: benchmark.color }}
               >
-                {value.toFixed(1)}
+                {value !== null && value !== undefined ? value.toFixed(1) : '-'}
               </div>
             </div>
           );
         })}
 
       {/* Inflation (special format) */}
-      {selectedBenchmarks.includes('inflation_tr') && inflationValue > 0 && (
+      {selectedBenchmarks.includes('inflation_tr') && (
         <div>
           <div className="text-xs text-muted-foreground">Enflasyon</div>
           <div className="text-sm font-semibold font-mono text-orange-500">
-            100 → {inflationValue.toFixed(0)} TL
+            {inflationValue !== null && inflationValue > 0
+              ? `100 → ${inflationValue.toFixed(0)} TL`
+              : '-'}
           </div>
         </div>
       )}
@@ -304,7 +359,7 @@ function CustomTooltip({
   active?: boolean;
   payload?: Array<{
     dataKey: string;
-    value: number;
+    value: number | null;
     color: string;
     name: string;
   }>;
@@ -314,7 +369,10 @@ function CustomTooltip({
   if (!active || !payload?.length) return null;
 
   const portfolioEntry = payload.find((p) => p.dataKey === 'portfolioIndex');
-  const portfolioValue = portfolioEntry?.value ?? 100;
+  const portfolioValue = portfolioEntry?.value;
+  
+  // Don't show tooltip if portfolio value is null (before t0)
+  if (portfolioValue === null || portfolioValue === undefined) return null;
 
   return (
     <div className="bg-popover border border-border rounded-lg p-3 shadow-lg">
@@ -332,9 +390,9 @@ function CustomTooltip({
 
       {/* Benchmarks with difference */}
       {payload
-        .filter((p) => p.dataKey !== 'portfolioIndex')
+        .filter((p) => p.dataKey !== 'portfolioIndex' && p.value !== null)
         .map((p) => {
-          const value = p.value;
+          const value = p.value!;
           const diff = ((value / portfolioValue) - 1) * 100;
           const diffText =
             diff >= 0
@@ -374,6 +432,9 @@ export function EquityCurveChart({
   const { getSeriesData, fetchSeries, isLoading } = useMarketSeries();
   const [hoveredData, setHoveredData] = useState<ChartDataPoint | null>(null);
 
+  // Today key for dependency - recalculates when day changes
+  const todayKey = format(new Date(), 'yyyy-MM-dd');
+
   // Fetch data for selected benchmarks
   useEffect(() => {
     selectedBenchmarks.forEach((benchmarkId) => {
@@ -387,146 +448,153 @@ export function EquityCurveChart({
     [closedTrades]
   );
 
-  // Calculate t0 from ALL trades
-  const t0 = useMemo(() => calculateT0(allTrades), [allTrades]);
+  // Calculate t0 from CLOSED trades only (earliest created_at)
+  const t0 = useMemo(
+    () => calculateT0FromClosedTrades(closedTradesWithPositionAmount),
+    [closedTradesWithPositionAmount]
+  );
 
-  // Time range cutoff
-  const cutoffDate = useMemo(() => getTimeRangeCutoff(timeRange), [timeRange]);
+  // View window dates based on time range (recalculates when day changes)
+  const { startDate, endDate } = useMemo(
+    () => getTimeRangeDates(timeRange, new Date()),
+    [timeRange, todayKey]
+  );
 
-  // Generate chart data
-  const chartData = useMemo(() => {
-    if (!t0 || closedTradesWithPositionAmount.length === 0) return [];
+  // STAGE A: Build full portfolio index from t0 to endDate (Map)
+  const portfolioIndexMap = useMemo(() => {
+    const map = new Map<string, { index: number; tl: number }>();
+    if (!t0 || closedTradesWithPositionAmount.length === 0) return map;
 
-    const today = startOfDay(new Date());
     const dailyPnL = calculateDailyPnLContributions(closedTradesWithPositionAmount);
-
-    // Build portfolio curve from t0 to today
-    const data: ChartDataPoint[] = [];
     let cumulativeTL = startingCapital;
     let currentDay = t0;
 
-    while (currentDay <= today) {
+    while (currentDay <= endDate) {
       const key = format(currentDay, 'yyyy-MM-dd');
       const dailyContribution = dailyPnL.get(key) || 0;
       cumulativeTL += dailyContribution;
 
-      data.push({
-        date: format(currentDay, 'd MMM', { locale: tr }),
-        rawDate: key,
-        portfolioTL: cumulativeTL,
-        portfolioIndex: 100 * (cumulativeTL / startingCapital),
+      map.set(key, {
+        index: 100 * (cumulativeTL / startingCapital),
+        tl: cumulativeTL,
       });
 
       currentDay = addDays(currentDay, 1);
     }
 
-    // Filter by time range
-    const filtered = data.filter((point) => {
-      const pointDate = parseISO(point.rawDate);
-      return isAfter(pointDate, cutoffDate) || isEqual(pointDate, startOfDay(cutoffDate));
-    });
+    return map;
+  }, [t0, closedTradesWithPositionAmount, startingCapital, endDate]);
 
-    return filtered;
-  }, [t0, closedTradesWithPositionAmount, startingCapital, cutoffDate]);
-
-  // Get benchmark data and normalize from t0
+  // Get benchmark data and normalize from t0 (full range)
   const benchmarkDataMaps = useMemo(() => {
-    if (!t0) return {};
-
-    const today = startOfDay(new Date());
     const result: Record<string, Map<string, number>> = {};
+    if (!t0) return result;
 
     selectedBenchmarks.forEach((benchmarkId) => {
       const seriesData = getSeriesData(benchmarkId as MarketAsset);
       if (seriesData?.points) {
         if (benchmarkId === 'inflation_tr') {
-          result[benchmarkId] = convertInflationToCompoundIndex(seriesData.points, t0);
+          // Get monthly map then convert to daily with carry-forward
+          const monthlyMap = convertInflationToCompoundIndex(seriesData.points, t0);
+          result[benchmarkId] = inflationMonthlyToDailyWithCarryForward(monthlyMap, t0, endDate);
         } else {
           result[benchmarkId] = normalizeBenchmarkFromT0WithCarryForward(
             seriesData.points,
             t0,
-            today
+            endDate
           );
         }
       }
     });
 
     return result;
-  }, [selectedBenchmarks, getSeriesData, t0]);
+  }, [selectedBenchmarks, getSeriesData, t0, endDate]);
 
-  // Merge benchmark data into chart data
-  const mergedChartData = useMemo(() => {
-    if (chartData.length === 0) return [];
+  // STAGE B: Build view series from startDate to endDate
+  const chartData = useMemo(() => {
+    const data: ChartDataPoint[] = [];
+    let currentDay = startDate;
 
-    return chartData.map((point) => {
-      const merged: ChartDataPoint = { ...point };
+    while (currentDay <= endDate) {
+      const key = format(currentDay, 'yyyy-MM-dd');
+      const isBeforeT0 = t0 ? isBefore(currentDay, t0) : true;
 
+      const portfolioData = portfolioIndexMap.get(key);
+
+      const point: ChartDataPoint = {
+        date: format(currentDay, 'd MMM', { locale: tr }),
+        rawDate: key,
+        portfolioIndex: isBeforeT0 ? null : (portfolioData?.index ?? null),
+        portfolioTL: isBeforeT0 ? null : (portfolioData?.tl ?? null),
+      };
+
+      // Add benchmark values
       for (const [benchmarkId, dataMap] of Object.entries(benchmarkDataMaps)) {
-        if (benchmarkId === 'inflation_tr') {
-          // For inflation, find the matching month
-          const pointMonth = point.rawDate.substring(0, 7);
-          for (const [dateKey, value] of dataMap.entries()) {
-            if (dateKey.startsWith(pointMonth)) {
-              merged.inflation_tr = value;
-              break;
-            }
-          }
-        } else {
-          const value = dataMap.get(point.rawDate);
-          if (value !== undefined) {
-            switch (benchmarkId) {
-              case 'gold':
-                merged.gold = value;
-                break;
-              case 'usd':
-                merged.usd = value;
-                break;
-              case 'eur':
-                merged.eur = value;
-                break;
-              case 'bist100':
-                merged.bist100 = value;
-                break;
-              case 'nasdaq100':
-                merged.nasdaq100 = value;
-                break;
-            }
-          }
+        const value = isBeforeT0 ? null : (dataMap.get(key) ?? null);
+        
+        switch (benchmarkId) {
+          case 'gold':
+            point.gold = value;
+            break;
+          case 'usd':
+            point.usd = value;
+            break;
+          case 'eur':
+            point.eur = value;
+            break;
+          case 'bist100':
+            point.bist100 = value;
+            break;
+          case 'nasdaq100':
+            point.nasdaq100 = value;
+            break;
+          case 'inflation_tr':
+            point.inflation_tr = value;
+            break;
         }
       }
 
-      return merged;
-    });
-  }, [chartData, benchmarkDataMaps]);
+      data.push(point);
+      currentDay = addDays(currentDay, 1);
+    }
 
-  // Calculate final values for the panel
+    return data;
+  }, [startDate, endDate, t0, portfolioIndexMap, benchmarkDataMaps]);
+
+  // Calculate final values for the panel (find last non-null value)
   const finalValues = useMemo(() => {
-    const source = hoveredData || (mergedChartData.length > 0 ? mergedChartData[mergedChartData.length - 1] : null);
-    
-    if (!source) {
+    // Use hovered data if available, otherwise find last non-null portfolio value
+    const source = hoveredData || (() => {
+      for (let i = chartData.length - 1; i >= 0; i--) {
+        if (chartData[i].portfolioIndex !== null) {
+          return chartData[i];
+        }
+      }
+      return null;
+    })();
+
+    if (!source || source.portfolioIndex === null) {
       return {
-        portfolioValue: 100,
-        benchmarkValues: {} as Record<string, number>,
-        inflationValue: 100,
+        portfolioValue: null as number | null,
+        benchmarkValues: {} as Record<string, number | null>,
+        inflationValue: null as number | null,
       };
     }
 
-    const benchmarkValues: Record<string, number> = {};
+    const benchmarkValues: Record<string, number | null> = {};
     selectedBenchmarks
       .filter((id) => id !== 'inflation_tr')
       .forEach((id) => {
-        const val = source[id as keyof ChartDataPoint] as number | undefined;
-        if (val !== undefined) {
-          benchmarkValues[id] = val;
-        }
+        const val = source[id as keyof ChartDataPoint] as number | null | undefined;
+        benchmarkValues[id] = val ?? null;
       });
 
     return {
       portfolioValue: source.portfolioIndex,
       benchmarkValues,
-      inflationValue: source.inflation_tr ?? 100,
+      inflationValue: source.inflation_tr ?? null,
     };
-  }, [mergedChartData, hoveredData, selectedBenchmarks]);
+  }, [chartData, hoveredData, selectedBenchmarks]);
 
   // Check if any benchmark is loading
   const anyLoading = selectedBenchmarks.some((id) => isLoading(id as MarketAsset));
@@ -568,7 +636,7 @@ export function EquityCurveChart({
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
-              data={mergedChartData}
+              data={chartData}
               margin={{ top: 5, right: 5, left: -10, bottom: 5 }}
               onMouseMove={(state) => {
                 if (state?.activePayload?.[0]?.payload) {
@@ -600,7 +668,7 @@ export function EquityCurveChart({
                 strokeDasharray="3 3"
                 strokeOpacity={0.5}
               />
-              {/* Portfolio curve */}
+              {/* Portfolio curve - NO connectNulls to skip null values */}
               <Line
                 type="monotone"
                 dataKey="portfolioIndex"
@@ -609,9 +677,8 @@ export function EquityCurveChart({
                 strokeWidth={3}
                 dot={false}
                 activeDot={{ r: 6, fill: 'hsl(var(--primary))' }}
-                connectNulls
               />
-              {/* Benchmark lines */}
+              {/* Benchmark lines - NO connectNulls to skip null values */}
               {selectedBenchmarks.map((benchmarkId) => {
                 const benchmark = benchmarks.find((b) => b.id === benchmarkId);
                 if (!benchmark) return null;
@@ -625,7 +692,6 @@ export function EquityCurveChart({
                     strokeWidth={2}
                     strokeDasharray="5 5"
                     dot={false}
-                    connectNulls
                   />
                 );
               })}
