@@ -122,6 +122,7 @@ function findValueAtDateWithCarryForward(
 }
 
 // Normalize benchmark from t0 with carry-forward for all days
+// Uses Map for O(1) lookups instead of O(n) find() calls
 function normalizeBenchmarkFromT0WithCarryForward(
   points: MarketSeriesPoint[],
   t0: Date,
@@ -133,8 +134,9 @@ function normalizeBenchmarkFromT0WithCarryForward(
   const t0Value = findValueAtDateWithCarryForward(points, t0);
   if (!t0Value) return result;
 
-  const sorted = [...points].sort(
-    (a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime()
+  // Convert to Map for O(1) lookup instead of O(n) find()
+  const valueByDate = new Map<string, number>(
+    points.map((p) => [p.date.substring(0, 10), p.value])
   );
 
   let lastKnownValue = t0Value;
@@ -142,7 +144,7 @@ function normalizeBenchmarkFromT0WithCarryForward(
 
   while (currentDay <= endDate) {
     const key = format(currentDay, 'yyyy-MM-dd');
-    const pointValue = sorted.find((p) => p.date === key)?.value;
+    const pointValue = valueByDate.get(key); // O(1) instead of O(n)
 
     if (pointValue !== undefined) {
       lastKnownValue = pointValue;
@@ -156,9 +158,12 @@ function normalizeBenchmarkFromT0WithCarryForward(
 }
 
 // Convert inflation monthly rates to compound index starting from t0
+// Rule: t0 month = 100 (no compounding), first rate applied from month AFTER t0
+// Result includes daily carry-forward for the entire t0 month
 function convertInflationToCompoundIndex(
   monthlyRates: MarketSeriesPoint[],
-  t0: Date
+  t0: Date,
+  endDate?: Date
 ): Map<string, number> {
   const result = new Map<string, number>();
   if (!monthlyRates || monthlyRates.length === 0) return result;
@@ -168,19 +173,35 @@ function convertInflationToCompoundIndex(
   );
 
   const t0Month = format(t0, 'yyyy-MM');
-  const t0Index = sortedRates.findIndex((r) => r.date.startsWith(t0Month));
+  let t0Index = sortedRates.findIndex((r) => r.date.startsWith(t0Month));
   
-  if (t0Index === -1) return result;
+  // If t0 month not found in data, find first month after t0
+  if (t0Index === -1) {
+    const t0Time = t0.getTime();
+    t0Index = sortedRates.findIndex((r) => parseISO(r.date).getTime() > t0Time);
+    
+    if (t0Index === -1) return result;
+    
+    // Add synthetic t0 month entry (startOfMonth format yyyy-MM-01)
+    const syntheticT0Date = format(t0, 'yyyy-MM-01');
+    result.set(syntheticT0Date, 100);
+  }
 
   let index = 100;
 
   for (let i = t0Index; i < sortedRates.length; i++) {
     const rate = sortedRates[i].value;
-    if (i > t0Index) {
+    const dateKey = sortedRates[i].date.substring(0, 10);
+    const monthKey = sortedRates[i].date.substring(0, 7);
+    
+    if (monthKey === t0Month) {
+      // t0 month: index stays at 100 (no compounding applied)
+      result.set(dateKey, 100);
+    } else {
+      // Subsequent months: apply compounding
       index = index * (1 + rate / 100);
+      result.set(dateKey, parseFloat(index.toFixed(2)));
     }
-    // Store with the date (first of month)
-    result.set(sortedRates[i].date.substring(0, 10), parseFloat(index.toFixed(2)));
   }
 
   return result;
