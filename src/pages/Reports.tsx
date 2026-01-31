@@ -264,7 +264,7 @@ export default function Reports() {
           selectedBenchmarks={selectedBenchmarks}
           benchmarks={BENCHMARKS}
           allTrades={trades}
-          closedTrades={filteredTrades}
+          closedTrades={closedTrades}
           startingCapital={startingCapital}
         />
       </div>
