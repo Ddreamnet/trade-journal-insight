@@ -8,6 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  LabelList,
 } from 'recharts';
 import { TimeRange, BenchmarkData, Trade } from '@/types/trade';
 import { MarketAsset, MarketSeriesPoint } from '@/types/market';
@@ -281,71 +282,30 @@ function inflationMonthlyToDailyWithCarryForward(
   return result;
 }
 
-// Value Panel Component
-function ValuePanel({
-  portfolioValue,
-  benchmarkValues,
-  inflationValue,
-  benchmarks,
-  selectedBenchmarks,
-  hoveredDate,
+// Custom Label Component for line end values
+function LineEndLabel({
+  viewBox,
+  value,
+  color,
 }: {
-  portfolioValue: number | null;
-  benchmarkValues: Record<string, number | null>;
-  inflationValue: number | null;
-  benchmarks: BenchmarkData[];
-  selectedBenchmarks: string[];
-  hoveredDate?: string;
+  viewBox?: { x?: number; y?: number };
+  value: number | null;
+  color: string;
 }) {
+  if (value === null || !viewBox?.x || !viewBox?.y) return null;
+  
   return (
-    <div className="w-28 shrink-0 border-l border-border pl-3 flex flex-col gap-3">
-      {hoveredDate && (
-        <div className="text-xs text-muted-foreground mb-1">
-          {hoveredDate}
-        </div>
-      )}
-      
-      {/* Portfolio */}
-      <div>
-        <div className="text-xs text-muted-foreground">Portföy</div>
-        <div className="text-lg font-bold text-primary font-mono">
-          {portfolioValue !== null ? portfolioValue.toFixed(1) : '-'}
-        </div>
-      </div>
-
-      {/* Benchmarks */}
-      {selectedBenchmarks
-        .filter((id) => id !== 'inflation_tr')
-        .map((id) => {
-          const benchmark = benchmarks.find((b) => b.id === id);
-          const value = benchmarkValues[id];
-          if (!benchmark) return null;
-
-          return (
-            <div key={id}>
-              <div className="text-xs text-muted-foreground">{benchmark.symbol}</div>
-              <div
-                className="text-sm font-semibold font-mono"
-                style={{ color: benchmark.color }}
-              >
-                {value !== null && value !== undefined ? value.toFixed(1) : '-'}
-              </div>
-            </div>
-          );
-        })}
-
-      {/* Inflation (special format) */}
-      {selectedBenchmarks.includes('inflation_tr') && (
-        <div>
-          <div className="text-xs text-muted-foreground">Enflasyon</div>
-          <div className="text-sm font-semibold font-mono text-orange-500">
-            {inflationValue !== null && inflationValue > 0
-              ? `100 → ${inflationValue.toFixed(0)} TL`
-              : '-'}
-          </div>
-        </div>
-      )}
-    </div>
+    <text
+      x={(viewBox.x || 0) + 4}
+      y={viewBox.y || 0}
+      fill={color}
+      fontSize={10}
+      fontFamily="JetBrains Mono, monospace"
+      fontWeight={600}
+      dominantBaseline="middle"
+    >
+      {value.toFixed(0)}
+    </text>
   );
 }
 
@@ -625,90 +585,129 @@ export function EquityCurveChart({
     );
   }
 
-  return (
-    <div className="w-full flex gap-4">
-      {/* Chart Area */}
-      <div className="flex-1 h-[300px] sm:h-[400px]">
-        {anyLoading && selectedBenchmarks.length > 0 ? (
-          <div className="w-full h-full flex items-center justify-center">
-            <Skeleton className="w-full h-full" />
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={chartData}
-              margin={{ top: 5, right: 5, left: -10, bottom: 5 }}
-              onMouseMove={(state) => {
-                if (state?.activePayload?.[0]?.payload) {
-                  setHoveredData(state.activePayload[0].payload);
-                }
-              }}
-              onMouseLeave={() => setHoveredData(null)}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis
-                dataKey="date"
-                stroke="hsl(var(--muted-foreground))"
-                fontSize={12}
-                tickLine={false}
-              />
-              <YAxis
-                stroke="hsl(var(--muted-foreground))"
-                fontSize={12}
-                tickLine={false}
-                domain={['auto', 'auto']}
-              />
-              <Tooltip
-                content={<CustomTooltip benchmarks={benchmarks} />}
-              />
-              {/* Reference line at 100 */}
-              <ReferenceLine
-                y={100}
-                stroke="hsl(var(--muted-foreground))"
-                strokeDasharray="3 3"
-                strokeOpacity={0.5}
-              />
-              {/* Portfolio curve - NO connectNulls to skip null values */}
-              <Line
-                type="monotone"
-                dataKey="portfolioIndex"
-                name="Portföy"
-                stroke="hsl(var(--primary))"
-                strokeWidth={3}
-                dot={false}
-                activeDot={{ r: 6, fill: 'hsl(var(--primary))' }}
-              />
-              {/* Benchmark lines - NO connectNulls to skip null values */}
-              {selectedBenchmarks.map((benchmarkId) => {
-                const benchmark = benchmarks.find((b) => b.id === benchmarkId);
-                if (!benchmark) return null;
-                return (
-                  <Line
-                    key={benchmarkId}
-                    type="monotone"
-                    dataKey={benchmarkKeyMap[benchmarkId]}
-                    name={benchmark.name}
-                    stroke={benchmark.color}
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
-                    dot={false}
-                  />
-                );
-              })}
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </div>
+  // Get last non-null values for line labels
+  const lastValues = useMemo(() => {
+    const result: Record<string, number | null> = { portfolioIndex: null };
+    selectedBenchmarks.forEach((id) => {
+      result[id] = null;
+    });
 
-      {/* Value Panel */}
-      <ValuePanel
-        portfolioValue={finalValues.portfolioValue}
-        benchmarkValues={finalValues.benchmarkValues}
-        inflationValue={finalValues.inflationValue}
-        benchmarks={benchmarks}
-        selectedBenchmarks={selectedBenchmarks}
-        hoveredDate={hoveredData?.date}
-      />
+    for (let i = chartData.length - 1; i >= 0; i--) {
+      const point = chartData[i];
+      if (result.portfolioIndex === null && point.portfolioIndex !== null) {
+        result.portfolioIndex = point.portfolioIndex;
+      }
+      selectedBenchmarks.forEach((id) => {
+        if (result[id] === null) {
+          const val = point[id as keyof ChartDataPoint] as number | null | undefined;
+          if (val !== null && val !== undefined) {
+            result[id] = val;
+          }
+        }
+      });
+    }
+    return result;
+  }, [chartData, selectedBenchmarks]);
+
+  return (
+    <div className="w-full h-[300px] sm:h-[400px]">
+      {anyLoading && selectedBenchmarks.length > 0 ? (
+        <div className="w-full h-full flex items-center justify-center">
+          <Skeleton className="w-full h-full" />
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={chartData}
+            margin={{ top: 5, right: 45, left: -10, bottom: 5 }}
+            onMouseMove={(state) => {
+              if (state?.activePayload?.[0]?.payload) {
+                setHoveredData(state.activePayload[0].payload);
+              }
+            }}
+            onMouseLeave={() => setHoveredData(null)}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+            <XAxis
+              dataKey="date"
+              stroke="hsl(var(--muted-foreground))"
+              fontSize={12}
+              tickLine={false}
+            />
+            <YAxis
+              stroke="hsl(var(--muted-foreground))"
+              fontSize={12}
+              tickLine={false}
+              domain={['auto', 'auto']}
+            />
+            <Tooltip
+              content={<CustomTooltip benchmarks={benchmarks} />}
+            />
+            {/* Reference line at 100 */}
+            <ReferenceLine
+              y={100}
+              stroke="hsl(var(--muted-foreground))"
+              strokeDasharray="3 3"
+              strokeOpacity={0.5}
+            />
+            {/* Portfolio curve with end label */}
+            <Line
+              type="monotone"
+              dataKey="portfolioIndex"
+              name="Portföy"
+              stroke="hsl(var(--primary))"
+              strokeWidth={3}
+              dot={false}
+              activeDot={{ r: 6, fill: 'hsl(var(--primary))' }}
+            >
+              <LabelList
+                dataKey="portfolioIndex"
+                position="right"
+                content={({ index, ...props }) => 
+                  index === chartData.length - 1 ? (
+                    <LineEndLabel 
+                      viewBox={props as { x?: number; y?: number }}
+                      value={lastValues.portfolioIndex}
+                      color="hsl(var(--primary))"
+                    />
+                  ) : null
+                }
+              />
+            </Line>
+            {/* Benchmark lines with end labels */}
+            {selectedBenchmarks.map((benchmarkId) => {
+              const benchmark = benchmarks.find((b) => b.id === benchmarkId);
+              if (!benchmark) return null;
+              return (
+                <Line
+                  key={benchmarkId}
+                  type="monotone"
+                  dataKey={benchmarkKeyMap[benchmarkId]}
+                  name={benchmark.name}
+                  stroke={benchmark.color}
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                >
+                  <LabelList
+                    dataKey={benchmarkKeyMap[benchmarkId]}
+                    position="right"
+                    content={({ index, ...props }) => 
+                      index === chartData.length - 1 ? (
+                        <LineEndLabel 
+                          viewBox={props as { x?: number; y?: number }}
+                          value={lastValues[benchmarkId]}
+                          color={benchmark.color}
+                        />
+                      ) : null
+                    }
+                  />
+                </Line>
+              );
+            })}
+          </LineChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }
