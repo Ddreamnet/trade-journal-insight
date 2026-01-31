@@ -569,23 +569,7 @@ export function EquityCurveChart({
     inflation_tr: 'inflation_tr',
   };
 
-  // Empty state: no closed trades with position amount
-  if (closedTradesWithPositionAmount.length === 0) {
-    return (
-      <div className="w-full h-[300px] sm:h-[400px] flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground text-sm mb-2">
-            Henüz kapanmış işlem bulunmuyor
-          </p>
-          <p className="text-xs text-muted-foreground">
-            İşlemler kapandığında grafik burada görünecek
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Get last non-null values for line labels
+  // Get last non-null values for line labels (must be before early return!)
   const lastValues = useMemo(() => {
     const result: Record<string, number | null> = { portfolioIndex: null };
     selectedBenchmarks.forEach((id) => {
@@ -608,6 +592,22 @@ export function EquityCurveChart({
     }
     return result;
   }, [chartData, selectedBenchmarks]);
+
+  // Empty state: no closed trades with position amount
+  if (closedTradesWithPositionAmount.length === 0) {
+    return (
+      <div className="w-full h-[300px] sm:h-[400px] flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground text-sm mb-2">
+            Henüz kapanmış işlem bulunmuyor
+          </p>
+          <p className="text-xs text-muted-foreground">
+            İşlemler kapandığında grafik burada görünecek
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-[300px] sm:h-[400px]">
