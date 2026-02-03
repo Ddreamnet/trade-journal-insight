@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { NumberInput } from '@/components/ui/number-input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StockLogo } from '@/components/ui/stock-logo';
-import { Stock, TradeType, TradeReason, TRADE_REASONS } from '@/types/trade';
+import { Stock, TradeType, StopReason, STOP_REASONS } from '@/types/trade';
 import { cn } from '@/lib/utils';
 
 interface TradeFormProps {
@@ -25,7 +25,7 @@ interface TradeFormProps {
 
 export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: TradeFormProps) {
   const [tradeType, setTradeType] = useState<TradeType | null>(null);
-  const [reasons, setReasons] = useState<TradeReason[]>([]);
+  const [reasons, setReasons] = useState<StopReason[]>([]);
   const [entryPrice, setEntryPrice] = useState(stock.currentPrice.toString());
   const [targetPrice, setTargetPrice] = useState('');
   const [stopPrice, setStopPrice] = useState('');
@@ -54,7 +54,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
     return Math.abs(rr);
   }, [parsedEntry, parsedTarget, parsedStop]);
 
-  const toggleReason = (reasonId: TradeReason) => {
+  const toggleReason = (reasonId: StopReason) => {
     setReasons((prev) =>
       prev.includes(reasonId)
         ? prev.filter((r) => r !== reasonId)
@@ -184,7 +184,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                   İşlem Sebepleri
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {TRADE_REASONS.map((reason) => (
+                  {STOP_REASONS.map((reason) => (
                     <label
                       key={reason.id}
                       className={cn(
