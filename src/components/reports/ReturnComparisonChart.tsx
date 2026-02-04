@@ -72,7 +72,7 @@ function BarTooltip({
   );
 }
 
-// Custom label for bar values
+// Custom label for bar values (vertical columns)
 function BarValueLabel(props: {
   x?: number | string;
   y?: number | string;
@@ -86,15 +86,15 @@ function BarValueLabel(props: {
     value === undefined ||
     typeof x !== 'number' ||
     typeof y !== 'number' ||
-    typeof width !== 'number' ||
-    typeof height !== 'number'
+    typeof width !== 'number'
   ) {
     return null;
   }
   
   const isPositive = value >= 0;
-  const labelX = isPositive ? x + width + 4 : x + width - 4;
-  const labelY = y + height / 2;
+  // Dikey sütun için: bar'ın üstüne (pozitif) veya altına (negatif)
+  const labelX = x + width / 2;
+  const labelY = isPositive ? y - 6 : y + (typeof height === 'number' ? height : 0) + 14;
 
   return (
     <text
@@ -105,7 +105,7 @@ function BarValueLabel(props: {
       fontFamily="JetBrains Mono, monospace"
       fontWeight={600}
       dominantBaseline="middle"
-      textAnchor={isPositive ? 'start' : 'end'}
+      textAnchor="middle"
     >
       {isPositive ? '+' : ''}{value.toFixed(1)}%
     </text>
@@ -302,16 +302,22 @@ export function ReturnComparisonChart({
             <div className={cn(needsScroll && 'overflow-x-auto')}>
               <div
                 style={{
-                  minWidth: needsScroll ? returnData.length * 60 : 'auto',
+                  minWidth: needsScroll ? returnData.length * 80 : 'auto',
                 }}
               >
                 <ResponsiveContainer width="100%" height={chartHeight}>
                   <BarChart
                     data={returnData}
-                    layout="vertical"
-                    margin={{ top: 5, right: 60, left: 0, bottom: 5 }}
+                    margin={{ top: 25, right: 10, left: 10, bottom: 5 }}
                   >
                     <XAxis
+                      type="category"
+                      dataKey="name"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={11}
+                      tickLine={false}
+                    />
+                    <YAxis
                       type="number"
                       domain={['auto', 'auto']}
                       stroke="hsl(var(--muted-foreground))"
@@ -319,21 +325,13 @@ export function ReturnComparisonChart({
                       tickLine={false}
                       tickFormatter={(value: number) => `${value}%`}
                     />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={11}
-                      tickLine={false}
-                      width={70}
-                    />
                     <Tooltip content={<BarTooltip />} />
                     <ReferenceLine
-                      x={0}
+                      y={0}
                       stroke="hsl(var(--muted-foreground))"
                       strokeDasharray="3 3"
                     />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={40}>
                       {returnData.map((entry) => (
                         <Cell key={entry.id} fill={entry.color} />
                       ))}
