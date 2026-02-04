@@ -1,0 +1,362 @@
+import { useMemo, useState } from 'react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  ReferenceLine,
+  LabelList,
+} from 'recharts';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import { TimeRange, BenchmarkData, Trade, TIME_RANGES } from '@/types/trade';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { useEquityCurveData, ChartDataPoint } from '@/hooks/useEquityCurveData';
+import { cn } from '@/lib/utils';
+
+interface ReturnComparisonChartProps {
+  timeRange: TimeRange;
+  selectedBenchmarks: string[];
+  benchmarks: BenchmarkData[];
+  closedTrades: Trade[];
+  startingCapital: number;
+}
+
+interface ReturnDataPoint {
+  id: string;
+  name: string;
+  value: number;
+  color: string;
+  startValue: number;
+  endValue: number;
+}
+
+// Custom tooltip for bar chart
+function BarTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{
+    payload: ReturnDataPoint;
+  }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const data = payload[0].payload;
+
+  return (
+    <div className="bg-popover border border-border rounded-lg p-2 shadow-lg text-sm">
+      <div className="font-medium" style={{ color: data.color }}>
+        {data.name}
+      </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-1">
+        <span className="text-muted-foreground">Başlangıç:</span>
+        <span className="font-mono">{data.startValue.toFixed(1)}</span>
+        <span className="text-muted-foreground">Bitiş:</span>
+        <span className="font-mono">{data.endValue.toFixed(1)}</span>
+        <span className="text-muted-foreground">Getiri:</span>
+        <span
+          className={cn(
+            'font-mono font-semibold',
+            data.value >= 0 ? 'text-profit' : 'text-loss'
+          )}
+        >
+          {data.value >= 0 ? '+' : ''}
+          {data.value.toFixed(2)}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Custom label for bar values
+function BarValueLabel(props: {
+  x?: number | string;
+  y?: number | string;
+  width?: number | string;
+  height?: number | string;
+  value?: number;
+}) {
+  const { x, y, width, height, value } = props;
+  
+  if (
+    value === undefined ||
+    typeof x !== 'number' ||
+    typeof y !== 'number' ||
+    typeof width !== 'number' ||
+    typeof height !== 'number'
+  ) {
+    return null;
+  }
+  
+  const isPositive = value >= 0;
+  const labelX = isPositive ? x + width + 4 : x + width - 4;
+  const labelY = y + height / 2;
+
+  return (
+    <text
+      x={labelX}
+      y={labelY}
+      fill={isPositive ? 'hsl(var(--profit))' : 'hsl(var(--loss))'}
+      fontSize={11}
+      fontFamily="JetBrains Mono, monospace"
+      fontWeight={600}
+      dominantBaseline="middle"
+      textAnchor={isPositive ? 'start' : 'end'}
+    >
+      {isPositive ? '+' : ''}{value.toFixed(1)}%
+    </text>
+  );
+}
+
+// Calculate returns from chartData
+function calculateReturns(
+  chartData: ChartDataPoint[],
+  selectedBenchmarks: string[],
+  benchmarks: BenchmarkData[]
+): ReturnDataPoint[] {
+  const result: ReturnDataPoint[] = [];
+
+  // Helper to find first and last non-null values
+  const findFirstLast = (
+    data: ChartDataPoint[],
+    accessor: (point: ChartDataPoint) => number | null | undefined
+  ): { first: number | null; last: number | null } => {
+    let first: number | null = null;
+    let last: number | null = null;
+
+    for (const point of data) {
+      const val = accessor(point);
+      if (val !== null && val !== undefined) {
+        if (first === null) first = val;
+        last = val;
+      }
+    }
+
+    return { first, last };
+  };
+
+  // Portfolio
+  const portfolioValues = findFirstLast(chartData, (p) => p.portfolioIndex);
+  if (portfolioValues.first !== null && portfolioValues.last !== null) {
+    const returnPct = ((portfolioValues.last / portfolioValues.first) - 1) * 100;
+    result.push({
+      id: 'portfolio',
+      name: 'Portföy',
+      value: returnPct,
+      color: 'hsl(var(--primary))',
+      startValue: portfolioValues.first,
+      endValue: portfolioValues.last,
+    });
+  }
+
+  // Benchmarks
+  selectedBenchmarks.forEach((benchmarkId) => {
+    const benchmark = benchmarks.find((b) => b.id === benchmarkId);
+    if (!benchmark) return;
+
+    const accessor = (point: ChartDataPoint): number | null | undefined => {
+      switch (benchmarkId) {
+        case 'gold': return point.gold;
+        case 'usd': return point.usd;
+        case 'eur': return point.eur;
+        case 'bist100': return point.bist100;
+        case 'nasdaq100': return point.nasdaq100;
+        case 'inflation_tr': return point.inflation_tr;
+        default: return null;
+      }
+    };
+
+    const values = findFirstLast(chartData, accessor);
+    if (values.first !== null && values.last !== null) {
+      const returnPct = ((values.last / values.first) - 1) * 100;
+      result.push({
+        id: benchmarkId,
+        name: benchmark.name,
+        value: returnPct,
+        color: benchmark.color,
+        startValue: values.first,
+        endValue: values.last,
+      });
+    }
+  });
+
+  return result;
+}
+
+export function ReturnComparisonChart({
+  timeRange,
+  selectedBenchmarks,
+  benchmarks,
+  closedTrades,
+  startingCapital,
+}: ReturnComparisonChartProps) {
+  const isMobile = useIsMobile();
+  const [isOpen, setIsOpen] = useState(!isMobile);
+
+  // Use shared hook for data
+  const { chartData, t0 } = useEquityCurveData(
+    timeRange,
+    selectedBenchmarks,
+    closedTrades,
+    startingCapital
+  );
+
+  // Calculate return percentages
+  const returnData = useMemo(() => {
+    return calculateReturns(chartData, selectedBenchmarks, benchmarks);
+  }, [chartData, selectedBenchmarks, benchmarks]);
+
+  // Get time range label
+  const timeRangeLabel = TIME_RANGES.find((tr) => tr.id === timeRange)?.label || timeRange;
+
+  // Don't render if no t0 (no closed trades)
+  if (!t0) {
+    return null;
+  }
+
+  // Show message if less than 2 items
+  if (returnData.length < 2) {
+    return (
+      <div className="rounded-xl bg-card border border-border p-4 mb-6">
+        <h3 className="text-sm font-medium text-foreground mb-2">
+          Kıyaslama (Getiri %)
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          Kıyaslamak için en az 2 varlık seçin.{' '}
+          <span className="text-primary">
+            Üstteki grafikten benchmark ekleyebilirsiniz.
+          </span>
+        </p>
+      </div>
+    );
+  }
+
+  // Check if data has no values
+  const hasNoData = returnData.every((d) => d.startValue === d.endValue);
+  if (hasNoData) {
+    return (
+      <div className="rounded-xl bg-card border border-border p-4 mb-6">
+        <h3 className="text-sm font-medium text-foreground mb-2">
+          Kıyaslama (Getiri %)
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          Bu aralık için yeterli veri bulunamadı.
+        </p>
+      </div>
+    );
+  }
+
+  const chartHeight = isMobile ? 180 : 220;
+  const needsScroll = returnData.length > 5;
+
+  return (
+    <div className="rounded-xl bg-card border border-border p-4 mb-6">
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <CollapsibleTrigger className="w-full">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-foreground">
+              Kıyaslama (Getiri %)
+            </h3>
+            {isOpen ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            )}
+          </div>
+        </CollapsibleTrigger>
+
+        {/* Collapsed view: Show chips */}
+        {!isOpen && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {returnData.map((item) => (
+              <div
+                key={item.id}
+                className="px-2 py-1 rounded-md text-xs font-mono font-semibold border"
+                style={{
+                  backgroundColor: `${item.color}15`,
+                  borderColor: item.color,
+                }}
+              >
+                <span className="text-foreground">{item.name}</span>{' '}
+                <span className={item.value >= 0 ? 'text-profit' : 'text-loss'}>
+                  {item.value >= 0 ? '+' : ''}
+                  {item.value.toFixed(1)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <CollapsibleContent>
+          <div className="mt-4">
+            {/* Time range info */}
+            <p className="text-xs text-muted-foreground mb-3">
+              Seçili aralık: {timeRangeLabel} — Toplam getiri %
+            </p>
+
+            {/* Chart container with horizontal scroll for many items */}
+            <div className={cn(needsScroll && 'overflow-x-auto')}>
+              <div
+                style={{
+                  minWidth: needsScroll ? returnData.length * 60 : 'auto',
+                }}
+              >
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <BarChart
+                    data={returnData}
+                    layout="vertical"
+                    margin={{ top: 5, right: 60, left: 0, bottom: 5 }}
+                  >
+                    <XAxis
+                      type="number"
+                      domain={['auto', 'auto']}
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={11}
+                      tickLine={false}
+                      tickFormatter={(value: number) => `${value}%`}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={11}
+                      tickLine={false}
+                      width={70}
+                    />
+                    <Tooltip content={<BarTooltip />} />
+                    <ReferenceLine
+                      x={0}
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeDasharray="3 3"
+                    />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
+                      {returnData.map((entry) => (
+                        <Cell key={entry.id} fill={entry.color} />
+                      ))}
+                      <LabelList
+                        dataKey="value"
+                        content={(props: Record<string, unknown>) => (
+                          <BarValueLabel
+                            x={props.x as number | string | undefined}
+                            y={props.y as number | string | undefined}
+                            width={props.width as number | string | undefined}
+                            height={props.height as number | string | undefined}
+                            value={props.value as number | undefined}
+                          />
+                        )}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
+  );
+}

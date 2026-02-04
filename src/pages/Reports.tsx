@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { TrendingUp, Trophy, BarChart3, Wallet, Settings } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { EquityCurveChart } from '@/components/reports/EquityCurveChart';
+import { ReturnComparisonChart } from '@/components/reports/ReturnComparisonChart';
 import { TimeRangeSelector } from '@/components/reports/TimeRangeSelector';
 import { BenchmarkSelector } from '@/components/reports/BenchmarkSelector';
 import { TimeRange, BENCHMARKS, Trade } from '@/types/trade';
@@ -268,6 +269,15 @@ export default function Reports() {
           startingCapital={startingCapital}
         />
       </div>
+
+      {/* Return Comparison Chart */}
+      <ReturnComparisonChart
+        timeRange={selectedTimeRange}
+        selectedBenchmarks={selectedBenchmarks}
+        benchmarks={BENCHMARKS}
+        closedTrades={closedTrades}
+        startingCapital={startingCapital}
+      />
 
       {/* Benchmark Selector */}
       <div className="rounded-xl bg-card border border-border p-4">
