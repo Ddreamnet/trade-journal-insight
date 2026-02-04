@@ -325,7 +325,7 @@ export function ReturnComparisonChart({
                       tickLine={false}
                       tickFormatter={(value: number) => `${value}%`}
                     />
-                    <Tooltip content={<BarTooltip />} />
+                    <Tooltip content={<BarTooltip />} cursor={false} />
                     <ReferenceLine
                       y={0}
                       stroke="hsl(var(--muted-foreground))"
