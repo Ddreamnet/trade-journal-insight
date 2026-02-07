@@ -9,6 +9,10 @@ import { MarketSeriesProvider } from '@/contexts/MarketSeriesContext';
 import Index from './pages/Index';
 import Login from './pages/Login';
 import Reports from './pages/Reports';
+import Blog from './pages/Blog';
+import BlogPost from './pages/BlogPost';
+import PanelBlog from './pages/PanelBlog';
+import PanelBlogEditor from './pages/PanelBlogEditor';
 import NotFound from './pages/NotFound';
 
 const queryClient = new QueryClient();
@@ -73,6 +77,34 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Reports />
+          </ProtectedRoute>
+        }
+      />
+      {/* Public Blog Routes */}
+      <Route path="/blog" element={<Blog />} />
+      <Route path="/blog/:slug" element={<BlogPost />} />
+      {/* Protected Panel Blog Routes */}
+      <Route
+        path="/panel/blog"
+        element={
+          <ProtectedRoute>
+            <PanelBlog />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/panel/blog/new"
+        element={
+          <ProtectedRoute>
+            <PanelBlogEditor />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/panel/blog/edit/:id"
+        element={
+          <ProtectedRoute>
+            <PanelBlogEditor />
           </ProtectedRoute>
         }
       />

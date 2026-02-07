@@ -390,3 +390,125 @@
     @apply text-loss font-semibold;
   }
 }
+
+/* ===== Blog Styles ===== */
+
+/* Tiptap Editor */
+.blog-editor-content {
+  font-family: 'Inter', sans-serif;
+}
+
+.blog-editor-content p.is-editor-empty:first-child::before {
+  color: #adb5bd;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.blog-editor-content img.blog-content-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.blog-editor-content .blog-youtube-embed {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+/* Public Blog Post Content */
+.blog-post-content {
+  font-family: 'Inter', sans-serif;
+  line-height: 1.8;
+}
+
+.blog-post-content h1,
+.blog-post-content h2,
+.blog-post-content h3 {
+  color: #111;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.blog-post-content h1 { font-size: 2rem; }
+.blog-post-content h2 { font-size: 1.5rem; }
+.blog-post-content h3 { font-size: 1.25rem; }
+
+.blog-post-content p {
+  margin-bottom: 1.25rem;
+}
+
+.blog-post-content a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.blog-post-content a:hover {
+  color: #1d4ed8;
+}
+
+.blog-post-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 1.5rem 0;
+}
+
+.blog-post-content iframe {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 8px;
+  margin: 1.5rem 0;
+  border: none;
+}
+
+.blog-post-content blockquote {
+  border-left: 4px solid #e5e7eb;
+  padding-left: 1rem;
+  margin: 1.5rem 0;
+  color: #4b5563;
+  font-style: italic;
+}
+
+.blog-post-content pre {
+  background: #1f2937;
+  color: #e5e7eb;
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+}
+
+.blog-post-content code {
+  background: #f3f4f6;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875em;
+}
+
+.blog-post-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.blog-post-content ul,
+.blog-post-content ol {
+  padding-left: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.blog-post-content ul { list-style-type: disc; }
+.blog-post-content ol { list-style-type: decimal; }
+
+.blog-post-content li {
+  margin-bottom: 0.5rem;
+}
