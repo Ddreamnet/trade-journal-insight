@@ -33,7 +33,7 @@ import {
 interface TradeListProps {
   trades: Trade[];
   type: 'active' | 'closed';
-  onCloseTrade?: (tradeId: string, exitPrice: number, closingType: ClosingType, stopReason?: string, closingNote?: string) => void;
+  onCloseTrade?: (tradeId: string, exitPrice: number, closingType: ClosingType, lotQuantity: number, stopReason?: string, closingNote?: string) => void;
   onUpdateTrade?: (tradeId: string, data: TradeUpdateData) => void;
   onDeleteTrade?: (tradeId: string) => void;
   highlightedTradeId?: string | null;
@@ -45,9 +45,9 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const { getStockBySymbol } = useMarketData();
 
-  const handleCloseConfirm = (exitPrice: number, closingType: ClosingType, stopReason?: string, closingNote?: string) => {
+  const handleCloseConfirm = (exitPrice: number, closingType: ClosingType, lotQuantity: number, stopReason?: string, closingNote?: string) => {
     if (closingTrade && onCloseTrade) {
-      onCloseTrade(closingTrade.id, exitPrice, closingType, stopReason, closingNote);
+      onCloseTrade(closingTrade.id, exitPrice, closingType, lotQuantity, stopReason, closingNote);
       setClosingTrade(null);
     }
   };

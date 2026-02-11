@@ -47,6 +47,7 @@ export interface CloseTradeParams {
   closingType: ClosingType;
   stopReason?: string;
   closingNote?: string;
+  lotQuantity: number;
 }
 
 export function useTrades() {
@@ -73,14 +74,24 @@ export function useTrades() {
     mutationFn: async (trade: TradeInsert) => {
       if (!user) throw new Error('Not authenticated');
 
+      const { data: tradeId, error: rpcError } = await supabase.rpc('create_trade_with_cash_check', {
+        p_user_id: user.id,
+        p_stock_symbol: trade.stock_symbol,
+        p_stock_name: trade.stock_name,
+        p_trade_type: trade.trade_type,
+        p_entry_price: trade.entry_price,
+        p_target_price: trade.target_price,
+        p_stop_price: trade.stop_price,
+        p_lot_quantity: trade.lot_quantity || 0,
+        p_reasons: trade.reasons,
+      });
+
+      if (rpcError) throw rpcError;
+
       const { data, error } = await supabase
         .from('trades')
-        .insert({
-          ...trade,
-          user_id: user.id,
-          lot_quantity: trade.lot_quantity || 0,
-        })
-        .select()
+        .select('*')
+        .eq('id', tradeId)
         .single();
 
       if (error) throw error;
@@ -106,18 +117,26 @@ export function useTrades() {
   });
 
   const closeTrade = useMutation({
-    mutationFn: async ({ tradeId, exitPrice, closingType, stopReason, closingNote }: CloseTradeParams) => {
+    mutationFn: async ({ tradeId, exitPrice, closingType, stopReason, closingNote, lotQuantity }: CloseTradeParams) => {
+      if (!user) throw new Error('Not authenticated');
+
+      const { data: partialId, error: rpcError } = await supabase.rpc('close_trade_partial', {
+        p_user_id: user.id,
+        p_trade_id: tradeId,
+        p_exit_price: exitPrice,
+        p_lot_quantity: lotQuantity,
+        p_closing_type: closingType,
+        p_stop_reason: closingType === 'stop' ? (stopReason || null) : null,
+        p_closing_note: closingNote || null,
+      });
+
+      if (rpcError) throw rpcError;
+
+      // Re-fetch the trade to get updated state
       const { data, error } = await supabase
         .from('trades')
-        .update({
-          status: 'closed' as const,
-          exit_price: exitPrice,
-          closing_type: closingType,
-          stop_reason: closingType === 'stop' ? stopReason : null,
-          closing_note: closingNote || null,
-        })
+        .select('*')
         .eq('id', tradeId)
-        .select()
         .single();
 
       if (error) throw error;
@@ -128,10 +147,15 @@ export function useTrades() {
         old.map((t) => (t.id === updatedTrade.id ? updatedTrade : t))
       );
       
+      const isClosed = updatedTrade.status === 'closed';
       const isKarAl = updatedTrade.closing_type === 'kar_al';
       toast({
-        title: isKarAl ? '💰 Kâr Al!' : '🛑 Stop',
-        description: `İşlem %${updatedTrade.progress_percent?.toFixed(1)} ilerleme ile kapatıldı.`,
+        title: isClosed 
+          ? (isKarAl ? '💰 Kâr Al!' : '🛑 Stop')
+          : '📊 Kısmi Çıkış',
+        description: isClosed
+          ? `İşlem %${updatedTrade.progress_percent?.toFixed(1)} ilerleme ile kapatıldı.`
+          : `Kısmi çıkış yapıldı. Kalan lot: ${updatedTrade.remaining_lot}`,
       });
     },
     onError: (error) => {

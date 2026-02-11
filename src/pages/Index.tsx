@@ -46,10 +46,11 @@ export default function Index() {
     tradeId: string,
     exitPrice: number,
     closingType: ClosingType,
+    lotQuantity: number,
     stopReason?: string,
     closingNote?: string
   ) => {
-    await closeTrade.mutateAsync({ tradeId, exitPrice, closingType, stopReason, closingNote });
+    await closeTrade.mutateAsync({ tradeId, exitPrice, closingType, lotQuantity, stopReason, closingNote });
   };
 
   const handleUpdateTrade = async (tradeId: string, data: TradeUpdateData) => {
