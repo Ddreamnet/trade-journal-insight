@@ -16,6 +16,7 @@ export interface PartialCloseRecord {
   id: string;
   trade_id: string;
   realized_pnl: number | null;
+  lot_quantity: number;
   created_at: string;
 }
 
@@ -42,10 +43,10 @@ export interface EquityCurveData {
 }
 
 /**
- * Calculate t0 from CLOSED trades only (earliest created_at among closed trades)
+ * Calculate t0 from ALL trades (earliest created_at)
  */
-export function calculateT0FromClosedTrades(closedTrades: Trade[]): Date | null {
-  const validTrades = closedTrades.filter((t) => t.closed_at && t.created_at);
+export function calculateT0FromTrades(allTrades: Trade[]): Date | null {
+  const validTrades = allTrades.filter((t) => t.created_at);
   if (validTrades.length === 0) return null;
 
   return validTrades.reduce((earliest, trade) => {
@@ -53,6 +54,9 @@ export function calculateT0FromClosedTrades(closedTrades: Trade[]): Date | null 
     return d < earliest ? d : earliest;
   }, startOfDay(parseISO(validTrades[0].created_at)));
 }
+
+// Keep backward-compatible alias
+export const calculateT0FromClosedTrades = calculateT0FromTrades;
 
 /**
  * Calculate view window dates based on time range
@@ -87,7 +91,7 @@ export function getTimeRangeDates(timeRange: TimeRange, today: Date): { startDat
 /**
  * Step PnL approach: realized PnL applied on the partial close date
  */
-function calculateDailyPnLFromPartialCloses(partialCloses: PartialCloseRecord[]): Map<string, number> {
+function calculateCumulativeRealizedPnL(partialCloses: PartialCloseRecord[]): Map<string, number> {
   const dailyPnL = new Map<string, number>();
   for (const pc of partialCloses) {
     if (!pc.realized_pnl) continue;
@@ -95,6 +99,44 @@ function calculateDailyPnLFromPartialCloses(partialCloses: PartialCloseRecord[])
     dailyPnL.set(key, (dailyPnL.get(key) || 0) + pc.realized_pnl);
   }
   return dailyPnL;
+}
+
+/**
+ * For a given trade, compute remaining_lot at a specific day
+ * by subtracting partial closes that happened on or before that day
+ */
+function getRemainingLotAtDay(
+  trade: Trade,
+  dayKey: string,
+  tradePartialCloses: PartialCloseRecord[]
+): number {
+  let closed = 0;
+  for (const pc of tradePartialCloses) {
+    const pcKey = format(startOfDay(parseISO(pc.created_at)), 'yyyy-MM-dd');
+    if (pcKey <= dayKey) {
+      closed += pc.lot_quantity;
+    }
+  }
+  return Math.max(0, trade.lot_quantity - closed);
+}
+
+/**
+ * Linear interpolation fallback for trades without price data
+ */
+function linearInterpolatePrice(
+  entryPrice: number,
+  exitPrice: number | null,
+  openDate: Date,
+  closeDate: Date | null,
+  currentDay: Date
+): number {
+  if (!closeDate || !exitPrice) return entryPrice;
+
+  const totalDays = Math.max(1, (closeDate.getTime() - openDate.getTime()) / (1000 * 60 * 60 * 24));
+  const elapsedDays = Math.max(0, (currentDay.getTime() - openDate.getTime()) / (1000 * 60 * 60 * 24));
+  const progress = Math.min(1, elapsedDays / totalDays);
+
+  return entryPrice + (exitPrice - entryPrice) * progress;
 }
 
 // Find value at date with carry-forward
@@ -241,7 +283,10 @@ export function useEquityCurveData(
   selectedBenchmarks: string[],
   closedTrades: Trade[],
   startingCapital: number,
-  partialCloses: PartialCloseRecord[] = []
+  partialCloses: PartialCloseRecord[] = [],
+  allTrades: Trade[] = [],
+  stockPriceMap: Map<string, Map<string, number>> = new Map(),
+  priceDataMissing: string[] = []
 ): EquityCurveData {
   const { getSeriesData, fetchSeries } = useMarketSeries();
   const todayKey = format(new Date(), 'yyyy-MM-dd');
@@ -253,16 +298,16 @@ export function useEquityCurveData(
     });
   }, [selectedBenchmarks, fetchSeries]);
 
-  // Filter closed trades with closed_at
-  const closedTradesWithData = useMemo(
-    () => closedTrades.filter((t) => t.closed_at && t.created_at),
-    [closedTrades]
+  // Use allTrades for t0 (earliest trade open date)
+  const tradesForT0 = useMemo(
+    () => (allTrades.length > 0 ? allTrades : closedTrades).filter((t) => t.created_at),
+    [allTrades, closedTrades]
   );
 
-  // Calculate t0 from CLOSED trades only
+  // Calculate t0 from ALL trades
   const t0 = useMemo(
-    () => calculateT0FromClosedTrades(closedTradesWithData),
-    [closedTradesWithData]
+    () => calculateT0FromTrades(tradesForT0),
+    [tradesForT0]
   );
 
   // View window dates based on time range
@@ -278,30 +323,98 @@ export function useEquityCurveData(
     return t0 > startDate ? t0 : startDate;
   }, [t0, startDate]);
 
-  // Build RAW portfolio index from t0 to endDate using partial closes (step PnL)
+  // Group partial closes by trade_id for fast lookup
+  const partialClosesByTrade = useMemo(() => {
+    const map = new Map<string, PartialCloseRecord[]>();
+    for (const pc of partialCloses) {
+      const existing = map.get(pc.trade_id) || [];
+      existing.push(pc);
+      map.set(pc.trade_id, existing);
+    }
+    return map;
+  }, [partialCloses]);
+
+  // Build RAW portfolio value from t0 to endDate using realized + unrealized PnL
   const rawPortfolioIndexMap = useMemo(() => {
     const map = new Map<string, { index: number; tl: number }>();
     if (!t0) return map;
 
-    const dailyPnL = calculateDailyPnLFromPartialCloses(partialCloses);
-    let cumulativeTL = startingCapital;
+    // Pre-compute daily realized PnL contributions
+    const dailyRealizedPnL = calculateCumulativeRealizedPnL(partialCloses);
+
+    // Determine which symbols are missing price data (for fallback)
+    const missingSet = new Set(priceDataMissing);
+
+    let cumulativeRealized = 0;
     let currentDay = t0;
 
     while (currentDay <= endDate) {
       const key = format(currentDay, 'yyyy-MM-dd');
-      const dailyContribution = dailyPnL.get(key) || 0;
-      cumulativeTL += dailyContribution;
+
+      // Add realized PnL for this day
+      const dayRealized = dailyRealizedPnL.get(key) || 0;
+      cumulativeRealized += dayRealized;
+
+      // Calculate unrealized PnL for all trades open on this day
+      let unrealizedPnL = 0;
+
+      for (const trade of allTrades) {
+        const tradeOpen = startOfDay(parseISO(trade.created_at));
+        const tradeClosed = trade.closed_at ? startOfDay(parseISO(trade.closed_at)) : null;
+
+        // Is this trade open on this day?
+        if (tradeOpen > currentDay) continue;
+        if (tradeClosed && tradeClosed <= currentDay) continue;
+
+        // Get remaining lot at this day
+        const tradePC = partialClosesByTrade.get(trade.id) || [];
+        const remainingLot = getRemainingLotAtDay(trade, key, tradePC);
+        if (remainingLot <= 0) continue;
+
+        // Get current price
+        let currentPrice: number;
+        const symbolPrices = stockPriceMap.get(trade.stock_symbol);
+
+        if (symbolPrices && symbolPrices.size > 0) {
+          // Use actual price data
+          currentPrice = symbolPrices.get(key) ?? trade.entry_price;
+        } else if (missingSet.has(trade.stock_symbol)) {
+          // Fallback: linear interpolation if closed, entry price if active
+          if (trade.closed_at && trade.exit_price) {
+            currentPrice = linearInterpolatePrice(
+              trade.entry_price,
+              trade.exit_price,
+              tradeOpen,
+              tradeClosed,
+              currentDay
+            );
+          } else {
+            currentPrice = trade.entry_price;
+          }
+        } else {
+          currentPrice = trade.entry_price;
+        }
+
+        // Calculate unrealized PnL
+        if (trade.trade_type === 'buy') {
+          unrealizedPnL += (currentPrice - trade.entry_price) * remainingLot;
+        } else {
+          unrealizedPnL += (trade.entry_price - currentPrice) * remainingLot;
+        }
+      }
+
+      const portfolioValue = startingCapital + cumulativeRealized + unrealizedPnL;
 
       map.set(key, {
-        index: 100 * (cumulativeTL / startingCapital),
-        tl: cumulativeTL,
+        index: 100 * (portfolioValue / startingCapital),
+        tl: portfolioValue,
       });
 
       currentDay = addDays(currentDay, 1);
     }
 
     return map;
-  }, [t0, partialCloses, startingCapital, endDate]);
+  }, [t0, partialCloses, startingCapital, endDate, allTrades, stockPriceMap, priceDataMissing, partialClosesByTrade]);
 
   // Normalize portfolio from effectiveStart (effectiveStart = 100)
   const portfolioIndexMap = useMemo(() => {
