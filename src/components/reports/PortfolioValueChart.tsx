@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -14,9 +14,11 @@ import {
   PortfolioCurrency,
   PortfolioValuePoint,
 } from '@/hooks/usePortfolioValueData';
-import { PartialCloseRecord } from '@/hooks/useEquityCurveData';
+import { PartialCloseRecord, calculateT0FromTrades } from '@/hooks/useEquityCurveData';
+import { useStockPriceSeries } from '@/hooks/useStockPriceSeries';
 import { cn } from '@/lib/utils';
 import { AlertTriangle } from 'lucide-react';
+import { startOfDay, subYears } from 'date-fns';
 
 interface CashFlowInput {
   flow_type: string;
@@ -147,12 +149,30 @@ export function PortfolioValueChart({
   const [selectedCurrency, setSelectedCurrency] =
     useState<PortfolioCurrency>('TL');
 
+  // Calculate date range for stock price fetching (t0 → today, max 3y back)
+  const { priceStartDate, priceEndDate } = useMemo(() => {
+    const today = startOfDay(new Date());
+    const t0 = calculateT0FromTrades(allTrades.length > 0 ? allTrades : closedTrades);
+    const threeYearsAgo = subYears(today, 3);
+    const start = t0 && t0 > threeYearsAgo ? t0 : threeYearsAgo;
+    return { priceStartDate: start, priceEndDate: today };
+  }, [allTrades, closedTrades]);
+
+  // Fetch stock price series for symbols with open positions
+  const { priceMap: stockPriceMap, missingSymbols } = useStockPriceSeries(
+    allTrades,
+    priceStartDate,
+    priceEndDate
+  );
+
   const { data, t0, currencyFallback } = usePortfolioValueData(
     closedTrades,
     allTrades,
     cashFlows,
     partialCloses,
-    selectedCurrency
+    selectedCurrency,
+    stockPriceMap,
+    missingSymbols
   );
 
   if (!t0 || data.length === 0) {
@@ -199,6 +219,13 @@ export function PortfolioValueChart({
         </div>
       )}
 
+      {missingSymbols.length > 0 && (
+        <div className="flex items-center gap-2 text-xs text-amber-500 mb-3">
+          <AlertTriangle className="w-3 h-3" />
+          {missingSymbols.join(', ')} için fiyat verisi alınamadı (tahmini hesaplama)
+        </div>
+      )}
+
       <div className="w-full h-[300px] sm:h-[400px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
@@ -227,7 +254,7 @@ export function PortfolioValueChart({
               content={<CustomTooltip selectedCurrency={selectedCurrency} />}
             />
             <Line
-              type="stepAfter"
+              type="monotone"
               dataKey="value"
               name="Portföy"
               stroke="hsl(var(--primary))"
