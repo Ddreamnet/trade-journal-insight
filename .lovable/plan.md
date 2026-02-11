@@ -1,313 +1,238 @@
-# Plan: Raporlarim Kartlari + Grafikler (1. 2. 3. grafik) + Zaman Araligi Mantigi (v2)
 
-Onceki plana 6 netlestirme entegre edilmistir. Diger tum maddeler aynen korunmustur.
 
----
+# Plan: Portfoy Cizgisine Unrealized PnL Ekleme (Canli Fiyat Serisi)
 
-## Yapilacaklar Ozeti
+## Sorun
+
+1. grafikteki portfoy cizgisi su an sadece realized PnL (kapanis olaylari) ile guncelleniyor. Bir trade acikken cizgi duz kaliyor cunku gunluk fiyat verisi yok.
+
+## Cozum Ozeti
 
 ```text
-A) Ust kartlar: zaman araligi filtresi + "En Iyi Seri" -> Basarili/Basarisiz karti
-B) Grafik alani: baslik/duzenleme temizligi + isimlendirme
-C) 1. Grafik: "% Cizgi Grafigi" -- benchmark + portfoy normalizasyonu aralik baslangicina gore
-D) 2. Grafik: "% Sutun Grafigi" -- Portfoy butonu eklenmesi
-E) 3. Grafik: Portfoyun t0'dan itibaren ilerleyisi (tek cizgi, kur secimi, nakit jump, alim markeri)
+1. Yeni Edge Function: stock-series (Yahoo Finance uzerinden BIST hisse gunluk kapanis)
+2. Yeni Hook: useStockPriceSeries (ihtiyac duyulan sembolleri tespit et, fiyat serisi cek)
+3. useEquityCurveData guncelleme: realized + unrealized PnL hesabi
+4. Fallback: fiyat verisi yoksa lineer interpolasyon (entry -> exit arasi esit dagitim)
 ```
 
 ---
 
-## A) Ust 4 Kart: Zaman Araligi Filtresi
+## 1. Edge Function: `stock-series`
 
-### Degisiklikler
+### Amac
 
-**TimeRange tipi (`types/trade.ts`):**
+Yahoo Finance Chart API uzerinden BIST hisselerinin gunluk kapanis fiyatlarini cek.
 
-- `'1w'` secenegi kaldirilir. Kalan: 1m, 3m, 6m, 1y, 3y.
-- `getTimeRangeDates` ve diger yerlerdeki `'1w'` case'leri temizlenir.
+### API Formati
 
-**Filtreleme kriteri -- "kapanis olaylari":**
+```text
+GET https://query1.finance.yahoo.com/v8/finance/chart/{SYMBOL}.IS?range=3y&interval=1d
+```
 
-- Kartlar icin PnL ve islem sayisi hesabi artik sadece `closed_at`'e gore degil, **kapanis olaylari** uzerinden filtrelenir.
-- Bir trade henuz tam kapanmamis (status=active) olsa bile, o aralikta `trade_partial_closes` kaydi varsa o kismi cikisin realized PnL'i dahil edilir.
-- Veri kaynagi: `trade_partial_closes` tablosundaki `created_at` tarihi zaman araligina gore filtrelenir.
-- Toplam islem sayisi: Secili aralikta herhangi bir kapanis olayi olan **benzersiz trade** sayisi (partial closes'tan distinct trade_id + aralikta tam kapanan trade'ler). “Realized PnL hesaplarında tek kaynak trade_partial_closes’tur; trades üzerindeki kapanış alanları para hesabında kullanılmaz.”
-- Toplam K/Z: Aralikta gerceklesen tum partial close'larin `realized_pnl` toplami.
+Yahoo Finance yaniti: JSON icinde `timestamp[]` ve `indicators.quote[0].close[]` dizileri.
 
-**Basarili/Basarisiz sayimi -- trade'in FINAL kapanis turune gore:**
+### Endpoint Tasarimi
 
-- Bir trade'in "basarili" veya "basarisiz" sayilmasi icin trade'in tamamen kapanmis olmasi (`status = 'closed'`) VE `closed_at`'in secili aralik icinde olmasi gerekir.
-- Basarili = `closing_type === 'kar_al'` olan tam kapanmis trade sayisi.
-- Basarisiz = `closing_type === 'stop'` olan tam kapanmis trade sayisi.
-- Kismi cikislari devam eden (hala active) trade'ler bu sayima dahil edilmez.
+```text
+GET /stock-series?symbols=AKSEN,EUPWR&range=3y
+```
 
-**"En Iyi Seri" karti -> "Basarili / Basarisiz" karti:**
+- Birden fazla sembol virgul ile gonderilir (tek istekte toplu cekme).
+- Her sembol icin ayri Yahoo Finance cagrisi yapilir (paralel).
+- Yanit: `{ [symbol]: { points: [{date, value}], source } }`.
 
-- Kart boyutu/olculeri ayni kalacak.
-- Kartinin ortasinda ince dikey bir `Separator` cizgisi olacak.
-- Sol tarafta: "Basarili" yazisi + altinda basarili islem sayisi.
-- Sag tarafta: "Basarisiz" yazisi + altinda basarisiz islem sayisi.
+### Cache
 
-**Kar Al % hesabi:**
+- In-memory cache: sembol bazinda 30 dakika (benchmark'larla ayni).
+- Ayni sembol tekrar istenirse cache'den doner.
 
-- `winRate = basarili / (basarili + basarisiz)`. Sadece tam kapanmis trade'lerden hesaplanir.
+### Hata Yonetimi
 
-### Veri Ihtiyaci
+- Yahoo Finance erisim sorunlarinda sembol icin bos dizi doner (`points: []`).
+- Edge function tamamen basarisiz olursa client tarafinda fallback devreye girer.
 
-- `trade_partial_closes` verisini Reports sayfasinda cekmek gerekecek (yeni query veya hook).
-- Alternatif: `usePortfolioCash` hook'undan realized_pnl zaten var ama trade bazli degil. Reports icin ayri bir query gerekli.
+### Dosya
 
-### Degisecek Dosyalar
-
-- `src/types/trade.ts` (1w kaldirilacak)
-- `src/pages/Reports.tsx` (4. kart UI + stats hesabi + partial_closes query)
-- `src/components/reports/TimeRangeSelector.tsx` (otomatik)
-- `src/hooks/useEquityCurveData.ts` (1w case temizligi)
+- `supabase/functions/stock-series/index.ts` (yeni)
 
 ---
 
-## B) Grafik Alani Baslik ve Duzen
+## 2. Hook: `useStockPriceSeries`
 
-- "Equity Curve" yazisi ve Settings (dislisi) butonu/Popover tamamen kaldirilacak.
-- Baslangic sermayesi ayari simdilik kalkar (localStorage verisi korunur, silinmez).
-- 1. grafigin basligini "% Cizgi Grafigi" yap.
-- 2. grafigin basligini "% Sutun Grafigi" yap.
-- 3. grafik eklenir (detay E bolumunde).
+### Amac
+
+Grafik penceresi icinde pozisyonu olan sembolleri tespit et ve fiyat serisi cek.
+
+### Sembol Tespiti
+
+```text
+Tum trades (active + closed) taranir.
+Bir trade'in grafik penceresinde "aktif pozisyonu" varsa:
+  - created_at < endDate VE (closed_at > startDate VEYA status === 'active')
+Bu trade'lerin stock_symbol'leri benzersiz listeye alinir.
+```
+
+### Cekme Mantigi
+
+- `useQuery` ile `/stock-series?symbols=AKSEN,EUPWR&range=3y` endpoint'ine tek istek.
+- Query key: `['stock-price-series', symbolsKey]` (sembol listesi degismedikce tekrar cekmez).
+- Yanit: `Map<string, Map<string, number>>` (symbol -> dateKey -> closePrice).
+
+### Carry-Forward
+
+- Hafta sonu / tatil gunlerinde veri yoksa son bilinen kapanis fiyati kullanilir.
+- Hook seviyesinde gunluk Map olusturulurken carry-forward uygulanir.
+
+### Dosya
+
+- `src/hooks/useStockPriceSeries.ts` (yeni)
+
+---
+
+## 3. `useEquityCurveData` Guncelleme
+
+### Yeni Parametre
+
+```typescript
+// Mevcut:
+useEquityCurveData(timeRange, selectedBenchmarks, closedTrades, startingCapital, partialCloses)
+
+// Yeni:
+useEquityCurveData(timeRange, selectedBenchmarks, closedTrades, startingCapital, partialCloses,
+  allTrades,            // tum trade'ler (active dahil)
+  stockPriceMap,        // Map<symbol, Map<dateKey, price>>
+  priceDataMissing      // string[] — fiyat verisi cekilemeyen semboller
+)
+```
+
+### Hesap Mantigi (Her Gun Icin)
+
+```text
+portfolioValue(gun) = startingCapital + realizedPnL(gun) + unrealizedPnL(gun)
+
+realizedPnL(gun):
+  - Su ana kadar gerceklesen tum partial close realized_pnl toplami
+  - (Mevcut step mantigi aynen korunur)
+
+unrealizedPnL(gun):
+  - O gunde ACIK olan her trade icin:
+    - Trade created_at <= gun VE (closed_at > gun VEYA hala active)
+    - remaining_lot_at(gun) hesapla:
+      - lot_quantity - SUM(partial_close lots where pc.created_at <= gun)
+    - price = stockPriceMap.get(symbol)?.get(gun) || entry_price
+    - Long:  (price - entry_price) * remaining_lot_at(gun)
+    - Short: (entry_price - price) * remaining_lot_at(gun)
+  - Tum open trade'lerin unrealized PnL'i toplanir
+
+portfolioIndex = 100 * (portfolioValue / startingCapital)
+```
+
+### remaining_lot_at(gun) Hesabi
+
+Her trade icin partial_closes'lari tarihe gore sirala. O gune kadar kapanan lotlari cikar:
+
+```text
+remaining_lot_at(gun) = trade.lot_quantity - SUM(pc.lot_quantity WHERE pc.trade_id = trade.id AND pc.created_at <= gun)
+```
+
+Bu hesap icin `PartialCloseRecord` interface'ine `lot_quantity` alani eklenir.
+
+### Fallback (Fiyat Verisi Yoksa)
+
+Eger bir sembol icin `stockPriceMap`'te veri yoksa:
+- Trade kapanmissa: entry ile exit arasinda lineer interpolasyon (estimated)
+- Trade hala aciksa: entry fiyatinda sabit (duz cizgi, eski davranis)
+- Bu "estimated" yaklasimdaki ilgili donemlerde cizgi stili farkli olmaz ama tooltip'te "(tahmini)" notu gosterilir
+
+### Normalizasyon
+
+Normalizasyon aynen korunur: effectiveStart'taki portfolioIndex degeri = 100.
+
+### Degisecek Dosya
+
+- `src/hooks/useEquityCurveData.ts`
+
+---
+
+## 4. Reports.tsx ve EquityCurveChart Guncellemeleri
+
+### Reports.tsx
+
+- `useStockPriceSeries` hook'unu cagir (trades + timeRange ile).
+- `partialCloses` query'sine `lot_quantity` alani ekle.
+- `allTrades` ve `stockPriceMap` + `priceDataMissing` degerlerini EquityCurveChart'a aktar.
+
+### EquityCurveChart.tsx
+
+- Yeni prop'lari al ve `useEquityCurveData`'ya ilet.
+- `priceDataMissing` listesi dolu ise kucuk bir uyari goster: "X sembol icin fiyat verisi alinamadi".
 
 ### Degisecek Dosyalar
 
 - `src/pages/Reports.tsx`
-
----
-
-## C) 1. Grafik: "% Cizgi Grafigi"
-
-### Benchmark Normalizasyonu
-
-**Yeni mantik:** Hem benchmarklar hem portfoy, **secili zaman araliginin baslangicina** gore 100'den baslar.
-
-- Normalizasyon baslangici = `max(t0, viewStartDate)`.
-- Ornegin 1 ay secildiginde: 1 ay onceki deger = 100.
-
-**Uygulama (`useEquityCurveData.ts`):**
-
-- `normalizeBenchmarkFromT0WithCarryForward` fonksiyonunun baslangic parametresini `effectiveStart = max(t0, viewStartDate)` olarak degistir.
-- Portfoy icin: tam index t0'dan bugune hesaplanir, sonra view window baslangicindaki deger (`viewStartIndex`) bulunur ve tum gorunen degerler `(rawIndex / viewStartIndex) * 100` olarak yeniden normalize edilir.
-
-### PnL Adim Yaklasimayla (Step)
-
-- Lineer dagitim (PnL'i gunlere bolme) kaldirilacak.
-- PnL sadece `closed_at` tarihinde adim olarak eklenir.
-- **Netlestirme:** Kismi cikislar da dahil. `trade_partial_closes` kayitlarinin `created_at` tarihinde `realized_pnl` adim olarak eklenir. Trade'in final kapanisinda ise son parcainin PnL'i `closed_at` tarihinde eklenir.
-
-### 1-2. Grafik Nakit Akisi Haric Tutma
-
-- 1. ve 2. grafik "performans" grafikleri olarak nakit akislarini (deposit/withdraw) **tamamen haric tutar**.
-- Portfoy index hesabi sadece realized PnL'e dayalidir. Nakit girisi/cikisi index'i etkilemez.
-- Nakit jump'lari **sadece** 3. grafikte gosterilir.
-
-### Portfoy Cizgisi Kalinligi
-
-- `EquityCurveChart.tsx`: `strokeWidth={3}` -> `strokeWidth={1.5}`.
-
-### Degisecek Dosyalar
-
-- `src/hooks/useEquityCurveData.ts`
 - `src/components/reports/EquityCurveChart.tsx`
 
 ---
 
-## D) 2. Grafik: "% Sutun Grafigi" -- Portfoy Butonu
+## 5. PartialCloseRecord Guncelleme
 
-### Degisiklikler
-
-**BenchmarkSelector'a "Portfoy" secenegi ekle:**
-
-- Benchmark seciciye "Portfoy" butonu eklenir (ozel, BENCHMARKS dizisine dahil degil).
-- Varsayilan olarak **secili degil**.
-- Kullanici portfoy butonuna tikladiginda portfoy sutunu eklenir.
-
-**ReturnComparisonChart mantik degisikligi:**
-
-- Portfoy her zaman otomatik eklenmeyecek. Sadece `portfolioSelected` prop'u true ise eklensin.
-- "En az 2 varlik" kisiti kaldirilacak. Tek varlik secildiginde bile sutun gosterilecek.
-
-### Degisecek Dosyalar
-
-- `src/pages/Reports.tsx` (portfolioSelected state)
-- `src/components/reports/ReturnComparisonChart.tsx` (portfolioSelected prop)
-- `src/components/reports/BenchmarkSelector.tsx` (Portfoy butonu)
-
----
-
-## E) 3. Grafik: Portfoyun t0'dan Itibaren Ilerleyisi
-
-### Kritik Ozellik: TimeRange'e Bagli DEGIL
-
-- 3. grafik her zaman t0'dan bugune gosterir. Zaman araligi secimi bu grafigi etkilemez.
-
-### t0 ve Baslangic Degeri
-
-- t0 = kapali islemler arasinda en erken `created_at` tarihi (mevcut `calculateT0FromClosedTrades`).
-- **t0 baslangic degeri:** t0 gunu olusturulurken, t0'a kadar olan net nakit akisi + realized PnL ile baslatilir.
-  - `portfolioValue(t0) = SUM(deposits before t0) - SUM(withdrawals before t0) + SUM(realized_pnl before t0)`.
-  - Cogu durumda t0 ilk islem tarihi oldugu icin bu deger genellikle ilk deposit'e esit olur. Ama t0 oncesinde birden fazla nakit hareketi varsa hepsi dahil edilir.
-
-### Portfoy Degeri Serisi
-
-Her gun icin:
-
-```text
-portfolioValue(tarih) = 
-  SUM(deposits until tarih) - SUM(withdrawals until tarih) + SUM(realized_pnl until tarih)
+Mevcut interface:
+```typescript
+interface PartialCloseRecord {
+  id: string;
+  trade_id: string;
+  realized_pnl: number | null;
+  created_at: string;
+}
 ```
 
-- Nakit girisi/cikisi olan gunlerde grafik degerinde dikey atlama (dogal jump).
-- Bu gunler tooltip'te "Para Girisi: +X TL" veya "Para Cikisi: -X TL" olarak gosterilir.
+Yeni:
+```typescript
+interface PartialCloseRecord {
+  id: string;
+  trade_id: string;
+  realized_pnl: number | null;
+  lot_quantity: number;  // eklendi
+  created_at: string;
+}
+```
 
-### Islem Markerlari
-
-- Yeni islem acildiginda portfoy degeri degismez (nakit azalir, pozisyon degeri eklenir).
-- Bu tarihlerde grafik uzerinde kucuk marker gosterilir.
-- Tooltip'te "THYAO Alim" gibi bilgi verilir.
-
-### Kur/Deger Secimi
-
-- Varsayilan: TL bazinda.
-- Kullanici USD, EUR, Altin secebilir.
-- Secildiginde: `portfolioValueCurrency = portfolioValueTL / kurDegeri(tarih)`.
-- Kur verisi: `MarketSeriesContext`'ten (`getSeriesData` ile absolute degerler).
-
-**Kur serilerinde eksik gunler: carry-forward**
-
-- Hafta sonlari ve tatil gunlerinde kur verisi yoksa, en son bilinen deger kullanilir (carry-forward).
-- Bu zaten `findValueAtDateWithCarryForward` fonksiyonu ile mevcut, ayni mantik uygulanacak.
-
-**Kur verisi tamamen yoksa: TL fallback**
-
-- Bir kur secilmis ama o kur icin hic veri gelmemisse (API hata, vb.), grafik TL bazinda gosterilir ve kullaniciya "Kur verisi alinamadi, TL bazinda gosteriliyor" bilgisi verilir.
-
-### Degisecek/Olusacak Dosyalar
-
-- `src/components/reports/PortfolioValueChart.tsx` (yeni)
-- `src/hooks/usePortfolioValueData.ts` (yeni)
-- `src/pages/Reports.tsx` (3. grafigi entegre et)
+Reports.tsx'teki query'de `lot_quantity` alani eklenir.
 
 ---
 
 ## Uygulama Sirasi
 
-
-| Adim | Is Kalemi                                                                                | Gerekce                 |
-| ---- | ---------------------------------------------------------------------------------------- | ----------------------- |
-| 1    | TimeRange'den 1w kaldir                                                                  | Kucuk, her seyi etkiler |
-| 2    | Ust kartlar: stats hesabi guncelle (partial_closes query + basarili/basarisiz)           | Veri katmani            |
-| 3    | Ust kartlar: Basarili/Basarisiz kart UI                                                  | UI degisikligi          |
-| 4    | Grafik baslik temizligi (Equity Curve + Settings kaldir, yeniden isimlendir)             | Bagimsiz                |
-| 5    | 1. Grafik: normalizasyonu aralik baslangicina cek + PnL step yaklasimayla + cizgi incelt | Ana mantik              |
-| 6    | 2. Grafik: Portfoy butonu + tek varlik gosterimi                                         | 5'e bagimli             |
-| 7    | 3. Grafik: PortfolioValueChart + usePortfolioValueData (kur, jump, marker)               | Yeni komponent          |
-
+| Adim | Is | Gerekce |
+|------|----|---------|
+| 1 | Edge Function: `stock-series` olustur + deploy | Veri kaynagi hazir olmali |
+| 2 | `useStockPriceSeries` hook olustur | Veri katmani |
+| 3 | `PartialCloseRecord`'a lot_quantity ekle + Reports query guncelle | Veri yapisi |
+| 4 | `useEquityCurveData` refactor: realized + unrealized + fallback | Ana hesap degisikligi |
+| 5 | Reports.tsx + EquityCurveChart prop'larini guncelle + uyari mesaji | UI entegrasyonu |
 
 ---
 
-## Teknik Detaylar
+## Performans Notlari
 
-### Normalizasyon Degisikligi (1. Grafik)
-
-```text
-effectiveStart = max(t0, viewStartDate)
-
-// Benchmark:
-normalizeBenchmark(points, effectiveStart, endDate)
-  -> effectiveStart'taki deger = 100
-
-// Portfoy:
-viewStartIndex = portfolioIndexMap.get(effectiveStart)?.index || 100
-normalizedPortfolioIndex = (rawIndex / viewStartIndex) * 100
-```
-
-### PnL Step Yaklasimayla -- Partial Closes Dahil
-
-```text
-// Eski: PnL'i gunlere dagit (lineer)
-// Yeni:
-for each partialClose:
-  key = format(partialClose.created_at, 'yyyy-MM-dd')
-  dailyPnL[key] += partialClose.realized_pnl
-
-// Tam kapanis icin de son parcainin PnL'i closed_at'e yazilir
-// (Bu zaten close_trade_partial RPC'si ile trade_partial_closes'a kaydediliyor)
-```
-
-Not: Tum kapanislar `trade_partial_closes` tablosuna kaydedildigi icin (tam kapanis = remaining_lot'u sifirlayan son partial close), PnL hesabi icin sadece `trade_partial_closes` tablosu kullanilabilir. Ayrica trade'in kendi `exit_price` ve `position_amount` uzerinden hesap yapmaya gerek kalmaz.
-
-### 3. Grafik Portfoy Degeri Hesabi
-
-```text
-portfolioValue(tarih) = 
-  cumulative_deposits(tarih) - cumulative_withdrawals(tarih) + cumulative_realized_pnl(tarih)
-
-// t0 baslangici:
-portfolioValue(t0) = net_cash_before_t0 + realized_pnl_before_t0
-
-// Kur donusumu:
-USD bazinda: portfolioValue(tarih) / usd_tl_kuru(tarih)  // carry-forward ile
-Altin bazinda: portfolioValue(tarih) / altin_tl_gram_fiyati(tarih)
-
-// Kur verisi yoksa: TL fallback + uyari mesaji
-```
+- Edge function'da in-memory cache (30 dk) ile tekrar API cagrisi onlenir.
+- Client tarafinda `useQuery` cache ile sayfa acikken veri tekrar cekilmez.
+- Sembol listesi sadece grafik penceresinde pozisyonu olan trade'lerden uretilir (gereksiz sembol cekmez).
+- Hook `useMemo` ile gun basi hesaplamalari optimize eder.
 
 ---
 
 ## Test Kontrol Listesi
 
-### Zaman Araligi Filtresi
+- [ ] 7 Sub acilis, 11 Sub kapanis isleminde 7-11 arasi cizgi duz OLMAMALI; gunluk fiyata gore dalgalanmali
+- [ ] 11 Sub kapanisinda realized PnL dogru oturmali (cizgi adim yapmali)
+- [ ] Partial close sonrasi remaining lot azalmali ve unrealized PnL buna gore hesaplanmali
+- [ ] Aktif (kapanmamis) trade'lerin unrealized PnL'i bugunun fiyatiyla gosterilmeli
+- [ ] TimeRange degistiginde normalizasyon (baslangic=100) dogru calismali
+- [ ] Fiyat verisi cekilemeyen sembol icin uyari mesaji goruntulenmeli
+- [ ] Fiyat verisi yoksa fallback (lineer interpolasyon) devreye girmeli
+- [ ] Benchmark cizgileri ve diger grafikler/kartlar degismemeli
+- [ ] Deposit/withdraw nakit akislari 1. grafik portfoy cizgisini etkilememeli
+- [ ] Mobilde grafik duzgun gorunmeli
+- [ ] Edge function cache calismali (ayni sembol 30 dk icinde tekrar cekilmemeli)
 
-- 1 Hafta secenegi goruntulenmemeli
-- 1 Ay secildiginde kartlar son 1 ayda gerceklesen kapanis olaylarini yansitmali
-- Kismi cikisi olan ama hala aktif trade'in o araliktaki realized PnL'i toplam K/Z'ye dahil olmali
-- Zaman araligi degistiginde kartlar ve 1-2. grafik guncellenmeli, 3. grafik degismemeli
-
-### Ust Kartlar
-
-- Toplam K/Z: Aralikta gerceklesen tum partial close realized_pnl toplami
-- Basarili sayisi: Aralikta tam kapanan + closing_type='kar_al' olan trade sayisi (final kapanis turune gore)
-- Basarisiz sayisi: Aralikta tam kapanan + closing_type='stop' olan trade sayisi
-- Hala aktif olan (kismi cikis yapmis ama kapanmamis) trade'ler basarili/basarisiz sayisina dahil olmamali
-- Dikey ayirici cizgi mobilde ve desktopte gorunmeli
-
-### 1. Grafik: % Cizgi Grafigi
-
-- 1 Ay secildiginde benchmark ve portfoy 1 ay oncesi = 100'den baslamali
-- PnL adim seklinde eklenmeli (lineer dagitim yok)
-- Kismi cikis PnL'i partial_close tarihinde adim olarak gorunmeli
-- Nakit akislari (deposit/withdraw) portfoy index'ini etkilememeli
-- Portfoy cizgisi ~1.5px kalinliginda olmali
-- "Equity Curve" yazisi ve Settings ikonu gorunmemeli
-
-### 2. Grafik: % Sutun Grafigi
-
-- "Portfoy" butonu Benchmark seciciye eklenmis olmali
-- Portfoy butonu varsayilan olarak secili olmamali
-- Tek varlik secildiginde bile sutun goruntulenmeli
-- Nakit akislari portfoy getiri hesabini etkilememeli
-
-### 3. Grafik: Portfoy Degeri
-
-- Grafik t0'dan bugune gostermeli (timeRange'den bagimsiz)
-- Zaman araligi degistiginde 3. grafik degismemeli
-- t0 baslangic degeri: t0 oncesi net nakit + realized PnL ile baslamali
-- Nakit girisi/cikisi gunlerinde dikey atlama (jump) olmali
-- Islem acilis gunlerinde marker gorunmeli
-- TL varsayilan baz olmali
-- USD secildiginde farkli bir egri cizmeli (kur etkisi)
-- Kur verisinde eksik gunler carry-forward ile doldurulmali
-- Kur verisi tamamen yoksa TL fallback + uyari mesaji gostermeli
-- Kapanmis islem yoksa bos durum mesaji gostermeli
-
-### Mobil Uyum
-
-- Kartlar 2x2 grid'de duzgun gorunmeli
-- Basarili/Basarisiz karti mobilde ayirici ile duzgun gorunmeli
-- 3 grafik mobilde tam genislikte gorunmeli
-- Kur secici butonlari mobilde tasmamali
