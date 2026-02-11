@@ -21,12 +21,12 @@ const STARTING_CAPITAL_KEY = 'reports-starting-capital';
 function getCutoffDate(timeRange: TimeRange): Date {
   const now = new Date();
   switch (timeRange) {
-    case '1m': return subMonths(now, 1);
-    case '3m': return subMonths(now, 3);
-    case '6m': return subMonths(now, 6);
-    case '1y': return subYears(now, 1);
-    case '3y': return subYears(now, 3);
-    default: return subMonths(now, 1);
+    case '1m':return subMonths(now, 1);
+    case '3m':return subMonths(now, 3);
+    case '6m':return subMonths(now, 6);
+    case '1y':return subYears(now, 1);
+    case '3y':return subYears(now, 3);
+    default:return subMonths(now, 1);
   }
 }
 
@@ -53,14 +53,14 @@ export default function Reports() {
     queryKey: ['trade_partial_closes_reports', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const { data, error } = await supabase
-        .from('trade_partial_closes')
-        .select('id, trade_id, realized_pnl, lot_quantity, created_at')
-        .order('created_at', { ascending: true });
+      const { data, error } = await supabase.
+      from('trade_partial_closes').
+      select('id, trade_id, realized_pnl, lot_quantity, created_at').
+      order('created_at', { ascending: true });
       if (error) throw error;
       return data as PartialCloseRecord[];
     },
-    enabled: !!user,
+    enabled: !!user
   });
 
   // Auto-set starting capital from first trade's position_amount
@@ -79,17 +79,17 @@ export default function Reports() {
 
   const toggleLineChartBenchmark = (benchmarkId: string) => {
     setLineChartBenchmarks((prev) =>
-      prev.includes(benchmarkId)
-        ? prev.filter((id) => id !== benchmarkId)
-        : [...prev, benchmarkId]
+    prev.includes(benchmarkId) ?
+    prev.filter((id) => id !== benchmarkId) :
+    [...prev, benchmarkId]
     );
   };
 
   const toggleBarChartBenchmark = (benchmarkId: string) => {
     setBarChartBenchmarks((prev) =>
-      prev.includes(benchmarkId)
-        ? prev.filter((id) => id !== benchmarkId)
-        : [...prev, benchmarkId]
+    prev.includes(benchmarkId) ?
+    prev.filter((id) => id !== benchmarkId) :
+    [...prev, benchmarkId]
     );
   };
 
@@ -99,7 +99,7 @@ export default function Reports() {
 
     // PnL from partial closes in range
     const filteredPCs = partialCloses.filter((pc) =>
-      isAfter(parseISO(pc.created_at), cutoff)
+    isAfter(parseISO(pc.created_at), cutoff)
     );
     const totalPnL = filteredPCs.reduce((sum, pc) => sum + (pc.realized_pnl || 0), 0);
 
@@ -114,9 +114,9 @@ export default function Reports() {
     const successCount = closedInRange.filter((t) => t.closing_type === 'kar_al').length;
     const failCount = closedInRange.filter((t) => t.closing_type === 'stop').length;
     const winRate =
-      successCount + failCount > 0
-        ? (successCount / (successCount + failCount)) * 100
-        : 0;
+    successCount + failCount > 0 ?
+    successCount / (successCount + failCount) * 100 :
+    0;
 
     return { totalTrades, totalPnL, successCount, failCount, winRate: winRate.toFixed(1) };
   }, [partialCloses, closedTrades, selectedTimeRange]);
@@ -195,8 +195,8 @@ export default function Reports() {
           <h2 className="text-lg font-semibold text-foreground">% Çizgi Grafiği</h2>
           <TimeRangeSelector
             selectedRange={selectedTimeRange}
-            onSelect={setSelectedTimeRange}
-          />
+            onSelect={setSelectedTimeRange} />
+
         </div>
 
         <EquityCurveChart
@@ -206,19 +206,19 @@ export default function Reports() {
           allTrades={trades as Trade[]}
           closedTrades={closedTrades as Trade[]}
           startingCapital={startingCapital}
-          partialCloses={partialCloses}
-        />
+          partialCloses={partialCloses} />
+
 
         <div className="mt-4 pt-4 border-t border-border">
           <BenchmarkSelector
             benchmarks={BENCHMARKS}
             selectedBenchmarks={lineChartBenchmarks}
-            onToggle={toggleLineChartBenchmark}
-          />
-          <p className="text-xs text-muted-foreground mt-3">
-            💡 Piyasa verileri Stooq ve TCMB EVDS'den çekilmektedir. Tüm değerler
-            seçili zaman aralığının başlangıcından 100 bazında normalize edilmiştir.
-          </p>
+            onToggle={toggleLineChartBenchmark} />
+
+          
+
+
+
         </div>
       </div>
 
@@ -230,16 +230,16 @@ export default function Reports() {
         closedTrades={closedTrades as Trade[]}
         startingCapital={startingCapital}
         partialCloses={partialCloses}
-        portfolioSelected={portfolioSelected}
-      >
+        portfolioSelected={portfolioSelected}>
+
         <div className="mt-4 pt-4 border-t border-border">
           <BenchmarkSelector
             benchmarks={BENCHMARKS}
             selectedBenchmarks={barChartBenchmarks}
             onToggle={toggleBarChartBenchmark}
             portfolioSelected={portfolioSelected}
-            onPortfolioToggle={() => setPortfolioSelected((prev) => !prev)}
-          />
+            onPortfolioToggle={() => setPortfolioSelected((prev) => !prev)} />
+
           <p className="text-xs text-muted-foreground mt-3">
             💡 Piyasa verileri Stooq ve TCMB EVDS'den çekilmektedir. Tüm değerler
             seçili zaman aralığının başlangıcından 100 bazında normalize edilmiştir.
@@ -252,9 +252,9 @@ export default function Reports() {
         closedTrades={closedTrades as Trade[]}
         allTrades={trades as Trade[]}
         cashFlows={cashFlows}
-        partialCloses={partialCloses}
-      />
+        partialCloses={partialCloses} />
 
-    </MainLayout>
-  );
+
+    </MainLayout>);
+
 }
