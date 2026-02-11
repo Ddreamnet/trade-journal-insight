@@ -34,7 +34,7 @@ export default function Reports() {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('1m');
   const [lineChartBenchmarks, setLineChartBenchmarks] = useState<string[]>([]);
   const [barChartBenchmarks, setBarChartBenchmarks] = useState<string[]>([]);
-  const [portfolioSelected, setPortfolioSelected] = useState(false);
+  const [portfolioSelected, setPortfolioSelected] = useState(true);
   const [startingCapital, setStartingCapital] = useState<number>(() => {
     const saved = localStorage.getItem(STARTING_CAPITAL_KEY);
     return saved ? Number(saved) : 1000;
