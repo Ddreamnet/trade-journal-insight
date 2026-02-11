@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, X, StickyNote, Pencil } from 'lucide-react';
+import { TrendingUp, TrendingDown, X, StickyNote, Pencil, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trade, TRADE_REASONS, STOP_REASONS, ClosingType } from '@/types/trade';
 import { CloseTradeModal } from './CloseTradeModal';
 import { EditTradeModal, TradeUpdateData } from './EditTradeModal';
@@ -8,10 +9,12 @@ import { useMarketData } from '@/contexts/MarketDataContext';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import {
   Tooltip,
   TooltipContent,
@@ -76,7 +79,6 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
       .join(', ');
   };
 
-  // Anlık fiyat ve fark hesaplama
   const getCurrentPriceInfo = (trade: Trade) => {
     const marketStock = getStockBySymbol(trade.stock_symbol);
     if (!marketStock) return null;
@@ -92,6 +94,38 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
       isPositive: trade.trade_type === 'buy' ? priceDiff >= 0 : priceDiff <= 0
     };
   };
+
+  // Notes Dialog Component
+  const NotesDialog = ({ trade }: { trade: Trade }) => (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button className="p-1 rounded hover:bg-secondary transition-colors" title="Notlar">
+          <StickyNote className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{trade.stock_symbol} - Notlar</DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="max-h-[300px]">
+          <div className="space-y-3">
+            {trade.stop_reason && (
+              <div>
+                <div className="text-xs text-muted-foreground mb-1 font-medium">Stop Sebebi</div>
+                <p className="text-sm text-foreground">{getStopReasonLabels(trade.stop_reason)}</p>
+              </div>
+            )}
+            {trade.closing_note && (
+              <div>
+                <div className="text-xs text-muted-foreground mb-1 font-medium">Not</div>
+                <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
 
   if (isLoading) {
     return (
@@ -176,7 +210,19 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                       )}
                     </div>
                     <div>
-                      <div className="font-semibold text-foreground text-sm">{trade.stock_symbol}</div>
+                      <div className="font-semibold text-foreground text-sm flex items-center gap-1">
+                        {trade.stock_symbol}
+                        {type === 'active' && trade.lot_quantity === 0 && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <AlertTriangle className="w-3 h-3 text-warning" />
+                              </TooltipTrigger>
+                              <TooltipContent>Lot bilgisi eksik</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
                       <div className="text-xs text-muted-foreground truncate max-w-[80px]">{trade.stock_name}</div>
                     </div>
                   </div>
@@ -201,7 +247,7 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                   <span className="font-mono text-sm text-foreground">₺{trade.entry_price.toFixed(2)}</span>
                 </TableCell>
 
-                {/* Anlık Fiyat (sadece aktif işlemler için) */}
+                {/* Anlık Fiyat */}
                 {type === 'active' && (
                   <TableCell className="text-center">
                     {priceInfo ? (
@@ -296,7 +342,7 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                   </TableCell>
                 )}
 
-                {/* Edit + Note Icons (En Sağ) */}
+                {/* Edit + Note Icons */}
                 <TableCell className="py-1 pl-0 pr-2 w-10">
                   <div className="flex items-center gap-1">
                     <button
@@ -307,27 +353,7 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                       <Pencil className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                     </button>
                     {(trade.closing_note || trade.stop_reason) && (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="p-1 rounded hover:bg-secondary transition-colors" title="Notlar">
-                            <StickyNote className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 p-3" side="bottom">
-                          {trade.stop_reason && (
-                            <div className="mb-2">
-                              <div className="text-xs text-muted-foreground mb-1 font-medium">Stop Sebebi</div>
-                              <p className="text-sm text-foreground">{getStopReasonLabels(trade.stop_reason)}</p>
-                            </div>
-                          )}
-                          {trade.closing_note && (
-                            <div>
-                              <div className="text-xs text-muted-foreground mb-1 font-medium">Not</div>
-                              <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
-                            </div>
-                          )}
-                        </PopoverContent>
-                      </Popover>
+                      <NotesDialog trade={trade} />
                     )}
                   </div>
                 </TableCell>
@@ -369,7 +395,12 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                   )}
                 </div>
                 <div>
-                  <div className="font-semibold text-foreground text-sm">{trade.stock_symbol}</div>
+                  <div className="font-semibold text-foreground text-sm flex items-center gap-1">
+                    {trade.stock_symbol}
+                    {type === 'active' && trade.lot_quantity === 0 && (
+                      <AlertTriangle className="w-3 h-3 text-warning" />
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground">{trade.stock_name}</div>
                 </div>
               </div>
@@ -402,27 +433,7 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
                     <Pencil className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                   </button>
                   {(trade.closing_note || trade.stop_reason) && (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button className="p-1 rounded hover:bg-secondary transition-colors" title="Notlar">
-                          <StickyNote className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-56 p-3" side="bottom">
-                        {trade.stop_reason && (
-                          <div className="mb-2">
-                            <div className="text-xs text-muted-foreground mb-1 font-medium">Stop Sebebi</div>
-                            <p className="text-sm text-foreground">{getStopReasonLabels(trade.stop_reason)}</p>
-                          </div>
-                        )}
-                        {trade.closing_note && (
-                          <div>
-                            <div className="text-xs text-muted-foreground mb-1 font-medium">Not</div>
-                            <p className="text-sm text-foreground whitespace-pre-wrap">{trade.closing_note}</p>
-                          </div>
-                        )}
-                      </PopoverContent>
-                    </Popover>
+                    <NotesDialog trade={trade} />
                   )}
                 </div>
               </div>
@@ -486,7 +497,7 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
               </div>
             )}
 
-            {/* Row 3: Sebepler (sarmalı - alt satırlara akıyor) */}
+            {/* Row 3: Sebepler */}
             <div className="text-[10px] text-muted-foreground mb-2">
               <span className="font-medium">Sebepler:</span> {getReasonLabels(trade.reasons)}
             </div>

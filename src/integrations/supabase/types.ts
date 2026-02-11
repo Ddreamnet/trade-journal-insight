@@ -62,6 +62,33 @@ export type Database = {
         }
         Relationships: []
       }
+      portfolio_cash_flows: {
+        Row: {
+          amount: number
+          created_at: string
+          flow_type: string
+          id: string
+          note: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          flow_type: string
+          id?: string
+          note?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          flow_type?: string
+          id?: string
+          note?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       portfolio_events: {
         Row: {
           amount_tl: number
@@ -141,6 +168,53 @@ export type Database = {
           },
         ]
       }
+      trade_partial_closes: {
+        Row: {
+          closing_note: string | null
+          closing_type: string
+          created_at: string
+          exit_price: number
+          id: string
+          lot_quantity: number
+          realized_pnl: number | null
+          stop_reason: string | null
+          trade_id: string
+          user_id: string
+        }
+        Insert: {
+          closing_note?: string | null
+          closing_type: string
+          created_at?: string
+          exit_price: number
+          id?: string
+          lot_quantity: number
+          realized_pnl?: number | null
+          stop_reason?: string | null
+          trade_id: string
+          user_id: string
+        }
+        Update: {
+          closing_note?: string | null
+          closing_type?: string
+          created_at?: string
+          exit_price?: number
+          id?: string
+          lot_quantity?: number
+          realized_pnl?: number | null
+          stop_reason?: string | null
+          trade_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_partial_closes_trade_id_fkey"
+            columns: ["trade_id"]
+            isOneToOne: false
+            referencedRelation: "trades"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trades: {
         Row: {
           closed_at: string | null
@@ -151,9 +225,11 @@ export type Database = {
           exit_price: number | null
           id: string
           is_successful: boolean | null
+          lot_quantity: number
           position_amount: number | null
           progress_percent: number | null
           reasons: string[] | null
+          remaining_lot: number
           rr_ratio: number | null
           status: Database["public"]["Enums"]["trade_status"]
           stock_name: string
@@ -174,9 +250,11 @@ export type Database = {
           exit_price?: number | null
           id?: string
           is_successful?: boolean | null
+          lot_quantity?: number
           position_amount?: number | null
           progress_percent?: number | null
           reasons?: string[] | null
+          remaining_lot?: number
           rr_ratio?: number | null
           status?: Database["public"]["Enums"]["trade_status"]
           stock_name: string
@@ -197,9 +275,11 @@ export type Database = {
           exit_price?: number | null
           id?: string
           is_successful?: boolean | null
+          lot_quantity?: number
           position_amount?: number | null
           progress_percent?: number | null
           reasons?: string[] | null
+          remaining_lot?: number
           rr_ratio?: number | null
           status?: Database["public"]["Enums"]["trade_status"]
           stock_name?: string
@@ -218,6 +298,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_available_cash: { Args: { p_user_id: string }; Returns: number }
       calculate_progress_percent: {
         Args: {
           p_entry_price: number
@@ -235,6 +316,36 @@ export type Database = {
           p_trade_type: Database["public"]["Enums"]["trade_type"]
         }
         Returns: number
+      }
+      close_trade_partial: {
+        Args: {
+          p_closing_note?: string
+          p_closing_type: string
+          p_exit_price: number
+          p_lot_quantity: number
+          p_stop_reason?: string
+          p_trade_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      create_trade_with_cash_check: {
+        Args: {
+          p_entry_price: number
+          p_lot_quantity: number
+          p_reasons?: string[]
+          p_stock_name: string
+          p_stock_symbol: string
+          p_stop_price: number
+          p_target_price: number
+          p_trade_type: Database["public"]["Enums"]["trade_type"]
+          p_user_id: string
+        }
+        Returns: string
+      }
+      create_withdraw_with_check: {
+        Args: { p_amount: number; p_note?: string; p_user_id: string }
+        Returns: string
       }
     }
     Enums: {

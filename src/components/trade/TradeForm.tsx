@@ -18,7 +18,7 @@ interface TradeFormProps {
     target_price: number;
     stop_price: number;
     reasons: string[];
-    position_amount?: number;
+    lot_quantity?: number;
   }) => void;
   isSubmitting?: boolean;
 }
@@ -29,30 +29,66 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
   const [entryPrice, setEntryPrice] = useState(stock.currentPrice.toString());
   const [targetPrice, setTargetPrice] = useState('');
   const [stopPrice, setStopPrice] = useState('');
-  const [positionAmount, setPositionAmount] = useState('');
+  const [lotQuantity, setLotQuantity] = useState('');
   const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
 
   const parsedEntry = parseFloat(entryPrice);
   const parsedTarget = parseFloat(targetPrice);
   const parsedStop = parseFloat(stopPrice);
-  const parsedPosition = parseFloat(positionAmount);
+  const parsedLot = parseInt(lotQuantity, 10);
 
   // Validation checks
-  const hasEntryStopError = !isNaN(parsedEntry) && !isNaN(parsedStop) && parsedEntry === parsedStop;
   const hasNegativeEntry = !isNaN(parsedEntry) && parsedEntry <= 0;
   const hasNegativeTarget = !isNaN(parsedTarget) && parsedTarget <= 0;
   const hasNegativeStop = !isNaN(parsedStop) && parsedStop <= 0;
-  const hasNegativePosition = !isNaN(parsedPosition) && parsedPosition <= 0;
   const hasAnyNegativeError = hasNegativeEntry || hasNegativeTarget || hasNegativeStop;
+
+  // Directional validation
+  const directionalErrors = useMemo(() => {
+    const errors: string[] = [];
+    if (!tradeType || isNaN(parsedEntry) || parsedEntry <= 0) return errors;
+
+    if (tradeType === 'buy') {
+      if (!isNaN(parsedTarget) && parsedTarget > 0 && parsedTarget <= parsedEntry) {
+        errors.push('AL işleminde hedef fiyat giriş fiyatından büyük olmalı');
+      }
+      if (!isNaN(parsedStop) && parsedStop > 0 && parsedStop >= parsedEntry) {
+        errors.push('AL işleminde stop fiyat giriş fiyatından küçük olmalı');
+      }
+    } else {
+      if (!isNaN(parsedTarget) && parsedTarget > 0 && parsedTarget >= parsedEntry) {
+        errors.push('SAT işleminde hedef fiyat giriş fiyatından küçük olmalı');
+      }
+      if (!isNaN(parsedStop) && parsedStop > 0 && parsedStop <= parsedEntry) {
+        errors.push('SAT işleminde stop fiyat giriş fiyatından büyük olmalı');
+      }
+    }
+    return errors;
+  }, [tradeType, parsedEntry, parsedTarget, parsedStop]);
+
+  const hasDirectionalError = directionalErrors.length > 0;
 
   const rrRatio = useMemo(() => {
     if (isNaN(parsedEntry) || isNaN(parsedTarget) || isNaN(parsedStop)) return null;
-    if (parsedEntry === parsedStop) return null;
     if (parsedEntry <= 0 || parsedTarget <= 0 || parsedStop <= 0) return null;
+    if (hasDirectionalError) return null;
 
-    const rr = (parsedTarget - parsedEntry) / (parsedEntry - parsedStop);
-    return Math.abs(rr);
-  }, [parsedEntry, parsedTarget, parsedStop]);
+    if (tradeType === 'buy') {
+      const risk = parsedEntry - parsedStop;
+      if (risk <= 0) return null;
+      return (parsedTarget - parsedEntry) / risk;
+    } else {
+      const risk = parsedStop - parsedEntry;
+      if (risk <= 0) return null;
+      return (parsedEntry - parsedTarget) / risk;
+    }
+  }, [parsedEntry, parsedTarget, parsedStop, tradeType, hasDirectionalError]);
+
+  // Position amount calculation
+  const positionAmount = useMemo(() => {
+    if (isNaN(parsedEntry) || isNaN(parsedLot) || parsedLot <= 0) return null;
+    return parsedEntry * parsedLot;
+  }, [parsedEntry, parsedLot]);
 
   const toggleReason = (reasonId: StopReason) => {
     setReasons((prev) =>
@@ -63,10 +99,10 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
   };
 
   const handleSave = async () => {
-    if (isSubmittingLocal || isSubmitting) return; // Double-click protection
+    if (isSubmittingLocal || isSubmitting) return;
     if (!tradeType || !entryPrice || !targetPrice || !stopPrice) return;
     if (reasons.length === 0) return;
-    if (hasEntryStopError || hasAnyNegativeError) return;
+    if (hasAnyNegativeError || hasDirectionalError) return;
 
     setIsSubmittingLocal(true);
     try {
@@ -78,7 +114,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
         target_price: parsedTarget,
         stop_price: parsedStop,
         reasons,
-        position_amount: !isNaN(parsedPosition) && parsedPosition > 0 ? parsedPosition : undefined,
+        lot_quantity: !isNaN(parsedLot) && parsedLot > 0 ? parsedLot : undefined,
       });
     } finally {
       setIsSubmittingLocal(false);
@@ -92,8 +128,8 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
     stopPrice &&
     reasons.length > 0 &&
     rrRatio !== null &&
-    !hasEntryStopError &&
-    !hasAnyNegativeError;
+    !hasAnyNegativeError &&
+    !hasDirectionalError;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
@@ -248,36 +284,45 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                     placeholder="0.00"
                     value={stopPrice}
                     onChange={(e) => setStopPrice(e.target.value)}
-                    className={cn('font-mono', (hasNegativeStop || hasEntryStopError) && 'border-loss focus-visible:ring-loss')}
+                    className={cn('font-mono', hasNegativeStop && 'border-loss focus-visible:ring-loss')}
                   />
                   {hasNegativeStop && (
                     <p className="text-xs text-loss mt-1">⚠️ Fiyat sıfırdan büyük olmalı</p>
                   )}
-                  {hasEntryStopError && !hasNegativeStop && (
-                    <p className="text-xs text-loss mt-1">⚠️ Stop fiyatı Entry fiyatından farklı olmalı</p>
-                  )}
                 </div>
               </div>
 
-              {/* Position Amount (Optional) */}
+              {/* Directional Errors */}
+              {directionalErrors.length > 0 && (
+                <div className="space-y-1">
+                  {directionalErrors.map((err, i) => (
+                    <p key={i} className="text-xs text-loss">⚠️ {err}</p>
+                  ))}
+                </div>
+              )}
+
+              {/* Lot / Kağıt Adedi */}
               <div>
                 <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                  İşlem Tutarı (₺) - Opsiyonel
+                  Lot / Kağıt Adedi
                 </label>
                 <NumberInput
                   step="1"
                   min="1"
-                  placeholder="Örn: 10000"
-                  value={positionAmount}
-                  onChange={(e) => setPositionAmount(e.target.value)}
-                  className={cn('font-mono', hasNegativePosition && 'border-loss focus-visible:ring-loss')}
+                  placeholder="Örn: 100"
+                  value={lotQuantity}
+                  onChange={(e) => {
+                    // Only allow integers
+                    const val = e.target.value.replace(/[^0-9]/g, '');
+                    setLotQuantity(val);
+                  }}
+                  className="font-mono"
                 />
-                {hasNegativePosition && (
-                  <p className="text-xs text-loss mt-1">⚠️ Tutar sıfırdan büyük olmalı</p>
+                {positionAmount !== null && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    💰 İşlem Tutarı: ₺{positionAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                  </p>
                 )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  💡 Equity grafiği için işleme giren para miktarını girin
-                </p>
               </div>
 
               {/* RR Display */}

@@ -39,9 +39,13 @@ const setCachedData = (stocks: MarketStock[], updatedAt: string) => {
   }
 };
 
+// Hash-based comparison to prevent unnecessary re-renders
+function stocksHash(stocks: MarketStock[]): string {
+  return stocks.map(s => `${s.symbol}:${s.last}:${s.chgPct}`).join('|');
+}
+
 export function MarketDataProvider({ children }: { children: React.ReactNode }) {
   const [stocks, setStocks] = useState<MarketStock[]>(() => {
-    // İlk yüklemede cache varsa kullan
     const cached = getCachedData();
     return cached?.stocks || [];
   });
@@ -53,6 +57,7 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
   const [error, setError] = useState<string | null>(null);
   const [isFallback, setIsFallback] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const stocksHashRef = useRef<string>('');
 
   const fetchMarketData = useCallback(async () => {
     setIsLoading(true);
@@ -72,7 +77,12 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
       }
 
       if (response.items && response.items.length > 0) {
-        setStocks(response.items);
+        const newHash = stocksHash(response.items);
+        // Only update state if data actually changed
+        if (newHash !== stocksHashRef.current) {
+          stocksHashRef.current = newHash;
+          setStocks(response.items);
+        }
         setLastUpdated(response.updatedAt);
         setIsFallback(false);
         setCachedData(response.items, response.updatedAt);
@@ -81,10 +91,13 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
       console.error('Market data fetch error:', err);
       setError(err instanceof Error ? err.message : 'Veri alınamadı');
       
-      // Hata durumunda cache'e düş
       const cached = getCachedData();
       if (cached && cached.stocks.length > 0) {
-        setStocks(cached.stocks);
+        const newHash = stocksHash(cached.stocks);
+        if (newHash !== stocksHashRef.current) {
+          stocksHashRef.current = newHash;
+          setStocks(cached.stocks);
+        }
         setLastUpdated(cached.updatedAt);
         setIsFallback(true);
       }
@@ -97,12 +110,8 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
     return stocks.find(s => s.symbol.toUpperCase() === symbol.toUpperCase());
   }, [stocks]);
 
-  // İlk yükleme ve polling
   useEffect(() => {
-    // İlk fetch
     fetchMarketData();
-
-    // Polling başlat
     intervalRef.current = setInterval(() => {
       fetchMarketData();
     }, POLLING_INTERVAL);

@@ -1,12 +1,31 @@
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { useMarketData } from '@/contexts/MarketDataContext';
 import { cn } from '@/lib/utils';
 
-export function TickerTape() {
+const SPEED = 50; // px/s
+
+export const TickerTape = React.memo(function TickerTape() {
   const { stocks } = useMarketData();
-  
-  // Duplicate for seamless loop
-  const displayStocks = [...stocks, ...stocks];
+  const tickerRef = useRef<HTMLDivElement>(null);
+  const durationRef = useRef<number | null>(null);
+  const [duration, setDuration] = useState<number | null>(null);
+
+  const displayStocks = useMemo(() => [...stocks, ...stocks], [stocks]);
+
+  // Calculate duration only once on first data load
+  useEffect(() => {
+    if (durationRef.current !== null) return;
+    if (!tickerRef.current || stocks.length === 0) return;
+
+    const scrollWidth = tickerRef.current.scrollWidth;
+    if (scrollWidth > 0) {
+      const halfWidth = scrollWidth / 2;
+      const calculatedDuration = halfWidth / SPEED;
+      durationRef.current = calculatedDuration;
+      setDuration(calculatedDuration);
+    }
+  }, [stocks]);
 
   return (
     <div className="w-full bg-background-secondary border-b border-border overflow-hidden">
@@ -16,7 +35,11 @@ export function TickerTape() {
         <div className="absolute right-0 top-0 bottom-0 w-16 gradient-fade-right z-10 pointer-events-none" />
         
         {/* Ticker content */}
-        <div className="ticker-tape flex items-center py-2 whitespace-nowrap">
+        <div
+          ref={tickerRef}
+          className="ticker-tape flex items-center py-2 whitespace-nowrap"
+          style={duration ? { animationDuration: `${duration}s` } : { animationDuration: '15s' }}
+        >
           {displayStocks.map((stock, index) => (
             <div
               key={`${stock.symbol}-${index}`}
@@ -50,4 +73,4 @@ export function TickerTape() {
       </div>
     </div>
   );
-}
+});

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { X, Trash2, TrendingUp, TrendingDown } from "lucide-react";
+import { X, Trash2, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,7 +26,7 @@ export interface TradeUpdateData {
   target_price: number;
   stop_price: number;
   reasons: string[];
-  position_amount?: number | null;
+  lot_quantity?: number;
   // Closed trade fields
   exit_price?: number | null;
   closing_type?: ClosingType | null;
@@ -40,9 +40,10 @@ interface EditTradeModalProps {
   onSave: (tradeId: string, data: TradeUpdateData) => void;
   onDelete: (tradeId: string) => void;
   isSubmitting?: boolean;
+  hasPartialCloses?: boolean;
 }
 
-export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting = false }: EditTradeModalProps) {
+export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting = false, hasPartialCloses = false }: EditTradeModalProps) {
   const isClosed = trade.status === "closed";
 
   // Form state
@@ -51,7 +52,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
   const [entryPrice, setEntryPrice] = useState(trade.entry_price.toString());
   const [targetPrice, setTargetPrice] = useState(trade.target_price.toString());
   const [stopPrice, setStopPrice] = useState(trade.stop_price.toString());
-  const [positionAmount, setPositionAmount] = useState(trade.position_amount?.toString() || "");
+  const [lotQuantity, setLotQuantity] = useState(trade.lot_quantity?.toString() || "0");
 
   // Closed trade fields
   const [exitPrice, setExitPrice] = useState(trade.exit_price?.toString() || "");
@@ -66,25 +67,64 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
   const parsedEntry = parseFloat(entryPrice);
   const parsedTarget = parseFloat(targetPrice);
   const parsedStop = parseFloat(stopPrice);
-  const parsedPosition = parseFloat(positionAmount);
+  const parsedLot = parseInt(lotQuantity, 10);
   const parsedExit = parseFloat(exitPrice);
 
   // Validation
-  const hasEntryStopError = !isNaN(parsedEntry) && !isNaN(parsedStop) && parsedEntry === parsedStop;
   const hasNegativeEntry = !isNaN(parsedEntry) && parsedEntry <= 0;
   const hasNegativeTarget = !isNaN(parsedTarget) && parsedTarget <= 0;
   const hasNegativeStop = !isNaN(parsedStop) && parsedStop <= 0;
-  const hasNegativePosition = !isNaN(parsedPosition) && parsedPosition <= 0;
   const hasAnyNegativeError = hasNegativeEntry || hasNegativeTarget || hasNegativeStop;
+
+  // Directional validation
+  const directionalErrors = useMemo(() => {
+    const errors: string[] = [];
+    if (isNaN(parsedEntry) || parsedEntry <= 0) return errors;
+
+    if (tradeType === 'buy') {
+      if (!isNaN(parsedTarget) && parsedTarget > 0 && parsedTarget <= parsedEntry) {
+        errors.push('AL işleminde hedef fiyat giriş fiyatından büyük olmalı');
+      }
+      if (!isNaN(parsedStop) && parsedStop > 0 && parsedStop >= parsedEntry) {
+        errors.push('AL işleminde stop fiyat giriş fiyatından küçük olmalı');
+      }
+    } else {
+      if (!isNaN(parsedTarget) && parsedTarget > 0 && parsedTarget >= parsedEntry) {
+        errors.push('SAT işleminde hedef fiyat giriş fiyatından küçük olmalı');
+      }
+      if (!isNaN(parsedStop) && parsedStop > 0 && parsedStop <= parsedEntry) {
+        errors.push('SAT işleminde stop fiyat giriş fiyatından büyük olmalı');
+      }
+    }
+    return errors;
+  }, [tradeType, parsedEntry, parsedTarget, parsedStop]);
+
+  const hasDirectionalError = directionalErrors.length > 0;
+
+  // Legacy lot warning
+  const isLegacyLot = trade.lot_quantity === 0 && !isClosed;
 
   const rrRatio = useMemo(() => {
     if (isNaN(parsedEntry) || isNaN(parsedTarget) || isNaN(parsedStop)) return null;
-    if (parsedEntry === parsedStop) return null;
     if (parsedEntry <= 0 || parsedTarget <= 0 || parsedStop <= 0) return null;
+    if (hasDirectionalError) return null;
 
-    const rr = (parsedTarget - parsedEntry) / (parsedEntry - parsedStop);
-    return Math.abs(rr);
-  }, [parsedEntry, parsedTarget, parsedStop]);
+    if (tradeType === 'buy') {
+      const risk = parsedEntry - parsedStop;
+      if (risk <= 0) return null;
+      return (parsedTarget - parsedEntry) / risk;
+    } else {
+      const risk = parsedStop - parsedEntry;
+      if (risk <= 0) return null;
+      return (parsedEntry - parsedTarget) / risk;
+    }
+  }, [parsedEntry, parsedTarget, parsedStop, tradeType, hasDirectionalError]);
+
+  // Position amount calculation
+  const positionAmount = useMemo(() => {
+    if (isNaN(parsedEntry) || isNaN(parsedLot) || parsedLot <= 0) return null;
+    return parsedEntry * parsedLot;
+  }, [parsedEntry, parsedLot]);
 
   const toggleReason = (reasonId: TradeReason) => {
     setReasons((prev) => (prev.includes(reasonId) ? prev.filter((r) => r !== reasonId) : [...prev, reasonId]));
@@ -93,8 +133,9 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
   const handleSave = async () => {
     if (isSubmittingLocal || isSubmitting) return;
     if (!entryPrice || !targetPrice || !stopPrice) return;
-    if (reasons.length === 0) return;
-    if (hasEntryStopError || hasAnyNegativeError) return;
+    // Skip reasons validation for closed trades
+    if (!isClosed && reasons.length === 0) return;
+    if (hasAnyNegativeError || hasDirectionalError) return;
 
     // Closed trade validation
     if (isClosed) {
@@ -111,7 +152,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
         target_price: parsedTarget,
         stop_price: parsedStop,
         reasons,
-        position_amount: !isNaN(parsedPosition) && parsedPosition > 0 ? parsedPosition : null,
+        lot_quantity: !isNaN(parsedLot) && parsedLot > 0 ? parsedLot : undefined,
       };
 
       if (isClosed) {
@@ -136,11 +177,14 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
     entryPrice &&
     targetPrice &&
     stopPrice &&
-    reasons.length > 0 &&
+    (isClosed || reasons.length > 0) &&
     rrRatio !== null &&
-    !hasEntryStopError &&
     !hasAnyNegativeError &&
+    !hasDirectionalError &&
     (!isClosed || (exitPrice && closingType && (closingType === "kar_al" || stopReason)));
+
+  // Lot editing disabled if partial closes exist
+  const isLotDisabled = hasPartialCloses;
 
   return (
     <>
@@ -193,26 +237,28 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
                 </div>
               </div>
 
-              {/* Trade Reasons */}
-              <div>
-                <label className="text-sm font-medium text-muted-foreground mb-2 block">İşlem Sebepleri</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {TRADE_REASONS.map((reason) => (
-                    <label
-                      key={reason.id}
-                      className={cn(
-                        "flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all text-sm",
-                        reasons.includes(reason.id)
-                          ? "border-primary bg-primary/10"
-                          : "border-border hover:border-muted-foreground/50",
-                      )}
-                    >
-                      <Checkbox checked={reasons.includes(reason.id)} onCheckedChange={() => toggleReason(reason.id)} />
-                      <span className="text-foreground">{reason.label}</span>
-                    </label>
-                  ))}
+              {/* Trade Reasons - Hidden for closed trades */}
+              {!isClosed && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">İşlem Sebepleri</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TRADE_REASONS.map((reason) => (
+                      <label
+                        key={reason.id}
+                        className={cn(
+                          "flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all text-sm",
+                          reasons.includes(reason.id)
+                            ? "border-primary bg-primary/10"
+                            : "border-border hover:border-muted-foreground/50",
+                        )}
+                      >
+                        <Checkbox checked={reasons.includes(reason.id)} onCheckedChange={() => toggleReason(reason.id)} />
+                        <span className="text-foreground">{reason.label}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Price Inputs */}
               <div className="grid grid-cols-3 gap-3">
@@ -246,30 +292,50 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
                     placeholder="0.00"
                     value={stopPrice}
                     onChange={(e) => setStopPrice(e.target.value)}
-                    className={cn("font-mono text-sm", (hasNegativeStop || hasEntryStopError) && "border-loss")}
+                    className={cn("font-mono text-sm", hasNegativeStop && "border-loss")}
                   />
                 </div>
               </div>
 
               {/* Validation Errors */}
-              {(hasEntryStopError || hasAnyNegativeError) && (
-                <div className="text-xs text-loss">
-                  {hasEntryStopError && <p>⚠️ Stop fiyatı Entry fiyatından farklı olmalı</p>}
+              {(hasAnyNegativeError || hasDirectionalError) && (
+                <div className="text-xs text-loss space-y-1">
                   {hasAnyNegativeError && <p>⚠️ Fiyatlar sıfırdan büyük olmalı</p>}
+                  {directionalErrors.map((err, i) => (
+                    <p key={i}>⚠️ {err}</p>
+                  ))}
                 </div>
               )}
 
-              {/* Position Amount */}
+              {/* Lot / Kağıt Adedi */}
               <div>
-                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">İşlem Tutarı (₺)</label>
+                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Lot / Kağıt Adedi</label>
                 <NumberInput
                   step="1"
-                  min="1"
-                  placeholder="Örn: 10000"
-                  value={positionAmount}
-                  onChange={(e) => setPositionAmount(e.target.value)}
-                  className={cn("font-mono", hasNegativePosition && "border-loss")}
+                  min="0"
+                  placeholder="Örn: 100"
+                  value={lotQuantity}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, '');
+                    setLotQuantity(val);
+                  }}
+                  className="font-mono"
+                  disabled={isLotDisabled}
                 />
+                {isLotDisabled && (
+                  <p className="text-xs text-muted-foreground mt-1">🔒 Kısmi kapanışı olan işlemlerde lot değiştirilemez</p>
+                )}
+                {isLegacyLot && !isLotDisabled && (
+                  <p className="text-xs text-warning mt-1 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    Bu işlemin lot bilgisi eksik, lütfen güncelleyin
+                  </p>
+                )}
+                {positionAmount !== null && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    💰 İşlem Tutarı: ₺{positionAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                  </p>
+                )}
               </div>
 
               {/* RR Display */}
