@@ -25,6 +25,7 @@ interface ReturnComparisonChartProps {
   startingCapital: number;
   partialCloses: PartialCloseRecord[];
   portfolioSelected: boolean;
+  children?: React.ReactNode;
 }
 
 interface ReturnDataPoint {
@@ -198,6 +199,7 @@ export function ReturnComparisonChart({
   startingCapital,
   partialCloses,
   portfolioSelected,
+  children,
 }: ReturnComparisonChartProps) {
   const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(!isMobile);
@@ -233,6 +235,7 @@ export function ReturnComparisonChart({
             Aşağıdaki seçiciden benchmark veya portföy ekleyebilirsiniz.
           </span>
         </p>
+        {children}
       </div>
     );
   }
@@ -247,6 +250,7 @@ export function ReturnComparisonChart({
         <p className="text-sm text-muted-foreground">
           Bu aralık için yeterli veri bulunamadı.
         </p>
+        {children}
       </div>
     );
   }
@@ -354,6 +358,7 @@ export function ReturnComparisonChart({
           </div>
         </CollapsibleContent>
       </Collapsible>
+      {children}
     </div>
   );
 }
