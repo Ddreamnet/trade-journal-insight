@@ -55,10 +55,6 @@ function generateWinRateData(filteredTrades: Trade[], timeRange: TimeRange) {
   let groupBy: 'day' | 'week' | 'month';
 
   switch (timeRange) {
-    case '1w':
-      intervals = eachDayOfInterval({ start: subDays(now, 6), end: now });
-      groupBy = 'day';
-      break;
     case '1m':
       intervals = eachDayOfInterval({ start: subDays(now, 29), end: now });
       groupBy = 'day';
