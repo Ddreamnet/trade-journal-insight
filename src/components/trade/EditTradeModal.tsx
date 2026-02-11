@@ -146,7 +146,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
 
     setIsSubmittingLocal(true);
     try {
-      const updateData: TradeUpdateData = {
+      const updateData: TradeUpdateData & { remaining_lot?: number } = {
         trade_type: tradeType,
         entry_price: parsedEntry,
         target_price: parsedTarget,
@@ -154,6 +154,11 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
         reasons,
         lot_quantity: !isNaN(parsedLot) && parsedLot > 0 ? parsedLot : undefined,
       };
+
+      // Sync remaining_lot when lot changes and no partial closes exist
+      if (!hasPartialCloses && !isClosed && !isNaN(parsedLot) && parsedLot > 0) {
+        updateData.remaining_lot = parsedLot;
+      }
 
       if (isClosed) {
         updateData.exit_price = parsedExit;

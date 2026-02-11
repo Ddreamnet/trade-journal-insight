@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { X, TrendingUp, CircleStop } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NumberInput } from '@/components/ui/number-input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -12,19 +13,22 @@ import { cn } from '@/lib/utils';
 interface CloseTradeModalProps {
   trade: Trade;
   onClose: () => void;
-  onConfirm: (exitPrice: number, closingType: ClosingType, stopReason?: string, closingNote?: string) => void;
+  onConfirm: (exitPrice: number, closingType: ClosingType, lotQuantity: number, stopReason?: string, closingNote?: string) => void;
 }
 
 export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalProps) {
   const [exitPrice, setExitPrice] = useState('');
+  const [lotQuantity, setLotQuantity] = useState(trade.remaining_lot.toString());
   const [closingType, setClosingType] = useState<ClosingType | null>(null);
   const [stopReasons, setStopReasons] = useState<StopReason[]>([]);
   const [closingNote, setClosingNote] = useState('');
 
+  const parsedExit = parseFloat(exitPrice);
+  const parsedLot = parseInt(lotQuantity, 10);
+
   // Calculate signed progress percentage
   const progressPercent = useMemo(() => {
-    const exit = parseFloat(exitPrice);
-    if (isNaN(exit)) return null;
+    if (isNaN(parsedExit)) return null;
 
     const entry = trade.entry_price;
     const target = trade.target_price;
@@ -33,19 +37,26 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
     let targetMovement: number;
 
     if (trade.trade_type === 'buy') {
-      // Long: positive if exit > entry
-      movement = exit - entry;
+      movement = parsedExit - entry;
       targetMovement = target - entry;
     } else {
-      // Short: positive if exit < entry
-      movement = entry - exit;
+      movement = entry - parsedExit;
       targetMovement = entry - target;
     }
 
     if (targetMovement === 0) return 0;
-
     return (movement / targetMovement) * 100;
   }, [exitPrice, trade]);
+
+  // Calculate realized PnL for display
+  const realizedPnl = useMemo(() => {
+    if (isNaN(parsedExit) || isNaN(parsedLot) || parsedLot <= 0) return null;
+    if (trade.trade_type === 'buy') {
+      return (parsedExit - trade.entry_price) * parsedLot;
+    } else {
+      return (trade.entry_price - parsedExit) * parsedLot;
+    }
+  }, [parsedExit, parsedLot, trade]);
 
   const handleCheckedChange = (id: StopReason, checked: boolean) => {
     if (checked) {
@@ -55,13 +66,20 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
     }
   };
 
+  const handleFillAllLots = () => {
+    setLotQuantity(trade.remaining_lot.toString());
+  };
+
+  const lotValid = !isNaN(parsedLot) && parsedLot > 0 && parsedLot <= trade.remaining_lot;
+
   const handleConfirm = () => {
-    if (!closingType || progressPercent === null) return;
+    if (!closingType || progressPercent === null || !lotValid) return;
     if (closingType === 'stop' && stopReasons.length === 0) return;
     
     onConfirm(
-      parseFloat(exitPrice),
+      parsedExit,
       closingType,
+      parsedLot,
       closingType === 'stop' ? stopReasons.join(',') : undefined,
       closingNote.trim() || undefined
     );
@@ -69,6 +87,7 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
 
   const isValid = closingType !== null && 
     progressPercent !== null && 
+    lotValid &&
     (closingType === 'kar_al' || (closingType === 'stop' && stopReasons.length > 0));
 
   return (
@@ -134,6 +153,57 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
                 autoFocus
               />
             </div>
+
+            {/* Lot Quantity Input */}
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                Satılacak Lot
+              </label>
+              <div className="flex gap-2">
+                <NumberInput
+                  step="1"
+                  min="1"
+                  max={trade.remaining_lot.toString()}
+                  placeholder="Lot adedi"
+                  value={lotQuantity}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, '');
+                    setLotQuantity(val);
+                  }}
+                  className="font-mono flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 h-10 text-xs"
+                  onClick={handleFillAllLots}
+                >
+                  Tüm Lotlar ({trade.remaining_lot})
+                </Button>
+              </div>
+              {!isNaN(parsedLot) && parsedLot > trade.remaining_lot && (
+                <p className="text-xs text-loss mt-1">Kalan lot: {trade.remaining_lot}</p>
+              )}
+            </div>
+
+            {/* Realized PnL Display */}
+            {realizedPnl !== null && !isNaN(parsedExit) && (
+              <div className={cn(
+                'p-3 rounded-lg border text-center',
+                realizedPnl >= 0 
+                  ? 'border-profit/30 bg-profit/5' 
+                  : 'border-loss/30 bg-loss/5'
+              )}>
+                <span className="text-sm text-muted-foreground">Gerçekleşen K/Z: </span>
+                <span className={cn(
+                  'font-mono font-bold',
+                  realizedPnl >= 0 ? 'text-profit' : 'text-loss'
+                )}>
+                  {realizedPnl >= 0 ? '+' : ''}₺{realizedPnl.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
 
             {/* Progress Display */}
             {progressPercent !== null && (
@@ -244,7 +314,7 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
             onClick={handleConfirm}
             disabled={!isValid}
           >
-            İşlemi Kapat
+            {parsedLot < trade.remaining_lot && lotValid ? 'Kısmi Çıkış' : 'İşlemi Kapat'}
           </Button>
         </div>
       </div>
