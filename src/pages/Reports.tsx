@@ -32,7 +32,8 @@ function getCutoffDate(timeRange: TimeRange): Date {
 
 export default function Reports() {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('1m');
-  const [selectedBenchmarks, setSelectedBenchmarks] = useState<string[]>([]);
+  const [lineChartBenchmarks, setLineChartBenchmarks] = useState<string[]>([]);
+  const [barChartBenchmarks, setBarChartBenchmarks] = useState<string[]>([]);
   const [portfolioSelected, setPortfolioSelected] = useState(false);
   const [startingCapital, setStartingCapital] = useState<number>(() => {
     const saved = localStorage.getItem(STARTING_CAPITAL_KEY);
@@ -76,8 +77,16 @@ export default function Reports() {
     }
   }, [trades, hasUserSavedCapital]);
 
-  const toggleBenchmark = (benchmarkId: string) => {
-    setSelectedBenchmarks((prev) =>
+  const toggleLineChartBenchmark = (benchmarkId: string) => {
+    setLineChartBenchmarks((prev) =>
+      prev.includes(benchmarkId)
+        ? prev.filter((id) => id !== benchmarkId)
+        : [...prev, benchmarkId]
+    );
+  };
+
+  const toggleBarChartBenchmark = (benchmarkId: string) => {
+    setBarChartBenchmarks((prev) =>
       prev.includes(benchmarkId)
         ? prev.filter((id) => id !== benchmarkId)
         : [...prev, benchmarkId]
@@ -192,25 +201,51 @@ export default function Reports() {
 
         <EquityCurveChart
           timeRange={selectedTimeRange}
-          selectedBenchmarks={selectedBenchmarks}
+          selectedBenchmarks={lineChartBenchmarks}
           benchmarks={BENCHMARKS}
           allTrades={trades as Trade[]}
           closedTrades={closedTrades as Trade[]}
           startingCapital={startingCapital}
           partialCloses={partialCloses}
         />
+
+        <div className="mt-4 pt-4 border-t border-border">
+          <BenchmarkSelector
+            benchmarks={BENCHMARKS}
+            selectedBenchmarks={lineChartBenchmarks}
+            onToggle={toggleLineChartBenchmark}
+          />
+          <p className="text-xs text-muted-foreground mt-3">
+            💡 Piyasa verileri Stooq ve TCMB EVDS'den çekilmektedir. Tüm değerler
+            seçili zaman aralığının başlangıcından 100 bazında normalize edilmiştir.
+          </p>
+        </div>
       </div>
 
       {/* Chart 2: % Sütun Grafiği */}
       <ReturnComparisonChart
         timeRange={selectedTimeRange}
-        selectedBenchmarks={selectedBenchmarks}
+        selectedBenchmarks={barChartBenchmarks}
         benchmarks={BENCHMARKS}
         closedTrades={closedTrades as Trade[]}
         startingCapital={startingCapital}
         partialCloses={partialCloses}
         portfolioSelected={portfolioSelected}
-      />
+      >
+        <div className="mt-4 pt-4 border-t border-border">
+          <BenchmarkSelector
+            benchmarks={BENCHMARKS}
+            selectedBenchmarks={barChartBenchmarks}
+            onToggle={toggleBarChartBenchmark}
+            portfolioSelected={portfolioSelected}
+            onPortfolioToggle={() => setPortfolioSelected((prev) => !prev)}
+          />
+          <p className="text-xs text-muted-foreground mt-3">
+            💡 Piyasa verileri Stooq ve TCMB EVDS'den çekilmektedir. Tüm değerler
+            seçili zaman aralığının başlangıcından 100 bazında normalize edilmiştir.
+          </p>
+        </div>
+      </ReturnComparisonChart>
 
       {/* Chart 3: Portföy Değeri */}
       <PortfolioValueChart
@@ -220,20 +255,6 @@ export default function Reports() {
         partialCloses={partialCloses}
       />
 
-      {/* Benchmark Selector */}
-      <div className="rounded-xl bg-card border border-border p-4">
-        <BenchmarkSelector
-          benchmarks={BENCHMARKS}
-          selectedBenchmarks={selectedBenchmarks}
-          onToggle={toggleBenchmark}
-          portfolioSelected={portfolioSelected}
-          onPortfolioToggle={() => setPortfolioSelected((prev) => !prev)}
-        />
-        <p className="text-xs text-muted-foreground mt-3">
-          💡 Piyasa verileri Stooq ve TCMB EVDS'den çekilmektedir. Tüm değerler
-          seçili zaman aralığının başlangıcından 100 bazında normalize edilmiştir.
-        </p>
-      </div>
     </MainLayout>
   );
 }
