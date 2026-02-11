@@ -41,7 +41,6 @@ export const TRADE_REASONS: TradeReasonOption[] = [
   { id: 'takas_toplu', label: 'Takas Toplu' },
 ];
 
-// Stop reasons for closing trades
 export type StopReason =
   | '14ma_ustu_kapanis'
   | '14ma_alti_kapanis'
@@ -106,24 +105,15 @@ export interface Trade {
   exit_price: number | null;
   progress_percent: number | null;
   is_successful: boolean | null;
-  /**
-   * Trade opening date (when the position was opened).
-   * Used as the start date for equity curve calculations and t0 determination.
-   * This is the timestamp when the trade record was created in the database,
-   * which represents when the trade was entered/opened.
-   */
   created_at: string;
   updated_at: string;
-  /**
-   * Trade closing date (when the position was closed).
-   * Used as the end date for equity curve PnL distribution.
-   * Only set when status changes to 'closed'.
-   */
   closed_at: string | null;
   closing_note: string | null;
   position_amount: number | null;
   closing_type: ClosingType | null;
   stop_reason: string | null;
+  lot_quantity: number;
+  remaining_lot: number;
 }
 
 export interface BenchmarkData {

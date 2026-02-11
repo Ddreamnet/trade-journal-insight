@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { StockSelector } from '@/components/trade/StockSelector';
 import { TradeForm } from '@/components/trade/TradeForm';
 import { TradeList } from '@/components/trade/TradeList';
+import { CashFlowModal } from '@/components/trade/CashFlowModal';
 import { Stock, ClosingType } from '@/types/trade';
 import { TradeUpdateData } from '@/components/trade/EditTradeModal';
 import { useTrades } from '@/hooks/useTrades';
@@ -13,6 +14,7 @@ import { useTrades } from '@/hooks/useTrades';
 export default function Index() {
   const [isStockSelectorOpen, setIsStockSelectorOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<(Stock & { logoUrl?: string }) | null>(null);
+  const [isCashFlowOpen, setIsCashFlowOpen] = useState(false);
   const [highlightedTradeId, setHighlightedTradeId] = useState<string | null>(null);
 
   const { activeTrades, closedTrades, createTrade, closeTrade, updateTrade, deleteTrade, isLoading } = useTrades();
@@ -29,13 +31,12 @@ export default function Index() {
     target_price: number;
     stop_price: number;
     reasons: string[];
-    position_amount?: number;
+    lot_quantity?: number;
   }) => {
     const result = await createTrade.mutateAsync(tradeData);
     setSelectedStock(null);
     setHighlightedTradeId(result.id);
     
-    // Remove highlight after animation
     setTimeout(() => {
       setHighlightedTradeId(null);
     }, 2000);
@@ -61,8 +62,8 @@ export default function Index() {
 
   return (
     <MainLayout>
-      {/* New Trade Button */}
-      <div className="mb-6">
+      {/* Buttons */}
+      <div className="mb-6 flex flex-col sm:flex-row sm:justify-end gap-3">
         <Button
           size="lg"
           className="w-full sm:w-auto gap-2"
@@ -70,6 +71,15 @@ export default function Index() {
         >
           <Plus className="w-4 h-4" />
           Yeni İşlem Ekle
+        </Button>
+        <Button
+          size="lg"
+          variant="outline"
+          className="w-full sm:w-auto gap-2"
+          onClick={() => setIsCashFlowOpen(true)}
+        >
+          <Wallet className="w-4 h-4" />
+          Portföy Ekle/Çıkar
         </Button>
       </div>
 
@@ -132,6 +142,11 @@ export default function Index() {
           onSave={handleSaveTrade}
           isSubmitting={createTrade.isPending}
         />
+      )}
+
+      {/* Cash Flow Modal */}
+      {isCashFlowOpen && (
+        <CashFlowModal onClose={() => setIsCashFlowOpen(false)} />
       )}
     </MainLayout>
   );

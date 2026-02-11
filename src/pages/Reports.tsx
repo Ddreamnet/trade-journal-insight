@@ -123,7 +123,7 @@ export default function Reports() {
 
   // Filter closed trades by selected time range
   const filteredTrades = useMemo(() => {
-    return filterTradesByTimeRange(closedTrades, selectedTimeRange);
+    return filterTradesByTimeRange(closedTrades as Trade[], selectedTimeRange);
   }, [closedTrades, selectedTimeRange]);
 
   // Calculate stats from filtered data
@@ -264,8 +264,8 @@ export default function Reports() {
           timeRange={selectedTimeRange}
           selectedBenchmarks={selectedBenchmarks}
           benchmarks={BENCHMARKS}
-          allTrades={trades}
-          closedTrades={closedTrades}
+          allTrades={trades as Trade[]}
+          closedTrades={closedTrades as Trade[]}
           startingCapital={startingCapital}
         />
       </div>
@@ -275,7 +275,7 @@ export default function Reports() {
         timeRange={selectedTimeRange}
         selectedBenchmarks={selectedBenchmarks}
         benchmarks={BENCHMARKS}
-        closedTrades={closedTrades}
+        closedTrades={closedTrades as Trade[]}
         startingCapital={startingCapital}
       />
 

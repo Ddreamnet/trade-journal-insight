@@ -12,7 +12,7 @@ export interface TradeInsert {
   target_price: number;
   stop_price: number;
   reasons: string[];
-  position_amount?: number;
+  lot_quantity?: number;
 }
 
 export interface TradeRow {
@@ -37,6 +37,8 @@ export interface TradeRow {
   position_amount: number | null;
   closing_type: ClosingType | null;
   stop_reason: string | null;
+  lot_quantity: number;
+  remaining_lot: number;
 }
 
 export interface CloseTradeParams {
@@ -76,7 +78,7 @@ export function useTrades() {
         .insert({
           ...trade,
           user_id: user.id,
-          position_amount: trade.position_amount || null,
+          lot_quantity: trade.lot_quantity || 0,
         })
         .select()
         .single();
