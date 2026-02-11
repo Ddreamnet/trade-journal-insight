@@ -240,10 +240,10 @@ export default function Reports() {
             portfolioSelected={portfolioSelected}
             onPortfolioToggle={() => setPortfolioSelected((prev) => !prev)} />
 
-          <p className="text-xs text-muted-foreground mt-3">
-            💡 Piyasa verileri Stooq ve TCMB EVDS'den çekilmektedir. Tüm değerler
-            seçili zaman aralığının başlangıcından 100 bazında normalize edilmiştir.
-          </p>
+          
+
+
+
         </div>
       </ReturnComparisonChart>
 
