@@ -8,8 +8,8 @@ import {
   ResponsiveContainer,
   Cell,
   ReferenceLine,
-  LabelList,
-} from 'recharts';
+  LabelList } from
+'recharts';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { TimeRange, BenchmarkData, Trade, TIME_RANGES } from '@/types/trade';
@@ -40,13 +40,13 @@ interface ReturnDataPoint {
 // Custom tooltip for bar chart
 function BarTooltip({
   active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: Array<{
-    payload: ReturnDataPoint;
-  }>;
-}) {
+  payload
+
+
+
+
+
+}: {active?: boolean;payload?: Array<{payload: ReturnDataPoint;}>;}) {
   if (!active || !payload?.length) return null;
   const data = payload[0].payload;
 
@@ -65,14 +65,14 @@ function BarTooltip({
           className={cn(
             'font-mono font-semibold',
             data.value >= 0 ? 'text-profit' : 'text-loss'
-          )}
-        >
+          )}>
+
           {data.value >= 0 ? '+' : ''}
           {data.value.toFixed(2)}%
         </span>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 // Custom label for bar values
@@ -86,11 +86,11 @@ function BarValueLabel(props: {
   const { x, y, width, height, value } = props;
 
   if (
-    value === undefined ||
-    typeof x !== 'number' ||
-    typeof y !== 'number' ||
-    typeof width !== 'number'
-  ) {
+  value === undefined ||
+  typeof x !== 'number' ||
+  typeof y !== 'number' ||
+  typeof width !== 'number')
+  {
     return null;
   }
 
@@ -107,26 +107,26 @@ function BarValueLabel(props: {
       fontFamily="JetBrains Mono, monospace"
       fontWeight={600}
       dominantBaseline="middle"
-      textAnchor="middle"
-    >
+      textAnchor="middle">
+
       {isPositive ? '+' : ''}{value.toFixed(1)}%
-    </text>
-  );
+    </text>);
+
 }
 
 // Calculate returns from chartData
 function calculateReturns(
-  chartData: ChartDataPoint[],
-  selectedBenchmarks: string[],
-  benchmarks: BenchmarkData[],
-  portfolioSelected: boolean
-): ReturnDataPoint[] {
+chartData: ChartDataPoint[],
+selectedBenchmarks: string[],
+benchmarks: BenchmarkData[],
+portfolioSelected: boolean)
+: ReturnDataPoint[] {
   const result: ReturnDataPoint[] = [];
 
   const findFirstLast = (
-    data: ChartDataPoint[],
-    accessor: (point: ChartDataPoint) => number | null | undefined
-  ): { first: number | null; last: number | null } => {
+  data: ChartDataPoint[],
+  accessor: (point: ChartDataPoint) => number | null | undefined)
+  : {first: number | null;last: number | null;} => {
     let first: number | null = null;
     let last: number | null = null;
 
@@ -145,14 +145,14 @@ function calculateReturns(
   if (portfolioSelected) {
     const portfolioValues = findFirstLast(chartData, (p) => p.portfolioIndex);
     if (portfolioValues.first !== null && portfolioValues.last !== null) {
-      const returnPct = ((portfolioValues.last / portfolioValues.first) - 1) * 100;
+      const returnPct = (portfolioValues.last / portfolioValues.first - 1) * 100;
       result.push({
         id: 'portfolio',
         name: 'Portföy',
         value: returnPct,
         color: 'hsl(var(--primary))',
         startValue: portfolioValues.first,
-        endValue: portfolioValues.last,
+        endValue: portfolioValues.last
       });
     }
   }
@@ -164,26 +164,26 @@ function calculateReturns(
 
     const accessor = (point: ChartDataPoint): number | null | undefined => {
       switch (benchmarkId) {
-        case 'gold': return point.gold;
-        case 'usd': return point.usd;
-        case 'eur': return point.eur;
-        case 'bist100': return point.bist100;
-        case 'nasdaq100': return point.nasdaq100;
-        case 'inflation_tr': return point.inflation_tr;
-        default: return null;
+        case 'gold':return point.gold;
+        case 'usd':return point.usd;
+        case 'eur':return point.eur;
+        case 'bist100':return point.bist100;
+        case 'nasdaq100':return point.nasdaq100;
+        case 'inflation_tr':return point.inflation_tr;
+        default:return null;
       }
     };
 
     const values = findFirstLast(chartData, accessor);
     if (values.first !== null && values.last !== null) {
-      const returnPct = ((values.last / values.first) - 1) * 100;
+      const returnPct = (values.last / values.first - 1) * 100;
       result.push({
         id: benchmarkId,
         name: benchmark.name,
         value: returnPct,
         color: benchmark.color,
         startValue: values.first,
-        endValue: values.last,
+        endValue: values.last
       });
     }
   });
@@ -199,7 +199,7 @@ export function ReturnComparisonChart({
   startingCapital,
   partialCloses,
   portfolioSelected,
-  children,
+  children
 }: ReturnComparisonChartProps) {
   const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(!isMobile);
@@ -229,15 +229,15 @@ export function ReturnComparisonChart({
         <h3 className="text-sm font-medium text-foreground mb-2">
           % Sütun Grafiği
         </h3>
-        <p className="text-sm text-muted-foreground">
-          Kıyaslamak için en az 1 varlık seçin.{' '}
-          <span className="text-primary">
-            Aşağıdaki seçiciden benchmark veya portföy ekleyebilirsiniz.
-          </span>
-        </p>
+        
+
+
+
+
+
         {children}
-      </div>
-    );
+      </div>);
+
   }
 
   const hasNoData = returnData.every((d) => d.startValue === d.endValue);
@@ -251,8 +251,8 @@ export function ReturnComparisonChart({
           Bu aralık için yeterli veri bulunamadı.
         </p>
         {children}
-      </div>
-    );
+      </div>);
+
   }
 
   const chartHeight = isMobile ? 180 : 220;
@@ -266,35 +266,35 @@ export function ReturnComparisonChart({
             <h3 className="text-sm font-medium text-foreground">
               % Sütun Grafiği
             </h3>
-            {isOpen ? (
-              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            )}
+            {isOpen ?
+            <ChevronUp className="h-4 w-4 text-muted-foreground" /> :
+
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            }
           </div>
         </CollapsibleTrigger>
 
         {/* Collapsed view: Show chips */}
-        {!isOpen && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {returnData.map((item) => (
-              <div
-                key={item.id}
-                className="px-2 py-1 rounded-md text-xs font-mono font-semibold border"
-                style={{
-                  backgroundColor: `${item.color}15`,
-                  borderColor: item.color,
-                }}
-              >
+        {!isOpen &&
+        <div className="flex flex-wrap gap-2 mt-3">
+            {returnData.map((item) =>
+          <div
+            key={item.id}
+            className="px-2 py-1 rounded-md text-xs font-mono font-semibold border"
+            style={{
+              backgroundColor: `${item.color}15`,
+              borderColor: item.color
+            }}>
+
                 <span className="text-foreground">{item.name}</span>{' '}
                 <span className={item.value >= 0 ? 'text-profit' : 'text-loss'}>
                   {item.value >= 0 ? '+' : ''}
                   {item.value.toFixed(1)}%
                 </span>
               </div>
-            ))}
+          )}
           </div>
-        )}
+        }
 
         <CollapsibleContent>
           <div className="mt-4">
@@ -305,51 +305,51 @@ export function ReturnComparisonChart({
             <div className={cn(needsScroll && 'overflow-x-auto')}>
               <div
                 style={{
-                  minWidth: needsScroll ? returnData.length * 80 : 'auto',
-                }}
-              >
+                  minWidth: needsScroll ? returnData.length * 80 : 'auto'
+                }}>
+
                 <ResponsiveContainer width="100%" height={chartHeight}>
                   <BarChart
                     data={returnData}
-                    margin={{ top: 25, right: 10, left: 10, bottom: 5 }}
-                  >
+                    margin={{ top: 25, right: 10, left: 10, bottom: 5 }}>
+
                     <XAxis
                       type="category"
                       dataKey="name"
                       stroke="hsl(var(--muted-foreground))"
                       fontSize={11}
-                      tickLine={false}
-                    />
+                      tickLine={false} />
+
                     <YAxis
                       type="number"
                       domain={['auto', 'auto']}
                       stroke="hsl(var(--muted-foreground))"
                       fontSize={11}
                       tickLine={false}
-                      tickFormatter={(value: number) => `${value}%`}
-                    />
+                      tickFormatter={(value: number) => `${value}%`} />
+
                     <Tooltip content={<BarTooltip />} cursor={false} />
                     <ReferenceLine
                       y={0}
                       stroke="hsl(var(--muted-foreground))"
-                      strokeDasharray="3 3"
-                    />
+                      strokeDasharray="3 3" />
+
                     <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={40}>
-                      {returnData.map((entry) => (
-                        <Cell key={entry.id} fill={entry.color} />
-                      ))}
+                      {returnData.map((entry) =>
+                      <Cell key={entry.id} fill={entry.color} />
+                      )}
                       <LabelList
                         dataKey="value"
-                        content={(props: Record<string, unknown>) => (
-                          <BarValueLabel
-                            x={props.x as number | string | undefined}
-                            y={props.y as number | string | undefined}
-                            width={props.width as number | string | undefined}
-                            height={props.height as number | string | undefined}
-                            value={props.value as number | undefined}
-                          />
-                        )}
-                      />
+                        content={(props: Record<string, unknown>) =>
+                        <BarValueLabel
+                          x={props.x as number | string | undefined}
+                          y={props.y as number | string | undefined}
+                          width={props.width as number | string | undefined}
+                          height={props.height as number | string | undefined}
+                          value={props.value as number | undefined} />
+
+                        } />
+
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -359,6 +359,6 @@ export function ReturnComparisonChart({
         </CollapsibleContent>
       </Collapsible>
       {children}
-    </div>
-  );
+    </div>);
+
 }
