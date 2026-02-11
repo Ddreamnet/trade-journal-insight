@@ -54,7 +54,7 @@ export default function Reports() {
       if (!user) return [];
       const { data, error } = await supabase
         .from('trade_partial_closes')
-        .select('id, trade_id, realized_pnl, created_at')
+        .select('id, trade_id, realized_pnl, lot_quantity, created_at')
         .order('created_at', { ascending: true });
       if (error) throw error;
       return data as PartialCloseRecord[];

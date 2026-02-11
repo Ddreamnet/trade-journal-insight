@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.bist100]
 verify_jwt = false
+
+[functions.stock-series]
+verify_jwt = false

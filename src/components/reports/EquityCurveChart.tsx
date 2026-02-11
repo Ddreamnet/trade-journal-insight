@@ -12,6 +12,9 @@ import {
 } from 'recharts';
 import { TimeRange, BenchmarkData, Trade } from '@/types/trade';
 import { useEquityCurveData, ChartDataPoint, PartialCloseRecord } from '@/hooks/useEquityCurveData';
+import { useStockPriceSeries } from '@/hooks/useStockPriceSeries';
+import { getTimeRangeDates } from '@/hooks/useEquityCurveData';
+import { AlertTriangle } from 'lucide-react';
 
 interface EquityCurveChartProps {
   timeRange: TimeRange;
@@ -123,23 +126,40 @@ export function EquityCurveChart({
   timeRange,
   selectedBenchmarks,
   benchmarks,
+  allTrades,
   closedTrades,
   startingCapital,
   partialCloses,
 }: EquityCurveChartProps) {
   const [hoveredData, setHoveredData] = useState<ChartDataPoint | null>(null);
 
+  // Calculate date window for stock price fetching
+  const { startDate, endDate } = useMemo(
+    () => getTimeRangeDates(timeRange, new Date()),
+    [timeRange]
+  );
+
+  // Fetch stock price series for symbols with open positions in the view window
+  const { priceMap: stockPriceMap, missingSymbols, isLoading: priceLoading } = useStockPriceSeries(
+    allTrades,
+    startDate,
+    endDate
+  );
+
   const { chartData, t0 } = useEquityCurveData(
     timeRange,
     selectedBenchmarks,
     closedTrades,
     startingCapital,
-    partialCloses
+    partialCloses,
+    allTrades,
+    stockPriceMap,
+    missingSymbols
   );
 
-  const hasClosedTrades = useMemo(
-    () => closedTrades.some((t) => t.closed_at),
-    [closedTrades]
+  const hasTrades = useMemo(
+    () => allTrades.length > 0 || closedTrades.some((t) => t.closed_at),
+    [allTrades, closedTrades]
   );
 
   const benchmarkKeyMap: Record<string, keyof ChartDataPoint> = {
@@ -174,15 +194,15 @@ export function EquityCurveChart({
     return result;
   }, [chartData, selectedBenchmarks]);
 
-  if (!hasClosedTrades) {
+  if (!hasTrades) {
     return (
       <div className="w-full h-[300px] sm:h-[400px] flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted-foreground text-sm mb-2">
-            Henüz kapanmış işlem bulunmuyor
+            Henüz işlem bulunmuyor
           </p>
           <p className="text-xs text-muted-foreground">
-            İşlemler kapandığında grafik burada görünecek
+            İşlemler açıldığında grafik burada görünecek
           </p>
         </div>
       </div>
@@ -190,7 +210,14 @@ export function EquityCurveChart({
   }
 
   return (
-    <div className="w-full h-[300px] sm:h-[400px]">
+    <div>
+      {missingSymbols.length > 0 && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2 px-1">
+          <AlertTriangle className="w-3 h-3 text-warning shrink-0" />
+          <span>{missingSymbols.join(', ')} için fiyat verisi alınamadı (tahmini)</span>
+        </div>
+      )}
+      <div className="w-full h-[300px] sm:h-[400px]">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={chartData}
@@ -281,6 +308,7 @@ export function EquityCurveChart({
           })}
         </LineChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }
