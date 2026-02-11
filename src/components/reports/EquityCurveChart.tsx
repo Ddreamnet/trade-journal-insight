@@ -11,7 +11,7 @@ import {
   LabelList,
 } from 'recharts';
 import { TimeRange, BenchmarkData, Trade } from '@/types/trade';
-import { useEquityCurveData, ChartDataPoint } from '@/hooks/useEquityCurveData';
+import { useEquityCurveData, ChartDataPoint, PartialCloseRecord } from '@/hooks/useEquityCurveData';
 
 interface EquityCurveChartProps {
   timeRange: TimeRange;
@@ -20,6 +20,7 @@ interface EquityCurveChartProps {
   allTrades: Trade[];
   closedTrades: Trade[];
   startingCapital: number;
+  partialCloses: PartialCloseRecord[];
 }
 
 // Custom Label Component for line end values
@@ -33,7 +34,7 @@ function LineEndLabel({
   color: string;
 }) {
   if (value === null || !viewBox?.x || !viewBox?.y) return null;
-  
+
   return (
     <text
       x={(viewBox.x || 0) + 4}
@@ -70,15 +71,13 @@ function CustomTooltip({
 
   const portfolioEntry = payload.find((p) => p.dataKey === 'portfolioIndex');
   const portfolioValue = portfolioEntry?.value;
-  
-  // Don't show tooltip if portfolio value is null (before t0)
+
   if (portfolioValue === null || portfolioValue === undefined) return null;
 
   return (
     <div className="bg-popover border border-border rounded-lg p-3 shadow-lg">
       <div className="font-medium mb-2 text-foreground">{label}</div>
 
-      {/* Portfolio */}
       <div className="flex justify-between gap-4 text-sm">
         <span className="text-muted-foreground">Portföy:</span>
         <span className="font-mono font-semibold text-primary">
@@ -88,7 +87,6 @@ function CustomTooltip({
 
       {payload.length > 1 && <hr className="my-2 border-border" />}
 
-      {/* Benchmarks with difference */}
       {payload
         .filter((p) => p.dataKey !== 'portfolioIndex' && p.value !== null)
         .map((p) => {
@@ -127,24 +125,23 @@ export function EquityCurveChart({
   benchmarks,
   closedTrades,
   startingCapital,
+  partialCloses,
 }: EquityCurveChartProps) {
   const [hoveredData, setHoveredData] = useState<ChartDataPoint | null>(null);
 
-  // Use shared hook for all data calculations
   const { chartData, t0 } = useEquityCurveData(
     timeRange,
     selectedBenchmarks,
     closedTrades,
-    startingCapital
+    startingCapital,
+    partialCloses
   );
 
-  // Filter closed trades with position_amount for empty state check
-  const closedTradesWithPositionAmount = useMemo(
-    () => closedTrades.filter((t) => t.position_amount && t.exit_price && t.closed_at),
+  const hasClosedTrades = useMemo(
+    () => closedTrades.some((t) => t.closed_at),
     [closedTrades]
   );
 
-  // Benchmark key map
   const benchmarkKeyMap: Record<string, keyof ChartDataPoint> = {
     gold: 'gold',
     usd: 'usd',
@@ -154,7 +151,6 @@ export function EquityCurveChart({
     inflation_tr: 'inflation_tr',
   };
 
-  // Get last non-null values for line labels
   const lastValues = useMemo(() => {
     const result: Record<string, number | null> = { portfolioIndex: null };
     selectedBenchmarks.forEach((id) => {
@@ -178,8 +174,7 @@ export function EquityCurveChart({
     return result;
   }, [chartData, selectedBenchmarks]);
 
-  // Empty state: no closed trades with position amount
-  if (closedTradesWithPositionAmount.length === 0) {
+  if (!hasClosedTrades) {
     return (
       <div className="w-full h-[300px] sm:h-[400px] flex items-center justify-center">
         <div className="text-center">
@@ -223,29 +218,28 @@ export function EquityCurveChart({
           <Tooltip
             content={<CustomTooltip benchmarks={benchmarks} />}
           />
-          {/* Reference line at 100 */}
           <ReferenceLine
             y={100}
             stroke="hsl(var(--muted-foreground))"
             strokeDasharray="3 3"
             strokeOpacity={0.5}
           />
-          {/* Portfolio curve with end label */}
+          {/* Portfolio curve — ~50% thinner */}
           <Line
             type="monotone"
             dataKey="portfolioIndex"
             name="Portföy"
             stroke="hsl(var(--primary))"
-            strokeWidth={3}
+            strokeWidth={1.5}
             dot={false}
             activeDot={{ r: 6, fill: 'hsl(var(--primary))' }}
           >
             <LabelList
               dataKey="portfolioIndex"
               position="right"
-              content={({ index, ...props }) => 
+              content={({ index, ...props }) =>
                 index === chartData.length - 1 ? (
-                  <LineEndLabel 
+                  <LineEndLabel
                     viewBox={props as { x?: number; y?: number }}
                     value={lastValues.portfolioIndex}
                     color="hsl(var(--primary))"
@@ -254,7 +248,7 @@ export function EquityCurveChart({
               }
             />
           </Line>
-          {/* Benchmark lines with end labels */}
+          {/* Benchmark lines */}
           {selectedBenchmarks.map((benchmarkId) => {
             const benchmark = benchmarks.find((b) => b.id === benchmarkId);
             if (!benchmark) return null;
@@ -272,9 +266,9 @@ export function EquityCurveChart({
                 <LabelList
                   dataKey={benchmarkKeyMap[benchmarkId]}
                   position="right"
-                  content={({ index, ...props }) => 
+                  content={({ index, ...props }) =>
                     index === chartData.length - 1 ? (
-                      <LineEndLabel 
+                      <LineEndLabel
                         viewBox={props as { x?: number; y?: number }}
                         value={lastValues[benchmarkId]}
                         color={benchmark.color}

@@ -242,9 +242,6 @@ export function MarketSeriesProvider({ children }: { children: React.ReactNode }
       let cutoffDate: Date;
 
       switch (timeRange) {
-        case '1w':
-          cutoffDate = subDays(now, 7);
-          break;
         case '1m':
           cutoffDate = subMonths(now, 1);
           break;

@@ -14,7 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { TimeRange, BenchmarkData, Trade, TIME_RANGES } from '@/types/trade';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useEquityCurveData, ChartDataPoint } from '@/hooks/useEquityCurveData';
+import { useEquityCurveData, ChartDataPoint, PartialCloseRecord } from '@/hooks/useEquityCurveData';
 import { cn } from '@/lib/utils';
 
 interface ReturnComparisonChartProps {
@@ -23,6 +23,8 @@ interface ReturnComparisonChartProps {
   benchmarks: BenchmarkData[];
   closedTrades: Trade[];
   startingCapital: number;
+  partialCloses: PartialCloseRecord[];
+  portfolioSelected: boolean;
 }
 
 interface ReturnDataPoint {
@@ -72,7 +74,7 @@ function BarTooltip({
   );
 }
 
-// Custom label for bar values (vertical columns)
+// Custom label for bar values
 function BarValueLabel(props: {
   x?: number | string;
   y?: number | string;
@@ -81,7 +83,7 @@ function BarValueLabel(props: {
   value?: number;
 }) {
   const { x, y, width, height, value } = props;
-  
+
   if (
     value === undefined ||
     typeof x !== 'number' ||
@@ -90,9 +92,8 @@ function BarValueLabel(props: {
   ) {
     return null;
   }
-  
+
   const isPositive = value >= 0;
-  // Dikey sütun için: bar'ın üstüne (pozitif) veya altına (negatif)
   const labelX = x + width / 2;
   const labelY = isPositive ? y - 6 : y + (typeof height === 'number' ? height : 0) + 14;
 
@@ -116,11 +117,11 @@ function BarValueLabel(props: {
 function calculateReturns(
   chartData: ChartDataPoint[],
   selectedBenchmarks: string[],
-  benchmarks: BenchmarkData[]
+  benchmarks: BenchmarkData[],
+  portfolioSelected: boolean
 ): ReturnDataPoint[] {
   const result: ReturnDataPoint[] = [];
 
-  // Helper to find first and last non-null values
   const findFirstLast = (
     data: ChartDataPoint[],
     accessor: (point: ChartDataPoint) => number | null | undefined
@@ -139,18 +140,20 @@ function calculateReturns(
     return { first, last };
   };
 
-  // Portfolio
-  const portfolioValues = findFirstLast(chartData, (p) => p.portfolioIndex);
-  if (portfolioValues.first !== null && portfolioValues.last !== null) {
-    const returnPct = ((portfolioValues.last / portfolioValues.first) - 1) * 100;
-    result.push({
-      id: 'portfolio',
-      name: 'Portföy',
-      value: returnPct,
-      color: 'hsl(var(--primary))',
-      startValue: portfolioValues.first,
-      endValue: portfolioValues.last,
-    });
+  // Portfolio — only if selected
+  if (portfolioSelected) {
+    const portfolioValues = findFirstLast(chartData, (p) => p.portfolioIndex);
+    if (portfolioValues.first !== null && portfolioValues.last !== null) {
+      const returnPct = ((portfolioValues.last / portfolioValues.first) - 1) * 100;
+      result.push({
+        id: 'portfolio',
+        name: 'Portföy',
+        value: returnPct,
+        color: 'hsl(var(--primary))',
+        startValue: portfolioValues.first,
+        endValue: portfolioValues.last,
+      });
+    }
   }
 
   // Benchmarks
@@ -193,55 +196,53 @@ export function ReturnComparisonChart({
   benchmarks,
   closedTrades,
   startingCapital,
+  partialCloses,
+  portfolioSelected,
 }: ReturnComparisonChartProps) {
   const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(!isMobile);
 
-  // Use shared hook for data
   const { chartData, t0 } = useEquityCurveData(
     timeRange,
     selectedBenchmarks,
     closedTrades,
-    startingCapital
+    startingCapital,
+    partialCloses
   );
 
-  // Calculate return percentages
   const returnData = useMemo(() => {
-    return calculateReturns(chartData, selectedBenchmarks, benchmarks);
-  }, [chartData, selectedBenchmarks, benchmarks]);
+    return calculateReturns(chartData, selectedBenchmarks, benchmarks, portfolioSelected);
+  }, [chartData, selectedBenchmarks, benchmarks, portfolioSelected]);
 
-  // Get time range label
   const timeRangeLabel = TIME_RANGES.find((tr) => tr.id === timeRange)?.label || timeRange;
 
-  // Don't render if no t0 (no closed trades)
   if (!t0) {
     return null;
   }
 
-  // Show message if less than 2 items
-  if (returnData.length < 2) {
+  // Show message if no items selected
+  if (returnData.length < 1) {
     return (
       <div className="rounded-xl bg-card border border-border p-4 mb-6">
         <h3 className="text-sm font-medium text-foreground mb-2">
-          Kıyaslama (Getiri %)
+          % Sütun Grafiği
         </h3>
         <p className="text-sm text-muted-foreground">
-          Kıyaslamak için en az 2 varlık seçin.{' '}
+          Kıyaslamak için en az 1 varlık seçin.{' '}
           <span className="text-primary">
-            Üstteki grafikten benchmark ekleyebilirsiniz.
+            Aşağıdaki seçiciden benchmark veya portföy ekleyebilirsiniz.
           </span>
         </p>
       </div>
     );
   }
 
-  // Check if data has no values
   const hasNoData = returnData.every((d) => d.startValue === d.endValue);
   if (hasNoData) {
     return (
       <div className="rounded-xl bg-card border border-border p-4 mb-6">
         <h3 className="text-sm font-medium text-foreground mb-2">
-          Kıyaslama (Getiri %)
+          % Sütun Grafiği
         </h3>
         <p className="text-sm text-muted-foreground">
           Bu aralık için yeterli veri bulunamadı.
@@ -259,7 +260,7 @@ export function ReturnComparisonChart({
         <CollapsibleTrigger className="w-full">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-foreground">
-              Kıyaslama (Getiri %)
+              % Sütun Grafiği
             </h3>
             {isOpen ? (
               <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -293,12 +294,10 @@ export function ReturnComparisonChart({
 
         <CollapsibleContent>
           <div className="mt-4">
-            {/* Time range info */}
             <p className="text-xs text-muted-foreground mb-3">
               Seçili aralık: {timeRangeLabel} — Toplam getiri %
             </p>
 
-            {/* Chart container with horizontal scroll for many items */}
             <div className={cn(needsScroll && 'overflow-x-auto')}>
               <div
                 style={{

@@ -7,12 +7,17 @@ import {
   parseISO,
   startOfDay,
   addDays,
-  differenceInDays,
   isBefore,
-  subDays,
   subMonths,
 } from 'date-fns';
 import { tr } from 'date-fns/locale';
+
+export interface PartialCloseRecord {
+  id: string;
+  trade_id: string;
+  realized_pnl: number | null;
+  created_at: string;
+}
 
 export interface ChartDataPoint {
   date: string;
@@ -38,12 +43,11 @@ export interface EquityCurveData {
 
 /**
  * Calculate t0 from CLOSED trades only (earliest created_at among closed trades)
- * t0 = the opening date of the first trade that has been closed
  */
 export function calculateT0FromClosedTrades(closedTrades: Trade[]): Date | null {
   const validTrades = closedTrades.filter((t) => t.closed_at && t.created_at);
   if (validTrades.length === 0) return null;
-  
+
   return validTrades.reduce((earliest, trade) => {
     const d = startOfDay(parseISO(trade.created_at));
     return d < earliest ? d : earliest;
@@ -52,17 +56,12 @@ export function calculateT0FromClosedTrades(closedTrades: Trade[]): Date | null 
 
 /**
  * Calculate view window dates based on time range
- * Returns startDate and endDate for the X-axis window
- * endDate = today, startDate = today - rangeDays
  */
 export function getTimeRangeDates(timeRange: TimeRange, today: Date): { startDate: Date; endDate: Date } {
   const endDate = startOfDay(today);
   let startDate: Date;
-  
+
   switch (timeRange) {
-    case '1w':
-      startDate = subDays(endDate, 7);
-      break;
     case '1m':
       startDate = subMonths(endDate, 1);
       break;
@@ -81,43 +80,20 @@ export function getTimeRangeDates(timeRange: TimeRange, today: Date): { startDat
     default:
       startDate = subMonths(endDate, 1);
   }
-  
+
   return { startDate: startOfDay(startDate), endDate };
 }
 
-// Calculate daily PnL contributions from closed trades with same-day fix
-function calculateDailyPnLContributions(closedTrades: Trade[]): Map<string, number> {
+/**
+ * Step PnL approach: realized PnL applied on the partial close date
+ */
+function calculateDailyPnLFromPartialCloses(partialCloses: PartialCloseRecord[]): Map<string, number> {
   const dailyPnL = new Map<string, number>();
-
-  for (const trade of closedTrades) {
-    if (!trade.position_amount || !trade.exit_price || !trade.closed_at) continue;
-
-    // Calculate PnL based on trade type
-    const r = trade.trade_type === 'buy'
-      ? (trade.exit_price - trade.entry_price) / trade.entry_price
-      : (trade.entry_price - trade.exit_price) / trade.entry_price;
-    const pnl = trade.position_amount * r;
-
-    const startDate = startOfDay(parseISO(trade.created_at));
-    const endDate = startOfDay(parseISO(trade.closed_at));
-    const days = differenceInDays(endDate, startDate);
-
-    if (days === 0) {
-      // Same-day trade: apply full PnL to that single day
-      const key = format(startDate, 'yyyy-MM-dd');
-      dailyPnL.set(key, (dailyPnL.get(key) || 0) + pnl);
-    } else {
-      // Normal: distribute across days (created_at included, closed_at excluded)
-      const dailyContribution = pnl / days;
-      let currentDay = startDate;
-      while (currentDay < endDate) {
-        const key = format(currentDay, 'yyyy-MM-dd');
-        dailyPnL.set(key, (dailyPnL.get(key) || 0) + dailyContribution);
-        currentDay = addDays(currentDay, 1);
-      }
-    }
+  for (const pc of partialCloses) {
+    if (!pc.realized_pnl) continue;
+    const key = format(startOfDay(parseISO(pc.created_at)), 'yyyy-MM-dd');
+    dailyPnL.set(key, (dailyPnL.get(key) || 0) + pc.realized_pnl);
   }
-
   return dailyPnL;
 }
 
@@ -147,26 +123,27 @@ function findValueAtDateWithCarryForward(
   return lastKnown;
 }
 
-// Normalize benchmark from t0 with carry-forward for all days
-// Uses Map for O(1) lookups instead of O(n) find() calls
-function normalizeBenchmarkFromT0WithCarryForward(
+/**
+ * Normalize benchmark from normStart with carry-forward for all days
+ * Uses Map for O(1) lookups
+ */
+function normalizeBenchmarkFromStartWithCarryForward(
   points: MarketSeriesPoint[],
-  t0: Date,
+  normStart: Date,
   endDate: Date
 ): Map<string, number> {
   const result = new Map<string, number>();
   if (!points || points.length === 0) return result;
 
-  const t0Value = findValueAtDateWithCarryForward(points, t0);
-  if (!t0Value) return result;
+  const startValue = findValueAtDateWithCarryForward(points, normStart);
+  if (!startValue) return result;
 
-  // Convert to Map for O(1) lookup instead of O(n) find()
   const valueByDate = new Map<string, number>(
     points.map((p) => [p.date.substring(0, 10), p.value])
   );
 
-  let lastKnownValue = t0Value;
-  let currentDay = t0;
+  let lastKnownValue = startValue;
+  let currentDay = normStart;
 
   while (currentDay <= endDate) {
     const key = format(currentDay, 'yyyy-MM-dd');
@@ -176,7 +153,7 @@ function normalizeBenchmarkFromT0WithCarryForward(
       lastKnownValue = pointValue;
     }
 
-    result.set(key, 100 * (lastKnownValue / t0Value));
+    result.set(key, 100 * (lastKnownValue / startValue));
     currentDay = addDays(currentDay, 1);
   }
 
@@ -184,12 +161,11 @@ function normalizeBenchmarkFromT0WithCarryForward(
 }
 
 /**
- * Convert inflation monthly rates to compound index starting from t0
- * Rule: t0 month = 100 (no compounding), first rate applied from month AFTER t0
+ * Convert inflation monthly rates to compound index starting from normStart
  */
 function convertInflationToCompoundIndex(
   monthlyRates: MarketSeriesPoint[],
-  t0: Date,
+  normStart: Date,
 ): Map<string, number> {
   const result = new Map<string, number>();
   if (!monthlyRates || monthlyRates.length === 0) return result;
@@ -198,33 +174,27 @@ function convertInflationToCompoundIndex(
     (a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime()
   );
 
-  const t0Month = format(t0, 'yyyy-MM');
-  let t0Index = sortedRates.findIndex((r) => r.date.startsWith(t0Month));
-  
-  // If t0 month not found in data, find first month after t0
-  if (t0Index === -1) {
-    const t0Time = t0.getTime();
-    t0Index = sortedRates.findIndex((r) => parseISO(r.date).getTime() > t0Time);
-    
-    if (t0Index === -1) return result;
-    
-    // Add synthetic t0 month entry
-    const syntheticT0Date = format(t0, 'yyyy-MM-01');
-    result.set(syntheticT0Date, 100);
+  const startMonth = format(normStart, 'yyyy-MM');
+  let startIndex = sortedRates.findIndex((r) => r.date.startsWith(startMonth));
+
+  if (startIndex === -1) {
+    const startTime = normStart.getTime();
+    startIndex = sortedRates.findIndex((r) => parseISO(r.date).getTime() > startTime);
+    if (startIndex === -1) return result;
+    const syntheticDate = format(normStart, 'yyyy-MM-01');
+    result.set(syntheticDate, 100);
   }
 
   let index = 100;
 
-  for (let i = t0Index; i < sortedRates.length; i++) {
+  for (let i = startIndex; i < sortedRates.length; i++) {
     const rate = sortedRates[i].value;
     const dateKey = sortedRates[i].date.substring(0, 10);
     const monthKey = sortedRates[i].date.substring(0, 7);
-    
-    if (monthKey === t0Month) {
-      // t0 month: index stays at 100
+
+    if (monthKey === startMonth) {
       result.set(dateKey, 100);
     } else {
-      // Subsequent months: apply compounding
       index = index * (1 + rate / 100);
       result.set(dateKey, parseFloat(index.toFixed(2)));
     }
@@ -248,19 +218,18 @@ function inflationMonthlyToDailyWithCarryForward(
   while (currentDay <= endDate) {
     const key = format(currentDay, 'yyyy-MM-dd');
     const monthKey = format(currentDay, 'yyyy-MM');
-    
-    // Look for any entry in this month
+
     for (const [dateKey, value] of monthlyMap.entries()) {
       if (dateKey.startsWith(monthKey)) {
         lastKnownValue = value;
         break;
       }
     }
-    
+
     if (lastKnownValue !== null) {
       result.set(key, lastKnownValue);
     }
-    
+
     currentDay = addDays(currentDay, 1);
   }
 
@@ -271,11 +240,10 @@ export function useEquityCurveData(
   timeRange: TimeRange,
   selectedBenchmarks: string[],
   closedTrades: Trade[],
-  startingCapital: number
+  startingCapital: number,
+  partialCloses: PartialCloseRecord[] = []
 ): EquityCurveData {
   const { getSeriesData, fetchSeries } = useMarketSeries();
-
-  // Today key for dependency - recalculates when day changes
   const todayKey = format(new Date(), 'yyyy-MM-dd');
 
   // Fetch data for selected benchmarks
@@ -285,16 +253,16 @@ export function useEquityCurveData(
     });
   }, [selectedBenchmarks, fetchSeries]);
 
-  // Filter closed trades with position_amount
-  const closedTradesWithPositionAmount = useMemo(
-    () => closedTrades.filter((t) => t.position_amount && t.exit_price && t.closed_at),
+  // Filter closed trades with closed_at
+  const closedTradesWithData = useMemo(
+    () => closedTrades.filter((t) => t.closed_at && t.created_at),
     [closedTrades]
   );
 
   // Calculate t0 from CLOSED trades only
   const t0 = useMemo(
-    () => calculateT0FromClosedTrades(closedTradesWithPositionAmount),
-    [closedTradesWithPositionAmount]
+    () => calculateT0FromClosedTrades(closedTradesWithData),
+    [closedTradesWithData]
   );
 
   // View window dates based on time range
@@ -304,12 +272,18 @@ export function useEquityCurveData(
     [timeRange, todayKey]
   );
 
-  // Build full portfolio index from t0 to endDate (Map)
-  const portfolioIndexMap = useMemo(() => {
-    const map = new Map<string, { index: number; tl: number }>();
-    if (!t0 || closedTradesWithPositionAmount.length === 0) return map;
+  // effectiveStart = max(t0, viewStartDate) for normalization
+  const effectiveStart = useMemo(() => {
+    if (!t0) return startDate;
+    return t0 > startDate ? t0 : startDate;
+  }, [t0, startDate]);
 
-    const dailyPnL = calculateDailyPnLContributions(closedTradesWithPositionAmount);
+  // Build RAW portfolio index from t0 to endDate using partial closes (step PnL)
+  const rawPortfolioIndexMap = useMemo(() => {
+    const map = new Map<string, { index: number; tl: number }>();
+    if (!t0) return map;
+
+    const dailyPnL = calculateDailyPnLFromPartialCloses(partialCloses);
     let cumulativeTL = startingCapital;
     let currentDay = t0;
 
@@ -327,9 +301,25 @@ export function useEquityCurveData(
     }
 
     return map;
-  }, [t0, closedTradesWithPositionAmount, startingCapital, endDate]);
+  }, [t0, partialCloses, startingCapital, endDate]);
 
-  // Get benchmark data and normalize from t0
+  // Normalize portfolio from effectiveStart (effectiveStart = 100)
+  const portfolioIndexMap = useMemo(() => {
+    const effectiveKey = format(effectiveStart, 'yyyy-MM-dd');
+    const viewStartEntry = rawPortfolioIndexMap.get(effectiveKey);
+    const viewStartIndex = viewStartEntry?.index || 100;
+
+    const normalized = new Map<string, { index: number; tl: number }>();
+    for (const [key, val] of rawPortfolioIndexMap) {
+      normalized.set(key, {
+        index: (val.index / viewStartIndex) * 100,
+        tl: val.tl,
+      });
+    }
+    return normalized;
+  }, [rawPortfolioIndexMap, effectiveStart]);
+
+  // Benchmark data normalized from effectiveStart
   const benchmarkDataMaps = useMemo(() => {
     const result: Record<string, Map<string, number>> = {};
     if (!t0) return result;
@@ -338,12 +328,12 @@ export function useEquityCurveData(
       const seriesData = getSeriesData(benchmarkId as MarketAsset);
       if (seriesData?.points) {
         if (benchmarkId === 'inflation_tr') {
-          const monthlyMap = convertInflationToCompoundIndex(seriesData.points, t0);
-          result[benchmarkId] = inflationMonthlyToDailyWithCarryForward(monthlyMap, t0, endDate);
+          const monthlyMap = convertInflationToCompoundIndex(seriesData.points, effectiveStart);
+          result[benchmarkId] = inflationMonthlyToDailyWithCarryForward(monthlyMap, effectiveStart, endDate);
         } else {
-          result[benchmarkId] = normalizeBenchmarkFromT0WithCarryForward(
+          result[benchmarkId] = normalizeBenchmarkFromStartWithCarryForward(
             seriesData.points,
-            t0,
+            effectiveStart,
             endDate
           );
         }
@@ -351,7 +341,7 @@ export function useEquityCurveData(
     });
 
     return result;
-  }, [selectedBenchmarks, getSeriesData, t0, endDate]);
+  }, [selectedBenchmarks, getSeriesData, t0, effectiveStart, endDate]);
 
   // Build view series from startDate to endDate
   const chartData = useMemo(() => {
@@ -360,21 +350,21 @@ export function useEquityCurveData(
 
     while (currentDay <= endDate) {
       const key = format(currentDay, 'yyyy-MM-dd');
-      const isBeforeT0 = t0 ? isBefore(currentDay, t0) : true;
+      const isBeforeEffective = isBefore(currentDay, effectiveStart);
 
       const portfolioData = portfolioIndexMap.get(key);
 
       const point: ChartDataPoint = {
         date: format(currentDay, 'd MMM', { locale: tr }),
         rawDate: key,
-        portfolioIndex: isBeforeT0 ? null : (portfolioData?.index ?? null),
-        portfolioTL: isBeforeT0 ? null : (portfolioData?.tl ?? null),
+        portfolioIndex: isBeforeEffective ? null : (portfolioData?.index ?? null),
+        portfolioTL: isBeforeEffective ? null : (portfolioData?.tl ?? null),
       };
 
       // Add benchmark values
       for (const [benchmarkId, dataMap] of Object.entries(benchmarkDataMaps)) {
-        const value = isBeforeT0 ? null : (dataMap.get(key) ?? null);
-        
+        const value = isBeforeEffective ? null : (dataMap.get(key) ?? null);
+
         switch (benchmarkId) {
           case 'gold':
             point.gold = value;
@@ -402,7 +392,7 @@ export function useEquityCurveData(
     }
 
     return data;
-  }, [startDate, endDate, t0, portfolioIndexMap, benchmarkDataMaps]);
+  }, [startDate, endDate, effectiveStart, portfolioIndexMap, benchmarkDataMaps]);
 
   return {
     chartData,
