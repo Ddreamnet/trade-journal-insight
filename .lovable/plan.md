@@ -1,246 +1,385 @@
 
 
-# Plan: TradeGunlugu Blog Sistemi
+# Plan: Ticker + Portfoy (Nakit) + Islem Formu + Kismi Cikis + Kapali Portfoy UX (Final v3)
 
-## Genel Bakis
-
-TradeGunlugu sitesine tam kapsamli bir blog sistemi eklenmesi: herkese acik blog sayfasi (/blog, /blog/:slug) ve login gerektiren yazar paneli (/panel/blog). Tiptap zengin metin editoru ve Supabase Storage ile gorsel yukleme destegi.
+Onceki final v2 plana 1 ek kritik duzeltme entegre edilmistir. Diger tum maddeler aynen korunmustur.
 
 ---
 
-## 1. Veritabani (Supabase Migration)
+## Yapilacaklar Ozeti ve Bagimliliklar
 
-### blog_posts Tablosu
+```text
+1. Ticker Tape Reset Sorunu          -- Bagimsiz
+2. Buton Yerlesimleri                 -- Bagimsiz (ama 3'e UI baglantisi var)
+3. Portfoy Nakit Yonetimi (yeni)     -- DB migration gerekli
+4. Islem Formu Validasyonu           -- Bagimsiz
+5. Lot Mantigi (position_amount -> lot) -- DB migration gerekli, 3'e bagimli
+6. Kismi Cikis (Partial Close)       -- 5'e bagimli (lot sistemi gerekli)
+7. Kapali Portfoy UX Iyilestirmeleri -- Bagimsiz
+```
+
+---
+
+## 1. Ticker Tape Reset Sorunu
+
+### Kok Neden
+`MarketDataContext` her 60 sn'de `setStocks(response.items)` cagiriyor. Yeni dizi referansi React'in TickerTape'i re-render etmesine yol aciyor. `displayStocks = [...stocks, ...stocks]` yeniden hesaplaniyor ve CSS `animation: ticker 15s linear infinite` sifirdan basliyor. Ayrica sabit `15s` duration, farkli ekran genisliklerinde farkli gorsel hiz yaratiyor.
+
+### Cozum
+
+**MarketDataContext.tsx -- Referans Stabilizasyonu:**
+- `setStocks` cagrilmadan once mevcut `stocks` ile gelen veriyi karsilastir (symbol+last+chgPct hash). Sadece icerik degismisse `setStocks` cagir. Bu gereksiz re-render'i kokunden onler.
+
+**TickerTape.tsx -- React.memo + Sabit px/sn Hiz:**
+- `React.memo` ile sarmala.
+- `displayStocks` icin `useMemo([...stocks, ...stocks], [stocks])`.
+- **Tek bir `useRef`** ile `.ticker-tape` elementinin `scrollWidth` degerini ol.
+- Sabit hiz sabiti: `SPEED = 50` px/sn.
+- `animation-duration = (scrollWidth / 2) / SPEED` saniye olarak hesapla.
+- **Duration SADECE ilk mount + ilk veri yuklemesinde set edilecek.** Sonraki veri guncellemelerinde veya window resize/orientation degisikliklerinde yeniden hesaplanmayacak.
+- Bunu saglamak icin: `useEffect` icinde `if (durationRef.current === null && scrollWidth > 0)` kontrolu ile sadece bir kez set et.
+
+**index.css:**
+- `.ticker-tape` sinifindaki `animation: ticker 15s linear infinite` satirindan `15s` kaldirilacak. Duration inline style olarak bir kez atanacak.
+- `animation-name`, `timing-function`, `iteration-count` CSS'te kalacak.
+
+### Degisecek Dosyalar
+- `src/contexts/MarketDataContext.tsx`
+- `src/components/layout/TickerTape.tsx`
+- `src/index.css`
+
+---
+
+## 2. Buton Yerlesimleri
+
+### Layout (Index.tsx, satir 64-74)
+- **Desktop (sm ve uzeri):** `flex flex-col sm:flex-row sm:justify-end gap-3`. "Yeni Islem Ekle" solda, "Portfoy Ekle/Cikar" sagda.
+- **Mobil:** Ust uste, tam genislik. "Portfoy Ekle/Cikar" ustte, "Yeni Islem Ekle" altta.
+
+### Degisecek Dosyalar
+- `src/pages/Index.tsx`
+
+---
+
+## 3. Portfoy Nakit Yonetimi (Yeni Ozellik)
+
+### Veri Modeli
+
+**Yeni tablo: `portfolio_cash_flows`** (APPEND-ONLY)
 
 | Kolon | Tip | Aciklama |
 |-------|-----|----------|
-| id | uuid (PK) | Otomatik |
-| user_id | uuid (NOT NULL) | Yazar |
-| title | text (NOT NULL) | Baslik |
-| slug | text (UNIQUE, NOT NULL) | SEO URL |
-| excerpt | text | Kisa ozet |
-| cover_image_url | text | Kapak gorseli URL |
-| content | jsonb | Tiptap JSON formati |
-| status | text (DEFAULT 'draft') | draft / published |
-| published_at | timestamptz | Yayinlanma tarihi |
-| reading_time_minutes | integer (DEFAULT 1) | Otomatik hesaplanan |
-| tags | text[] (DEFAULT '{}') | Etiketler |
-| created_at | timestamptz (DEFAULT now()) | |
-| updated_at | timestamptz (DEFAULT now()) | |
+| id | uuid PK DEFAULT gen_random_uuid() | |
+| user_id | uuid NOT NULL | |
+| flow_type | text NOT NULL | 'deposit' veya 'withdraw' |
+| amount | numeric NOT NULL CHECK (amount > 0) | Her zaman pozitif |
+| note | text | Opsiyonel |
+| created_at | timestamptz DEFAULT now() | |
 
-### RLS Politikalari
+**RLS (Append-Only):**
+- SELECT: `auth.uid() = user_id`
+- INSERT: `auth.uid() = user_id`
+- UPDATE: Hicbir policy yok (yasak)
+- DELETE: Hicbir policy yok (yasak)
 
-- **SELECT (herkes)**: `status = 'published'` olan yazilar herkese acik (anon + authenticated)
-- **SELECT (yazar)**: `auth.uid() = user_id` olan TUM yazilar (taslaklar dahil)
-- **INSERT**: `auth.uid() = user_id`
-- **UPDATE**: `auth.uid() = user_id`
-- **DELETE**: `auth.uid() = user_id`
+Yanlis giris icin ters islem eklenir (ornegin yanlis deposit icin withdraw).
 
-### updated_at Trigger
+### Kullanilabilir Nakit Hesabi
 
-Kayit degistiginde `updated_at` otomatik guncellenir.
-
-### Storage Bucket
-
-- `blog-images` adinda **public** bucket olusturulacak
-- RLS: Authenticated kullanicilar upload edebilir, herkes okuyabilir
-- Kabul edilen formatlar: jpg, png, webp
-- Boyut limiti: 5MB (frontend'de kontrol)
-
----
-
-## 2. Yeni Paketler
-
-- `@tiptap/react` - Tiptap React entegrasyonu
-- `@tiptap/starter-kit` - Temel editor ozellikleri (bold, italic, headings, lists, blockquote, code)
-- `@tiptap/extension-link` - Link ekleme
-- `@tiptap/extension-image` - Gorsel ekleme
-- `@tiptap/extension-youtube` - YouTube embed
-- `@tiptap/extension-underline` - Alti cizili
-- `@tiptap/extension-text-align` - Metin hizalama
-- `@tiptap/extension-color` - Yazi rengi
-- `@tiptap/extension-text-style` - Text style alt yapisi
-- `@tiptap/extension-placeholder` - Placeholder
-- `dompurify` - HTML sanitizasyonu (XSS koruması)
-
----
-
-## 3. Dosya Yapisi
+**Realized PnL dahil edilecek. Legacy blokaj fallback'i uygulanacak.**
 
 ```text
-src/
-  components/
-    blog/
-      BlogCard.tsx           -- Blog kart bileseni (liste gorunumu)
-      BlogHeader.tsx         -- Public blog icin ozel header
-      ShareButton.tsx        -- Paylasim butonu (Web Share API + fallback)
-      BlogEditor.tsx         -- Tiptap editor bileseni
-      EditorToolbar.tsx      -- Editor toolbar (H1-H3, bold, gorsel, youtube vs.)
-      ImageUploader.tsx      -- Gorsel yukleme bileseni (kapak + icerik)
-      ReadingTimeWarning.tsx -- 10 dk asim uyarisi
-      BlogPostForm.tsx       -- Yazi olusturma/duzenleme formu
-      BlogManageList.tsx     -- Panel yazilari listesi
-  hooks/
-    useBlogPosts.ts          -- Blog CRUD islemleri hook
-  pages/
-    Blog.tsx                 -- Public blog listesi (/blog)
-    BlogPost.tsx             -- Public blog detay (/blog/:slug)
-    PanelBlog.tsx            -- Yazar paneli ana sayfa (/panel/blog)
-    PanelBlogEditor.tsx      -- Yazi olustur/duzenle (/panel/blog/new, /panel/blog/edit/:id)
-  types/
-    blog.ts                  -- Blog tip tanimlari
-  lib/
-    blogUtils.ts             -- Slug olusturma, okuma suresi hesaplama
+Kullanilabilir Nakit =
+  SUM(deposits) - SUM(withdrawals)
+  - SUM(aktif islem bloklari)
+  + SUM(realized PnL)
 ```
 
----
+**KRITIK -- Legacy Aktif Islem Blokaj Fallback'i:**
 
-## 4. Routing (App.tsx)
+Her aktif islem icin blokaj su sekilde hesaplanir:
 
 ```text
-/blog              -- Public (login gerektirmez)
-/blog/:slug        -- Public (login gerektirmez)
-/panel/blog        -- Protected (login gerektirir)
-/panel/blog/new    -- Protected
-/panel/blog/edit/:id -- Protected
+Aktif islem blokaji =
+  CASE
+    WHEN remaining_lot > 0 THEN entry_price * remaining_lot
+    WHEN remaining_lot = 0 AND position_amount > 0 THEN position_amount
+    ELSE 0
+  END
 ```
 
-Header'daki "Blog" linki `/panel/blog` adresine yonlendirecek (sadece login yapmis kullanici icin gorunur).
+- `remaining_lot > 0`: Normal yeni sistem, blokaj = entry * remaining_lot
+- `remaining_lot = 0` VE `position_amount > 0`: Legacy aktif islem, lot henuz girilmemis. Eski `position_amount` degeri blokaj olarak kullanilir. Bu kullanicinin lot=0 eski islemleri varken "sinirsiz islem acma" kapisi birakilmasini engeller.
+- Her ikisi de 0: blokaj 0 (beklendigi gibi)
+
+Bu fallback mantigi su **uc yerde ayni sekilde** uygulanacak:
+1. `create_trade_with_cash_check` RPC fonksiyonu icinde
+2. `create_withdraw_with_check` RPC fonksiyonu icinde
+3. Frontend `usePortfolioCash` hook'unda UI'da gosterilen "kullanilabilir nakit" hesabinda
+
+### Atomik / Server-Side Kontrol
+
+**SQL Function: `create_trade_with_cash_check(...)`**
+- Kullanilabilir nakdi hesaplar (deposit - withdraw - blokaj + realized PnL)
+- Blokaj hesabinda legacy fallback kullanir (yukaridaki CASE ifadesi)
+- `entry_price * lot_quantity <= kullanilabilir_nakit` kontrolu
+- Yeterliyse INSERT, yetersizse RAISE EXCEPTION
+
+**SQL Function: `create_withdraw_with_check(p_user_id, p_amount, p_note)`**
+- Ayni blokaj hesabi (legacy fallback dahil)
+- Cekilecek tutar <= kullanilabilir nakit kontrolu
+
+### UI
+1. Modal: "Para Ekle" / "Para Cikar" sekmeleri
+2. Ust kisimda mevcut kullanilabilir nakit (legacy fallback dahil hesaplanmis)
+3. Gecmis islemler listesi (salt okunur, silinemez)
+4. Toast ile bildirim
+
+### Degisecek/Olusacak Dosyalar
+- Migration SQL
+- `src/hooks/usePortfolioCash.ts` (yeni -- legacy blokaj fallback dahil)
+- `src/components/trade/CashFlowModal.tsx` (yeni)
+- `src/pages/Index.tsx`
 
 ---
 
-## 5. Public Blog (/blog)
+## 4. Islem Formu Validasyonu (AL/SAT Yonune Gore)
 
-### Liste Sayfasi
+### Kurallar
 
-- **Arkaplan**: Acik gri (#F5F6F7), metin rengi siyah (#111)
-- **Ozel layout**: MainLayout yerine ozel bir BlogLayout (acik tema)
-- **Grid**: Mobil 1 kolon, tablet 2, desktop 3 kolon
-- **Kartlar**:
-  - Kapak gorseli (aspect-ratio 16:9, lazy-load)
-  - Baslik, ozet (max 2 satir), tarih, okuma suresi, etiketler
-  - Hover'da soft shadow ve hafif yukari kayma
-  - Paylasim ikonu (sag ust kosede)
-- **Pagination**: Sayfa basina 9 yazi, alt kisimda sayfa numaralari
-- **Bos durum**: "Henuz blog yazisi yok" mesaji
-- **Loading**: Skeleton kartlar (3 adet)
+**AL (buy):**
+- Target <= Entry -> hata: "AL isleminde hedef fiyat giris fiyatindan buyuk olmali"
+- Stop >= Entry -> hata: "AL isleminde stop fiyat giris fiyatindan kucuk olmali"
 
-### Detay Sayfasi (/blog/:slug)
+**SAT (sell):**
+- Target >= Entry -> hata: "SAT isleminde hedef fiyat giris fiyatindan kucuk olmali"
+- Stop <= Entry -> hata: "SAT isleminde stop fiyat giris fiyatindan buyuk olmali"
 
-- Ayni acik gri tema
-- Icerik genisligi sinirli (max-w-3xl, ortalanmis)
-- Kapak gorseli (tam genislik, aspect-ratio)
-- Baslik, tarih, okuma suresi
-- Icerik (Tiptap JSON'dan HTML'e render + DOMPurify sanitize)
-- YouTube embed'leri responsive (16:9 aspect ratio)
-- Paylasim butonlari (X/Twitter, WhatsApp, Telegram, LinkedIn)
-- 404 durumu: slug bulunamazsa ozel mesaj
+### RR Hesabi Duzeltmesi (Frontend)
+Mevcut TradeForm.tsx (satir 53): `(parsedTarget - parsedEntry) / (parsedEntry - parsedStop)` + `Math.abs()` -- bu SAT icin yanlis.
 
-### Paylasim
+Duzeltme:
+- AL: `(target - entry) / (entry - stop)`
+- SAT: `(entry - target) / (stop - entry)`
+- `Math.abs()` kaldirilacak
+
+Server-side `calculate_rr_ratio` zaten dogru calisiyor.
+
+### UI
+- Hata mesaji alan altinda kirmizi
+- Kaydet butonu disabled
+
+### Degisecek Dosyalar
+- `src/components/trade/TradeForm.tsx`
+- `src/components/trade/EditTradeModal.tsx`
+
+---
+
+## 5. Lot Mantigi (Islem Tutari -> Lot)
+
+### DB Degisikligi
+
+`trades` tablosuna:
+- `lot_quantity` (integer, NOT NULL, DEFAULT 0) -- Baslangic lot adedi, **TAM SAYI**
+- `remaining_lot` (integer, NOT NULL, DEFAULT 0) -- Kalan lot, **TAM SAYI**
+
+`position_amount` kolonu kalacak, `entry_price * lot_quantity` olarak trigger ile otomatik hesaplanacak.
+
+### Eski Kayit Migrasyonu
+
+- `lot_quantity = 0` ve `remaining_lot = 0` olarak set edilir
+- Kullanici bu kayitlari EditTradeModal'dan manuel duzeltir
+- Nakit blokaj hesabinda legacy fallback devreye girer (Madde 3'teki CASE ifadesi)
 
 ```text
-1. Web Share API destegi varsa: navigator.share() kullan
-2. Yoksa fallback:
-   - "Linki Kopyala" butonu (toast: "Link kopyalandi")
-   - X/Twitter paylas
-   - WhatsApp paylas
-   - Telegram paylas
-   - LinkedIn paylas
+UPDATE trades SET lot_quantity = 0, remaining_lot = 0;
 ```
 
-Paylasim URL'si: `https://tradegunlugu.com/blog/:slug`
+### Legacy Kayitlarda Rapor/PnL Fallback
 
----
+Lot=0 olan eski kapali kayitlar rapor ve PnL hesaplarinda 0'a dusmeyecek:
+- `lot_quantity = 0` VE `position_amount > 0` ise: `PnL = position_amount * ((exit - entry) / entry)` (AL) veya `position_amount * ((entry - exit) / entry)` (SAT)
+- Aktif islemlerde lot=0 ise kullaniciya "Bu islemin lot bilgisi eksik" uyarisi gosterilir
 
-## 6. Yazar Paneli (/panel/blog)
-
-### Yazi Listesi
-
-- Mevcut dark tema (MainLayout kullanilacak)
-- Filtre: "Tumu", "Yayinda", "Taslak" sekmeleri
-- Her satirda: baslik, durum badge, tarih, okuma suresi
-- Aksiyonlar: Duzenle, Sil, Yayinla/Taslaga Al
-- "Yeni Yazi" butonu (sag ust)
-
-### Editor Sayfasi (/panel/blog/new, /panel/blog/edit/:id)
-
-- **Kapak Gorseli**: Ayrı upload alani (drag-drop veya tikla)
-- **Baslik**: Buyuk input alani
-- **Etiketler**: Virgülle ayrılmış etiket girisi
-- **Tiptap Editor**:
-  - Toolbar: H1, H2, H3, Bold, Italic, Underline, Link, UL, OL, Blockquote, Code block, Hizalama (sol/orta/sag), Yazi rengi, Undo/Redo
-  - Gorsel ekleme: Toolbar'dan veya drag-drop (Supabase Storage'a yukler)
-  - YouTube embed: URL yapistirinca otomatik video blogu olusturur
-  - Varsayilan yazi rengi: siyah (#111) - public'te dogru goruntulenmesi icin
-- **Otomatik kaydetme**: 30 saniyede bir taslak olarak kaydet, "Kaydedildi" feedback'i
-- **Yayinla butonu**: status = published, published_at = now()
-- **10 dk uyarisi**: Icerik ~2000 kelimeyi astinda badge + toast ile uyari
-
-### Gorsel Yukleme
-
-- Supabase Storage `blog-images` bucket'ina upload
-- Upload sirasinda progress bar
-- Hata mesajlari (boyut asimi, format hatasi)
-- Kabul: jpg, png, webp - max 5MB
-- Dosya adi: `{userId}/{timestamp}-{random}.{ext}` formati
-
----
-
-## 7. SEO
-
-- `document.title` ve `<meta>` taglari React Helmet olmadan, `useEffect` ile dinamik set edilecek
-- Blog listesi: "Blog | Trade Gunlugu"
-- Blog detay: "{baslik} | Trade Gunlugu Blog"
-- OG taglari: og:title, og:description, og:image (kapak gorseli)
-- Not: SPA oldugundan tam SSR destegi yok, ama meta tag'lar client-side olarak ayarlanacak
-
----
-
-## 8. Guvenlik
-
-- Tum HTML ciktisi DOMPurify ile sanitize edilecek
-- YouTube embed icin sadece youtube.com ve youtu.be domainleri izinli
-- Diger iframe/script icerikleri strip edilecek
-- RLS ile sadece yazar kendi yazilarini yonetebilir
-- Public okuma icin sadece published yazilar gorunur
-
----
-
-## 9. Header Degisikligi
-
-Mevcut `navItems` dizisine "Blog" eklenmesi:
+### Trigger Guncellemesi
 
 ```text
-Ana Sayfa  |  Raporlarim  |  Blog  |  Cikis
+IF TG_OP = 'INSERT' THEN
+  NEW.remaining_lot := NEW.lot_quantity;
+END IF;
+NEW.position_amount := NEW.entry_price * NEW.lot_quantity;
 ```
 
-- Blog linki `/panel/blog` adresine gider
-- Sadece authenticated kullanici icin gorunur (zaten Header login gerektiren alanda)
+### UI Degisikligi
+
+**TradeForm.tsx:**
+- "Islem Tutari" alani kaldirilir
+- Yerine "Lot / Kagit Adedi" alani: `NumberInput step="1" min="1"`, ondalik kabul etmez
+- Bilgi satiri: "Islem Tutari: {entry * lot} TL"
+- Nakit kontrolu: `create_trade_with_cash_check` RPC kullanilir
+
+**EditTradeModal.tsx:**
+- Ayni degisiklik
+- Kismi kapanisi olmayan aktif islemlerde lot duzenlenince remaining_lot esitlenir
+- Kismi kapanisi olan islemlerde lot alani kilitli (disabled)
+
+### Degisecek Dosyalar
+- Migration SQL
+- `src/components/trade/TradeForm.tsx`
+- `src/components/trade/EditTradeModal.tsx`
+- `src/hooks/useTrades.ts`
+- `src/hooks/useEquityCurveData.ts` (fallback PnL hesabi)
+- `src/types/trade.ts`
 
 ---
 
-## 10. Uygulama Sirasi
+## 6. Kismi Cikis (Partial Close)
 
-| Adim | Islem |
-|------|-------|
-| 1 | Veritabani migration (blog_posts tablosu + RLS + storage bucket) |
-| 2 | Tiptap ve diger paketleri kur |
-| 3 | Tip tanimlari ve yardimci fonksiyonlar (types/blog.ts, lib/blogUtils.ts) |
-| 4 | useBlogPosts hook (CRUD islemleri) |
-| 5 | Blog editor bilesenleri (Tiptap, toolbar, gorsel yukleme) |
-| 6 | Yazar paneli sayfalari (liste + editor) |
-| 7 | Public blog sayfalari (liste + detay) |
-| 8 | Paylasim bileseni |
-| 9 | Header guncelleme |
-| 10 | Routing guncelleme (App.tsx) |
+### Yeni Tablo: `trade_partial_closes`
+
+| Kolon | Tip | Aciklama |
+|-------|-----|----------|
+| id | uuid PK | |
+| trade_id | uuid NOT NULL FK -> trades | |
+| user_id | uuid NOT NULL | |
+| exit_price | numeric NOT NULL | Cikis fiyati |
+| lot_quantity | integer NOT NULL | Satilan lot (tam sayi) |
+| closing_type | text NOT NULL | kar_al / stop |
+| stop_reason | text | |
+| closing_note | text | |
+| realized_pnl | numeric | Hesaplanan K/Z |
+| created_at | timestamptz DEFAULT now() | |
+
+**RLS:** SELECT + INSERT icin `auth.uid() = user_id`. UPDATE/DELETE yok (append-only).
+
+### Server-Side RPC: `close_trade_partial(...)`
+
+Atomik olarak:
+1. `remaining_lot >= p_lot_quantity` kontrolu
+2. `trade_partial_closes`'a INSERT (realized_pnl hesaplanir)
+3. `trades.remaining_lot -= p_lot_quantity`
+4. Eger `remaining_lot = 0`:
+   - `trades.status = 'closed'`
+   - `trades.exit_price` = bu son parcainin cikis fiyati
+   - `trades.closing_type`, `trades.closed_at` set edilir
+5. Eger `remaining_lot > 0`: trade `active` kalir, `trades.exit_price` NULL kalir
+6. Portfolio event (PnL) olusturulur (varsa)
+
+### Kapanis Fiyati Semantigi
+
+- `trades.exit_price`: sadece tam kapanis aninda son parcainin cikis fiyati yazilir. Kismi cikis sirasinda NULL kalir.
+- Gercek K/Z hesaplari her zaman `trade_partial_closes` kayitlarindan yapilir.
+
+### Blokaj-Nakit Uyumu
+
+Kismi cikis sonrasi:
+- `remaining_lot` azalir
+- Blokaj = `entry_price * remaining_lot` (azalmis degerle)
+- Serbest nakit otomatik artar
+- Realized PnL kullanilabilir nakde eklenir
+
+### UI (CloseTradeModal)
+
+1. Mevcut cikis fiyati alani korunur
+2. Yeni alan: "Satilacak Lot" (NumberInput step="1", tam sayi)
+3. Buton: "Tum Lotlar ({remaining_lot})"
+4. Validasyon: lot > 0 VE lot <= remaining_lot VE tam sayi
+5. Bilgi: "Gerceklesen K/Z: {(exit - entry) * lot} TL"
+
+### Degisecek/Olusacak Dosyalar
+- Migration SQL
+- `src/components/trade/CloseTradeModal.tsx`
+- `src/hooks/useTrades.ts`
+- `src/types/trade.ts`
 
 ---
 
-## 11. Teknik Notlar
+## 7. Kapali Portfoy UX Iyilestirmeleri
 
-- **Tiptap icerigi**: JSON formatinda kaydedilecek (jsonb), render sirasinda `generateHTML()` ile HTML'e cevrilecek
-- **Slug uretimi**: Turkce karakterler translitere edilecek (ornegin "Teknik Analiz Nedir?" -> "teknik-analiz-nedir")
-- **Okuma suresi**: `Math.ceil(kelimeSayisi / 200)` dakika
-- **Autosave**: `useEffect` + `setTimeout` ile 30 sn debounce, sadece draft durumunda
-- **Public blog acik tema**: Blog sayfalari icin ayri CSS degiskenleri veya inline stil kullanilacak (ana uygulama dark temasini etkilemeyecek)
+### 7a. "Islem Sebepleri" Gizleme (EditTradeModal)
+
+- `isClosed` true ise TRADE_REASONS grid renderlanmayacak
+- Mevcut `reasons` degerleri DB'de korunur, sadece UI'da gizlenir
+- `reasons.length > 0` validasyonunu kapali islemler icin atla
+
+### 7b. Notlar: Popover -> Dialog (TradeList)
+
+- Desktop ve mobil icin `Popover` yerine `Dialog` kullan
+- Dialog icinde: "{stock_symbol} - Notlar" basligi, stop sebebi, kapanma notu, `ScrollArea` ile uzun icerik destegi
+
+### Degisecek Dosyalar
+- `src/components/trade/EditTradeModal.tsx`
+- `src/components/trade/TradeList.tsx`
+
+---
+
+## Uygulama Sirasi
+
+| Adim | Is Kalemi | Gerekce |
+|------|-----------|---------|
+| 1 | DB Migrations (portfolio_cash_flows + trades lot kolonlari + trade_partial_closes + RPC fonksiyonlari) | Altyapi once |
+| 2 | Ticker Tape duzeltmesi | Bagimsiz, hizli |
+| 3 | Islem formu validasyonu (AL/SAT kurallari + RR duzeltmesi) | Bagimsiz |
+| 4 | Kapali portfoy UX (sebepler gizle + notlar dialog) | Bagimsiz |
+| 5 | Lot mantigi (UI + hook degisiklikleri + legacy fallback) | DB'ye bagimli |
+| 6 | Portfoy nakit yonetimi (hook + modal + realized PnL + legacy blokaj fallback) | DB'ye + lot'a bagimli |
+| 7 | Buton yerlesimleri + CashFlowModal entegrasyonu | 6'ya bagimli |
+| 8 | Kismi cikis (CloseTradeModal + RPC + lot kilidi) | 5'e bagimli |
+
+---
+
+## Test Kontrol Listesi
+
+### Ticker Tape
+- [ ] 60+ sn sonra ticker sicramiyor/sifirlanmiyor
+- [ ] Fiyat guncellendikten sonra animasyon kesintisiz devam ediyor
+- [ ] Mobil, tablet, desktop hizi tutarli (px/sn sabiti)
+- [ ] Window resize'da animasyon resetlenmiyor
+- [ ] Hover'da animasyon duruyor, birakinca devam ediyor
+
+### Buton Yerlesimi
+- [ ] Desktop: iki buton yan yana, sag hizali
+- [ ] Mobil: ust uste, tam genislik
+
+### Nakit Yonetimi
+- [ ] Para ekleme basariyla kaydediliyor
+- [ ] Para cikarma: yetersiz bakiye sunucu hatasi doner
+- [ ] Kullanilabilir nakit dogru (deposit - withdraw - bloklanan + realized PnL)
+- [ ] Realized PnL nakit hesabina dahil ediliyor
+- [ ] Kar edilen islem sonrasi kullanilabilir nakit artiyor
+- [ ] Gecmis islemler silinemez
+- [ ] Iki sekme ayni anda islem -> ikincisi reddediliyor
+- [ ] Legacy aktif islem (lot=0, position_amount>0) blokaji position_amount olarak hesaplaniyor
+- [ ] Legacy islem varken yeni islem acmak nakdi dogru dusuruyor
+
+### Islem Formu Validasyonu
+- [ ] AL: target <= entry hata, stop >= entry hata
+- [ ] SAT: target >= entry hata, stop <= entry hata
+- [ ] Hata varken Kaydet disabled
+- [ ] RR hesabi AL ve SAT icin dogru
+
+### Lot Mantigi
+- [ ] Lot alani tam sayi kabul ediyor, ondalik reddediliyor
+- [ ] Islem tutari = entry * lot otomatik gosteriliyor
+- [ ] Yetersiz nakit: sunucu hatasi + frontend uyarisi
+- [ ] Eski kayitlar lot_quantity=0 ile gorunuyor, hata vermiyor
+- [ ] Eski kapali kayitlarin PnL'i fallback ile dogru hesaplaniyor (0'a dusmuyor)
+- [ ] Eski aktif kayitlarda "lot bilgisi eksik" uyarisi gorunuyor
+- [ ] Kullanici eski kayitlari EditTradeModal'dan duzeltebiliyor
+
+### Kismi Cikis
+- [ ] "Tum Lotlar" butonu kalan lotu dolduruyor
+- [ ] Kismi cikis: islem active, remaining_lot azaliyor
+- [ ] Tam cikis: islem closed, exit_price = son parca fiyati
+- [ ] Birden fazla kismi cikis yapilabiliyor
+- [ ] Kismi cikis sonrasi serbest nakit artiyor (blokaj azaliyor + realized PnL ekleniyor)
+- [ ] PnL raporlara dogru yansiyor
+- [ ] Kismi kapanisi olan islemde lot duzenleme KILITLI
+- [ ] Kismi kapanisi olmayan aktif islemde lot duzenlenince remaining_lot esitleniyor
+
+### Kapali Portfoy UX
+- [ ] Duzenleme: "Islem Sebepleri" gorunmuyor
+- [ ] Notlar ikonu -> tam dialog (popover degil)
+- [ ] Uzun notlar scroll ile okunuyor
+- [ ] Desktop + mobil dialog duzgun
 
