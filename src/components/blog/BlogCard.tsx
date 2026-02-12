@@ -12,22 +12,24 @@ export function BlogCard({ post }: BlogCardProps) {
   return (
     <article className="group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1 border border-gray-100">
       {/* Cover Image */}
-      <Link to={`/blog/${post.slug}`}>
-        <div className="aspect-video overflow-hidden bg-gray-100">
-          {post.cover_image_url ? (
+      {post.cover_image_url ? (
+        <Link to={`/blog/${post.slug}`}>
+          <div className="aspect-video overflow-hidden bg-gray-100">
             <img
               src={post.cover_image_url}
               alt={post.title}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               loading="lazy"
             />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-300">
-              <span className="text-4xl">📝</span>
-            </div>
-          )}
-        </div>
-      </Link>
+          </div>
+        </Link>
+      ) : (
+        <Link to={`/blog/${post.slug}`}>
+          <div className="h-24 overflow-hidden bg-gray-50 flex items-center justify-center text-gray-300">
+            <span className="text-3xl">📝</span>
+          </div>
+        </Link>
+      )}
 
       {/* Share button */}
       <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
