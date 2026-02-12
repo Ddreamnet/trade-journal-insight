@@ -498,3 +498,9 @@
   margin-bottom: 0.5rem;
 }
 
+/* Ticker Tape Animation - Global scope (outside @layer to avoid Tailwind tree-shaking) */
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
