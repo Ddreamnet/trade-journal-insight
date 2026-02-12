@@ -129,6 +129,7 @@
     animation-name: ticker;
     animation-timing-function: linear;
     animation-iteration-count: infinite;
+    will-change: transform;
   }
 
   .ticker-tape:hover {
