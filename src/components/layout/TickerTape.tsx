@@ -43,7 +43,14 @@ export const TickerTape = React.memo(function TickerTape() {
         <div
           ref={tickerRef}
           className="ticker-tape flex items-center py-2 whitespace-nowrap"
-          style={{ animationDuration: duration ? `${duration}s` : stocks.length > 0 ? '60s' : '0s' }}
+          style={{
+            animation: duration
+              ? `ticker ${duration}s linear infinite`
+              : stocks.length > 0
+                ? 'ticker 60s linear infinite'
+                : 'none',
+            willChange: 'transform',
+          }}
         >
           {displayStocks.map((stock, index) => (
             <div
