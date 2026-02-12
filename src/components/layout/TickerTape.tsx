@@ -18,13 +18,18 @@ export const TickerTape = React.memo(function TickerTape() {
     if (durationRef.current !== null) return;
     if (!tickerRef.current || stocks.length === 0) return;
 
-    const scrollWidth = tickerRef.current.scrollWidth;
-    if (scrollWidth > 0) {
-      const halfWidth = scrollWidth / 2;
-      const calculatedDuration = halfWidth / SPEED;
-      durationRef.current = calculatedDuration;
-      setDuration(calculatedDuration);
-    }
+    const rafId = requestAnimationFrame(() => {
+      if (!tickerRef.current) return;
+      const scrollWidth = tickerRef.current.scrollWidth;
+      if (scrollWidth > 0) {
+        const halfWidth = scrollWidth / 2;
+        const calculatedDuration = halfWidth / SPEED;
+        durationRef.current = calculatedDuration;
+        setDuration(calculatedDuration);
+      }
+    });
+
+    return () => cancelAnimationFrame(rafId);
   }, [stocks]);
 
   return (
@@ -38,7 +43,7 @@ export const TickerTape = React.memo(function TickerTape() {
         <div
           ref={tickerRef}
           className="ticker-tape flex items-center py-2 whitespace-nowrap"
-          style={duration ? { animationDuration: `${duration}s` } : { animationDuration: '15s' }}
+          style={{ animationDuration: duration ? `${duration}s` : stocks.length > 0 ? '60s' : '0s' }}
         >
           {displayStocks.map((stock, index) => (
             <div
