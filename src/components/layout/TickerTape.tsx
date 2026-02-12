@@ -8,24 +8,25 @@ const SPEED = 50; // px/s
 export const TickerTape = React.memo(function TickerTape() {
   const { stocks } = useMarketData();
   const tickerRef = useRef<HTMLDivElement>(null);
-  const durationRef = useRef<number | null>(null);
+  const measuredRef = useRef(false);
+  const [halfWidth, setHalfWidth] = useState<number | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
 
   const displayStocks = useMemo(() => [...stocks, ...stocks], [stocks]);
 
-  // Calculate duration only once on first data load
+  // Measure scrollWidth once on first data load and calculate animation params
   useEffect(() => {
-    if (durationRef.current !== null) return;
+    if (measuredRef.current) return;
     if (!tickerRef.current || stocks.length === 0) return;
 
     const rafId = requestAnimationFrame(() => {
       if (!tickerRef.current) return;
-      const scrollWidth = tickerRef.current.scrollWidth;
-      if (scrollWidth > 0) {
-        const halfWidth = scrollWidth / 2;
-        const calculatedDuration = halfWidth / SPEED;
-        durationRef.current = calculatedDuration;
-        setDuration(calculatedDuration);
+      const sw = tickerRef.current.scrollWidth;
+      if (sw > 0) {
+        const half = sw / 2;
+        measuredRef.current = true;
+        setHalfWidth(half);
+        setDuration(half / SPEED);
       }
     });
 
@@ -34,21 +35,26 @@ export const TickerTape = React.memo(function TickerTape() {
 
   return (
     <div className="w-full bg-background-secondary border-b border-border overflow-hidden">
+      {/* Inject keyframes directly — immune to CSS build pipeline */}
+      <style>{`
+        @keyframes ticker-scroll {
+          from { transform: translateX(0); }
+          to { transform: translateX(var(--ticker-offset, -2000px)); }
+        }
+      `}</style>
+
       <div className="relative">
         {/* Gradient fades */}
         <div className="absolute left-0 top-0 bottom-0 w-16 gradient-fade-left z-10 pointer-events-none" />
         <div className="absolute right-0 top-0 bottom-0 w-16 gradient-fade-right z-10 pointer-events-none" />
-        
+
         {/* Ticker content */}
         <div
           ref={tickerRef}
           className="ticker-tape flex items-center py-2 whitespace-nowrap"
           style={{
-            animation: duration
-              ? `ticker ${duration}s linear infinite`
-              : stocks.length > 0
-                ? 'ticker 60s linear infinite'
-                : 'none',
+            ['--ticker-offset' as string]: halfWidth ? `-${halfWidth}px` : '-2000px',
+            animationDuration: duration ? `${duration}s` : '60s',
             willChange: 'transform',
           }}
         >
