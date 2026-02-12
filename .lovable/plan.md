@@ -1,72 +1,72 @@
 
 
-# Plan: Ticker Tape Animasyonunu Duzelt
+# Plan: Ticker Tape Animasyonunu Kesin Duzelt
 
 ## Sorun Analizi
 
-Ticker tape animasyonu calismama nedeni: `useEffect` ile `scrollWidth` olcumu, DOM henuz tam olarak layout'u tamamlamadan yapiliyor olabilir. Ayrica `durationRef` ile duration sadece bir kez hesaplaniyor — eger ilk olcum basarisiz olursa (scrollWidth = 0), animasyon bir daha duzgun baslayamaz.
+Mevcut yaklasimda animasyon iki farkli kaynaktan yonetiliyor:
+- CSS dosyasinda (`index.css`): `@keyframes ticker`, `animation-name`, `animation-timing-function`, `animation-iteration-count`
+- React inline style'da: `animationDuration`
 
-Ek olarak, stocks cache'den yuklendiginde `useState` initializer'da set edilir ve `useEffect([stocks])` sadece bir kez tetiklenir. Eger o anda DOM hazir degilse, scrollWidth 0 olur ve animasyon hic baslamaz.
+Bu karisik yaklasim, Vite/PostCSS/Tailwind'in CSS dosyasini islerken `@keyframes ticker` tanimini duzgun cozememe riskini tasiyor. Ayrica CSS `@layer` disinda tanimlanan kurallar, Tailwind'in urettigi CSS ile etkilesime girebiliyor.
 
 ## Cozum
 
-`TickerTape.tsx` dosyasinda su degisiklikler yapilacak:
-
-### 1. requestAnimationFrame ile Olcum Zamanlama
-
-`useEffect` icinde `requestAnimationFrame` kullanarak DOM'un layout'u tamamlamasini bekle. Bu, `scrollWidth`'in dogru olculmesini garanti eder.
-
-### 2. durationRef Kilidini Kaldir
-
-Eger `scrollWidth` 0 donerse, `durationRef`'i set etme — bir sonraki render'da tekrar dene. Boylece cache'den yuklenen bos bir state'te takilma olmaz.
-
-### 3. Fallback duration'i Iyilestir
-
-`duration` null oldugunda animasyon `15s` ile calisiyor ama icerik yokken bu anlamsiz. Stocks bos iken animasyonu tamamen devre disi birak (`animationDuration: '0s'` veya animation yok).
-
-### 4. will-change Ekleme
-
-Performans icin ticker-tape'e CSS'te `will-change: transform` ekle. Mobilde GPU hizlandirmasi saglayarak akici animasyon elde edilir.
-
-## Teknik Detay
-
-### TickerTape.tsx Degisiklikleri
-
-```text
-useEffect:
-  - stocks.length === 0 ise return (bos veriyle olcum yapma)
-  - durationRef.current !== null ise return (zaten hesaplandi)
-  - requestAnimationFrame icinde scrollWidth olc
-  - scrollWidth > 0 ise duration hesapla ve set et
-  - scrollWidth === 0 ise bir sey yapma (bir sonraki render'da tekrar dener)
-
-style:
-  - duration varsa: { animationDuration: `${duration}s` }
-  - duration yoksa VE stocks varsa: { animationDuration: '60s' } (makul fallback)
-  - stocks yoksa: animasyon yok
-```
-
-### index.css Degisiklikleri
-
-```css
-.ticker-tape {
-  animation-name: ticker;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-  will-change: transform;  /* GPU hizlandirma */
-}
-```
+Animasyonu tamamen React bileseninin icinde inline style olarak tanimla. CSS dosyasindan ticker animasyon kurallarini kaldir. Boylece hicbir CSS islemcisine bagimlilik kalmaz.
 
 ## Degisecek Dosyalar
 
-| Dosya | Degisiklik |
-|-------|-----------|
-| `src/components/layout/TickerTape.tsx` | useEffect icinde rAF, fallback iyilestirme |
-| `src/index.css` | will-change: transform ekleme |
+### 1. `src/components/layout/TickerTape.tsx`
 
-## Mobil Uyumluluk
+- `@keyframes ticker` icin CSS'e bagimlilik tamamen kaldirilacak
+- `className` icinden `ticker-tape` sinifi kaldirilacak (veya sadece hover icin birakilacak)
+- Tum animasyon ozellikleri inline `style` uzerinden ayarlanacak:
+  - `animation`: `ticker ${duration}s linear infinite`
+- Hover ile durdurma icin CSS class korunacak (sadece `animation-play-state: paused`)
 
-- `will-change: transform` mobilde GPU compositing saglar, animasyon akici olur
-- `translateX(-50%)` yuzde bazli oldugu icin her ekran boyutunda dogru calisir
-- Mevcut `overflow-hidden` ve gradient fade'ler korunur
+### 2. `src/index.css`
+
+- Dosyanin altindaki `@keyframes ticker` ve `.ticker-tape` animasyon kurallari silinecek
+- `@keyframes ticker` tanimini global scope'ta birakarak yalnizca keyframes tanimlayacagiz (React inline style `animation` shorthand icinde referans edecek)
+
+Aslinda daha iyi yaklasim: keyframes'i de component icinde `useEffect` ile `<style>` olarak enjekte etmek veya Tailwind config'e tanimlamak.
+
+En temiz cozum: **Tailwind config'e `ticker` keyframes tanimla**, boylece Tailwind'in kendi build pipeline'i icinde kalir ve inline style sadece `animation` shorthand'ini kullanir.
+
+### Detayli Degisiklikler
+
+**tailwind.config.ts:**
+- `keyframes` altina `ticker` ekle:
+  ```
+  ticker: {
+    "0%": { transform: "translateX(0)" },
+    "100%": { transform: "translateX(-50%)" }
+  }
+  ```
+- `animation` altina `ticker` eklemeye gerek yok (duration dinamik oldugu icin inline style kullanilacak)
+
+**src/components/layout/TickerTape.tsx:**
+- `className`'den `ticker-tape` kaldirilip, sadece hover-pause icin CSS class birakilacak
+- Inline style'a tam animasyon shorthand eklenecek:
+  ```
+  style={{
+    animation: duration
+      ? `ticker ${duration}s linear infinite`
+      : stocks.length > 0
+        ? `ticker 60s linear infinite`
+        : 'none'
+  }}
+  ```
+- `will-change: 'transform'` inline style'a eklenecek
+
+**src/index.css:**
+- Dosyanin altindaki `@keyframes ticker` ve `.ticker-tape` bloklari silinecek
+- `@layer components` icindeki `.ticker-tape:hover` kurali `ticker-tape` sinif adi korunarak birakilacak
+
+### Neden Bu Yaklasim?
+
+1. Tailwind config icindeki keyframes, Tailwind'in build pipeline'inda dogru sekilde islenir
+2. Inline `animation` shorthand, CSS cascade/layer sorunlarindan etkilenmez
+3. `will-change: transform` GPU hizlandirmayi saglar (mobil dahil)
+4. Hover ile durdurma CSS class ile calisir (`animation-play-state: paused`)
 
