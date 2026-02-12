@@ -1,92 +1,72 @@
 
 
-# Plan: Her Grafige Kendi Benchmark Secicisini Ekle
+# Plan: Ticker Tape Animasyonunu Duzelt
 
-## Mevcut Durum
+## Sorun Analizi
 
-Su an tek bir `BenchmarkSelector` sayfanin en altinda duruyor ve her iki grafik (Cizgi + Sutun) ayni `selectedBenchmarks` state'ini paylasiyor. Kullanici bir benchmark sectigi zaman hem 1. hem 2. grafik ayni anda degisiyor.
+Ticker tape animasyonu calismama nedeni: `useEffect` ile `scrollWidth` olcumu, DOM henuz tam olarak layout'u tamamlamadan yapiliyor olabilir. Ayrica `durationRef` ile duration sadece bir kez hesaplaniyor — eger ilk olcum basarisiz olursa (scrollWidth = 0), animasyon bir daha duzgun baslayamaz.
 
-## Hedef
+Ek olarak, stocks cache'den yuklendiginde `useState` initializer'da set edilir ve `useEffect([stocks])` sadece bir kez tetiklenir. Eger o anda DOM hazir degilse, scrollWidth 0 olur ve animasyon hic baslamaz.
 
-- Her grafik kendi icerisinde, kartla bitisik sekilde kendi benchmark secicisine sahip olacak.
-- 1. Grafik (% Cizgi Grafigi): Benchmark secici VAR, Portfoy butonu YOK.
-- 2. Grafik (% Sutun Grafigi): Benchmark secici VAR, Portfoy butonu VAR.
-- 3. Grafik (Portfoy Degeri): Zaten kendi kur secicisi var, degismeyecek.
-- Sayfanin altindaki ortak BenchmarkSelector tamamen kaldirilacak.
+## Cozum
 
-## Degisiklikler
+`TickerTape.tsx` dosyasinda su degisiklikler yapilacak:
 
-### 1. Reports.tsx
+### 1. requestAnimationFrame ile Olcum Zamanlama
 
-- `selectedBenchmarks` state'ini ikiye bol:
-  - `lineChartBenchmarks` (1. grafik icin)
-  - `barChartBenchmarks` (2. grafik icin)
-- Her biri icin ayri `toggleBenchmark` fonksiyonu olustur.
-- `portfolioSelected` state'i sadece 2. grafik icin kalacak (aynen).
-- **Sayfanin altindaki ortak BenchmarkSelector kartini tamamen kaldir.**
+`useEffect` icinde `requestAnimationFrame` kullanarak DOM'un layout'u tamamlamasini bekle. Bu, `scrollWidth`'in dogru olculmesini garanti eder.
 
-#### 1. Grafik karti icerisine:
-- Grafik altina `BenchmarkSelector` ekle.
-- `onPortfolioToggle` prop'u gonderilmeyecek (Portfoy butonu gorunmeyecek).
-- Bilgi mesaji: "Piyasa verileri Stooq ve TCMB EVDS'den cekilmektedir..."
+### 2. durationRef Kilidini Kaldir
 
-#### 2. Grafik karti icerisine:
-- `ReturnComparisonChart`'in icine veya hemen altina (ayni kart icerisinde) `BenchmarkSelector` ekle.
-- `onPortfolioToggle` prop'u gonderilecek (Portfoy butonu gorunecek).
-- Bilgi mesaji ayni.
+Eger `scrollWidth` 0 donerse, `durationRef`'i set etme — bir sonraki render'da tekrar dene. Boylece cache'den yuklenen bos bir state'te takilma olmaz.
 
-### 2. Diger Dosyalar
+### 3. Fallback duration'i Iyilestir
 
-Hicbir degisiklik yok. `BenchmarkSelector`, `EquityCurveChart`, `ReturnComparisonChart`, `PortfolioValueChart` komponentleri degismiyor. Tek degisen Reports.tsx'teki layout ve state yonetimi.
+`duration` null oldugunda animasyon `15s` ile calisiyor ama icerik yokken bu anlamsiz. Stocks bos iken animasyonu tamamen devre disi birak (`animationDuration: '0s'` veya animation yok).
 
----
+### 4. will-change Ekleme
+
+Performans icin ticker-tape'e CSS'te `will-change: transform` ekle. Mobilde GPU hizlandirmasi saglayarak akici animasyon elde edilir.
 
 ## Teknik Detay
 
-```text
-Reports.tsx state degisikligi:
-
-ONCE:
-  selectedBenchmarks        -> hem Chart1 hem Chart2
-  toggleBenchmark            -> tek fonksiyon
-
-SONRA:
-  lineChartBenchmarks       -> sadece Chart1
-  barChartBenchmarks        -> sadece Chart2
-  toggleLineChartBenchmark  -> Chart1 icin
-  toggleBarChartBenchmark   -> Chart2 icin
-```
-
-### Layout Yapisi (sonrasi)
+### TickerTape.tsx Degisiklikleri
 
 ```text
-[Stats Kartlari]
+useEffect:
+  - stocks.length === 0 ise return (bos veriyle olcum yapma)
+  - durationRef.current !== null ise return (zaten hesaplandi)
+  - requestAnimationFrame icinde scrollWidth olc
+  - scrollWidth > 0 ise duration hesapla ve set et
+  - scrollWidth === 0 ise bir sey yapma (bir sonraki render'da tekrar dener)
 
-[Kart: % Cizgi Grafigi]
-  - Baslik + TimeRangeSelector
-  - EquityCurveChart
-  - BenchmarkSelector (Portfoy butonu YOK)
-  - Bilgi mesaji
-
-[Kart: % Sutun Grafigi]
-  - ReturnComparisonChart (icinde grafik)
-  - BenchmarkSelector (Portfoy butonu VAR)
-  - Bilgi mesaji
-
-[Kart: Portfoy Degeri]
-  - Kur secici (mevcut, degismez)
-  - PortfolioValueChart
+style:
+  - duration varsa: { animationDuration: `${duration}s` }
+  - duration yoksa VE stocks varsa: { animationDuration: '60s' } (makul fallback)
+  - stocks yoksa: animasyon yok
 ```
 
----
+### index.css Degisiklikleri
 
-## Uygulama
+```css
+.ticker-tape {
+  animation-name: ticker;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;  /* GPU hizlandirma */
+}
+```
 
-Sadece `src/pages/Reports.tsx` dosyasi guncellenecek:
+## Degisecek Dosyalar
 
-1. State'leri ikiye bol
-2. Toggle fonksiyonlarini ikiye bol
-3. Chart 1 kartinin icine BenchmarkSelector ekle (portfolioToggle yok)
-4. Chart 2 kartinin altina (ayni kart icinde) BenchmarkSelector ekle (portfolioToggle var)
-5. Sayfanin altindaki ortak BenchmarkSelector kartini sil
+| Dosya | Degisiklik |
+|-------|-----------|
+| `src/components/layout/TickerTape.tsx` | useEffect icinde rAF, fallback iyilestirme |
+| `src/index.css` | will-change: transform ekleme |
+
+## Mobil Uyumluluk
+
+- `will-change: transform` mobilde GPU compositing saglar, animasyon akici olur
+- `translateX(-50%)` yuzde bazli oldugu icin her ekran boyutunda dogru calisir
+- Mevcut `overflow-hidden` ve gradient fade'ler korunur
 
