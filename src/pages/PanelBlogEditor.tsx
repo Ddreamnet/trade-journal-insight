@@ -82,15 +82,13 @@ export default function PanelBlogEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, content, tags, coverImageUrl, postId]);
 
-  const parseTags = (): string[] => {
-    return tags
+  const handleSave = useCallback(async (isAutoSave = false) => {
+    if (!title || isSaving) return;
+
+    const parsedTags = tags
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean);
-  };
-
-  const handleSave = useCallback(async (isAutoSave = false) => {
-    if (!title || isSaving) return;
 
     setIsSaving(true);
     try {
@@ -100,7 +98,7 @@ export default function PanelBlogEditor() {
         excerpt: generateExcerpt(content),
         cover_image_url: coverImageUrl,
         content,
-        tags: parseTags(),
+        tags: parsedTags,
         reading_time_minutes: readingTime,
       };
 
@@ -135,13 +133,18 @@ export default function PanelBlogEditor() {
 
     setIsSaving(true);
     try {
+      const parsedTags = tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+
       const postData = {
         title,
         slug: slug || generateSlug(title),
         excerpt: generateExcerpt(content),
         cover_image_url: coverImageUrl,
         content,
-        tags: parseTags(),
+        tags: parsedTags,
         reading_time_minutes: readingTime,
         status: 'published',
         published_at: new Date().toISOString(),
