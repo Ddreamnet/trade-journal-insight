@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import logo from '@/assets/logo.png';
 
 interface BlogHeaderProps {
   showBack?: boolean;
@@ -21,8 +22,9 @@ export function BlogHeader({ showBack = false }: BlogHeaderProps) {
               </Link>
             )}
             {!showBack && (
-              <Link to="/blog" className="text-xl font-bold text-gray-900">
-                Trade Günlüğü <span className="text-blue-600">Blog</span>
+              <Link to="/blog" className="flex items-center gap-2">
+                <img src={logo} alt="Trade Günlüğü" className="h-10 w-auto" />
+                <span className="text-xl font-bold text-gray-900">Blog</span>
               </Link>
             )}
           </div>
