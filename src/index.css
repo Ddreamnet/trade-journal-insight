@@ -498,19 +498,3 @@
   margin-bottom: 0.5rem;
 }
 
-/* Ticker Tape Animation - must be outside @layer for proper keyframe resolution */
-@keyframes ticker {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-.ticker-tape {
-  animation-name: ticker;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-  will-change: transform;
-}
