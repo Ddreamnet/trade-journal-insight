@@ -1,74 +1,63 @@
 
 
-# Kismi Kapanislari "Kapali Portfoyler" Sekmesinde Gosterme
+# Sebepler Gorunumu, Lot Sutunu ve Entry/Target Turkcelestirme
 
-## Sorun
+## 1. Sebepler Sutunu - Alt Alta Gosterim (Masaustu)
 
-Su an "Kapali Portfoyler" sekmesi sadece `trades` tablosundaki `status = 'closed'` kayitlari gosteriyor. Bir hissenin sadece bir kisminin kapatildigi durumlarda (ornegin 100 lotun 50'si satildiysa), trade hala `active` statusunde kalir ve kapali portfoyde hicbir sey gorunmez. Kullanici her kismi kapanisi ayri bir kart/satir olarak gormek istiyor.
+Su an sebepler "..." ile kisaltilip tooltip ile gosteriliyor. Bunun yerine her sebep ayri satir olarak gorunecek, kart/satir boyu asagi dogru uzayabilecek.
 
-## Cozum
+**Degisiklik yerleri:**
 
-`trade_partial_closes` tablosundan verileri cekip, her bir kismi kapanis kaydini parent trade bilgileriyle birlestirerek "Kapali Portfoyler" sekmesinde gostermek.
+### `src/components/trade/TradeList.tsx`
 
-## Teknik Degisiklikler
+**Aktif portfoy masaustu tablosu (DesktopTable, satir ~284-298):**
+- Tooltip + `line-clamp-2` yapisi kaldirilacak
+- Yerine `getReasonLabels` fonksiyonu virgullu string yerine sebep dizisi dondurecek (yeni helper: `getReasonLabelsList`)
+- Her sebep `<div>` icinde alt alta listelenecek
 
-### 1. `src/hooks/useTrades.ts`
+**Kapali portfoy masaustu tablosu (ClosedEntriesDesktopTable, satir ~574-583):**
+- Ayni degisiklik: Tooltip kaldirilacak, sebepler alt alta listelenecek
 
-- `trade_partial_closes` tablosundan verileri ceken yeni bir query ekle
-- Her partial close kaydini parent trade bilgileriyle (stock_symbol, stock_name, trade_type, entry_price, target_price, stop_price, reasons, rr_ratio) eslestir
-- Yeni bir `ClosedTradeEntry` tipi tanimla:
+**Not:** Mobil kartlarda sebepler zaten sararak gorunuyor, orada da ayni degisiklik uygulanacak (satirlar ~504-506 ve ~665-667).
 
-```text
-ClosedTradeEntry {
-  id: string              // partial close id
-  trade_id: string        // parent trade id
-  stock_symbol: string
-  stock_name: string
-  trade_type: 'buy' | 'sell'
-  entry_price: number
-  target_price: number
-  stop_price: number
-  reasons: string[]
-  rr_ratio: number | null
-  exit_price: number
-  closing_type: string
-  stop_reason: string | null
-  closing_note: string | null
-  lot_quantity: number    // kapatilan lot miktari
-  realized_pnl: number | null
-  created_at: string      // kapanma tarihi
-}
+### Yeni helper fonksiyon:
 ```
+getReasonLabelsList(reasonIds: string[]): string[]
+```
+Mevcut `getReasonLabels` virgullu string donduruyor. Yeni fonksiyon dizi dondurecek, her eleman bir satir olacak.
 
-- `closedTradeEntries` adinda yeni bir dizi don (tarihe gore sirali)
-- Mevcut `closedTrades` (tam kapanis) yerine bu yeni listeyi kullan
+## 2. Lot Sutunu Eklenmesi
 
-### 2. `src/components/trade/TradeList.tsx`
+### Aktif portfoy masaustu tablosu (DesktopTable):
+- Tur ve Entry (Giris) sutunlari arasina "Lot" sutunu eklenecek
+- Deger: `trade.remaining_lot` (aktif hissede kalan lot)
+- Eger `trade.remaining_lot < trade.lot_quantity` ise, yani kismi kapanis yapilmissa, farkli renkte gosterilecek
 
-- `type === 'closed'` icin yeni `ClosedTradeEntry` tipini kabul et
-- Kapali trade listesi icin `Trade` yerine `ClosedTradeEntry` tipini kullan
-- Her satir/kart su bilgileri gosterir:
-  - Hisse sembol ve adi (parent trade'den)
-  - Alis/Satis turu
-  - Entry, Target, Stop fiyatlari (parent trade'den)
-  - Exit fiyati (partial close'dan)
-  - Lot miktari (kapatilan lot)
-  - Sonuc (Kar Al / Stop)
-  - Sebepler (parent trade'den)
-  - RR (parent trade'den)
-  - Not ve stop sebebi (partial close'dan)
-- Edit ve delete butonlari kapali kayitlarda gosterilmez (partial close kayitlari degistirilemez)
+### Kapali portfoy masaustu tablosu (ClosedEntriesDesktopTable):
+- Zaten Lot sutunu mevcut, degisiklik gerekmez
 
-### 3. `src/pages/Index.tsx`
+### Aktif portfoy mobil kartlari:
+- Fiyat grid'ine Lot bilgisi eklenecek
 
-- `closedTrades` yerine `closedTradeEntries` kullan
-- Tab badge sayisi `closedTradeEntries.length` olacak
+## 3. Entry -> Giris, Target -> Hedef Degisikligi
 
-## Degisecek Dosyalar
+Asagidaki dosyalardaki tum gorunen "Entry" ve "Target" etiketleri degisecek:
 
-| Dosya | Degisiklik |
-|-------|-----------|
-| `src/hooks/useTrades.ts` | `trade_partial_closes` query + `ClosedTradeEntry` tipi + parent trade eslestirme |
-| `src/components/trade/TradeList.tsx` | Kapali portfoy icin `ClosedTradeEntry` desteği, props guncellemesi |
-| `src/pages/Index.tsx` | `closedTradeEntries` kullanimi |
+| Dosya | Entry -> | Target -> |
+|-------|----------|-----------|
+| `TradeList.tsx` | Giris | Hedef |
+| `TradeForm.tsx` | Giris | Hedef |
+| `EditTradeModal.tsx` | Giris | Hedef |
+| `CloseTradeModal.tsx` | Giris | Hedef |
+
+**Not:** Sadece kullaniciya gorunen etiket metinleri degisecek. Degisken adlari (entryPrice, targetPrice vb.) ve veritabani alan adlari aynen kalacak.
+
+## Degisecek Dosyalar Ozeti
+
+| Dosya | Degisiklikler |
+|-------|--------------|
+| `src/components/trade/TradeList.tsx` | Sebepler alt alta, Lot sutunu ekleme, Entry->Giris, Target->Hedef |
+| `src/components/trade/TradeForm.tsx` | Entry->Giris, Target->Hedef (etiketler) |
+| `src/components/trade/EditTradeModal.tsx` | Entry->Giris, Target->Hedef (etiketler) |
+| `src/components/trade/CloseTradeModal.tsx` | Entry->Giris, Target->Hedef (etiketler) |
 
