@@ -89,6 +89,26 @@ export const STOP_REASONS: StopReasonOption[] = [
 
 export type ClosingType = 'kar_al' | 'stop';
 
+export interface ClosedTradeEntry {
+  id: string;
+  trade_id: string;
+  stock_symbol: string;
+  stock_name: string;
+  trade_type: 'buy' | 'sell';
+  entry_price: number;
+  target_price: number;
+  stop_price: number;
+  reasons: string[];
+  rr_ratio: number | null;
+  exit_price: number;
+  closing_type: string;
+  stop_reason: string | null;
+  closing_note: string | null;
+  lot_quantity: number;
+  realized_pnl: number | null;
+  created_at: string;
+}
+
 // Trade interface aligned with database schema
 export interface Trade {
   id: string;

@@ -17,7 +17,7 @@ export default function Index() {
   const [isCashFlowOpen, setIsCashFlowOpen] = useState(false);
   const [highlightedTradeId, setHighlightedTradeId] = useState<string | null>(null);
 
-  const { activeTrades, closedTrades, createTrade, closeTrade, updateTrade, deleteTrade, isLoading } = useTrades();
+  const { activeTrades, closedTradeEntries, createTrade, closeTrade, updateTrade, deleteTrade, isLoading } = useTrades();
 
   const handleStockSelect = (stock: Stock & { logoUrl?: string }) => {
     setSelectedStock(stock);
@@ -97,9 +97,9 @@ export default function Index() {
           </TabsTrigger>
           <TabsTrigger value="closed" className="gap-2">
             Kapalı Portföyler
-            {closedTrades.length > 0 && (
+            {closedTradeEntries.length > 0 && (
               <span className="bg-muted text-muted-foreground text-xs px-2 py-0.5 rounded-full">
-                {closedTrades.length}
+                {closedTradeEntries.length}
               </span>
             )}
           </TabsTrigger>
@@ -119,10 +119,8 @@ export default function Index() {
 
         <TabsContent value="closed" className="mt-0">
           <TradeList 
-            trades={closedTrades} 
+            closedEntries={closedTradeEntries}
             type="closed"
-            onUpdateTrade={handleUpdateTrade}
-            onDeleteTrade={handleDeleteTrade}
             isLoading={isLoading}
           />
         </TabsContent>
