@@ -1,63 +1,36 @@
 
 
-# Sebepler Gorunumu, Lot Sutunu ve Entry/Target Turkcelestirme
+# Kapanış Türünün Otomatik Belirlenmesi
 
-## 1. Sebepler Sutunu - Alt Alta Gosterim (Masaustu)
+## Değişiklik
 
-Su an sebepler "..." ile kisaltilip tooltip ile gosteriliyor. Bunun yerine her sebep ayri satir olarak gorunecek, kart/satir boyu asagi dogru uzayabilecek.
+Kullanıcının manuel olarak "Kâr Al" veya "Stop" seçmesi yerine, çıkış fiyatı girildiğinde sistem otomatik olarak belirleyecek:
 
-**Degisiklik yerleri:**
+- **ALIŞ işlemi:** Exit > Entry ise "Kâr Al", Exit < Entry ise "Stop", Exit = Entry ise "Stop"
+- **SATIŞ işlemi:** Exit < Entry ise "Kâr Al", Exit > Entry ise "Stop", Exit = Entry ise "Stop"
 
-### `src/components/trade/TradeList.tsx`
+## Teknik Değişiklikler - `src/components/trade/CloseTradeModal.tsx`
 
-**Aktif portfoy masaustu tablosu (DesktopTable, satir ~284-298):**
-- Tooltip + `line-clamp-2` yapisi kaldirilacak
-- Yerine `getReasonLabels` fonksiyonu virgullu string yerine sebep dizisi dondurecek (yeni helper: `getReasonLabelsList`)
-- Her sebep `<div>` icinde alt alta listelenecek
+### Kaldırılacaklar:
+- `closingType` state'i (`useState<ClosingType | null>(null)`) kaldırılacak
+- "Kapanış Türü" başlığı ve Kâr Al / Stop butonları (satır 226-256) kaldırılacak
 
-**Kapali portfoy masaustu tablosu (ClosedEntriesDesktopTable, satir ~574-583):**
-- Ayni degisiklik: Tooltip kaldirilacak, sebepler alt alta listelenecek
+### Eklenecekler:
+- `closingType` artık `useMemo` ile hesaplanacak: exit fiyatı girildiğinde trade_type'a göre otomatik belirlenir
+- Butonlar yerine, belirlenen sonucu gösteren bir bilgi kutusu (badge/label) gösterilecek ("Kâr Al" veya "Stop" yazısı, rengiyle birlikte)
 
-**Not:** Mobil kartlarda sebepler zaten sararak gorunuyor, orada da ayni degisiklik uygulanacak (satirlar ~504-506 ve ~665-667).
+### Güncellenecekler:
+- `isValid` kontrolünden `closingType !== null` yerine `closingType !== undefined` veya exit fiyatı kontrolü yapılacak
+- Stop seçildiğinde stop sebepleri bölümü otomatik açılacak (mevcut mantık korunacak)
+- `handleConfirm` fonksiyonu aynı kalacak, sadece closingType artık computed olacak
 
-### Yeni helper fonksiyon:
-```
-getReasonLabelsList(reasonIds: string[]): string[]
-```
-Mevcut `getReasonLabels` virgullu string donduruyor. Yeni fonksiyon dizi dondurecek, her eleman bir satir olacak.
+### Akış:
+1. Kullanıcı çıkış fiyatını girer
+2. Sistem otomatik olarak Kâr Al / Stop belirler ve ekranda gösterir
+3. Stop ise stop sebepleri listesi otomatik açılır
+4. Kullanıcı notu yazar ve onaylar
 
-## 2. Lot Sutunu Eklenmesi
-
-### Aktif portfoy masaustu tablosu (DesktopTable):
-- Tur ve Entry (Giris) sutunlari arasina "Lot" sutunu eklenecek
-- Deger: `trade.remaining_lot` (aktif hissede kalan lot)
-- Eger `trade.remaining_lot < trade.lot_quantity` ise, yani kismi kapanis yapilmissa, farkli renkte gosterilecek
-
-### Kapali portfoy masaustu tablosu (ClosedEntriesDesktopTable):
-- Zaten Lot sutunu mevcut, degisiklik gerekmez
-
-### Aktif portfoy mobil kartlari:
-- Fiyat grid'ine Lot bilgisi eklenecek
-
-## 3. Entry -> Giris, Target -> Hedef Degisikligi
-
-Asagidaki dosyalardaki tum gorunen "Entry" ve "Target" etiketleri degisecek:
-
-| Dosya | Entry -> | Target -> |
-|-------|----------|-----------|
-| `TradeList.tsx` | Giris | Hedef |
-| `TradeForm.tsx` | Giris | Hedef |
-| `EditTradeModal.tsx` | Giris | Hedef |
-| `CloseTradeModal.tsx` | Giris | Hedef |
-
-**Not:** Sadece kullaniciya gorunen etiket metinleri degisecek. Degisken adlari (entryPrice, targetPrice vb.) ve veritabani alan adlari aynen kalacak.
-
-## Degisecek Dosyalar Ozeti
-
-| Dosya | Degisiklikler |
-|-------|--------------|
-| `src/components/trade/TradeList.tsx` | Sebepler alt alta, Lot sutunu ekleme, Entry->Giris, Target->Hedef |
-| `src/components/trade/TradeForm.tsx` | Entry->Giris, Target->Hedef (etiketler) |
-| `src/components/trade/EditTradeModal.tsx` | Entry->Giris, Target->Hedef (etiketler) |
-| `src/components/trade/CloseTradeModal.tsx` | Entry->Giris, Target->Hedef (etiketler) |
+| Dosya | Değişiklik |
+|-------|-----------|
+| `src/components/trade/CloseTradeModal.tsx` | Manuel seçim butonlarını kaldır, useMemo ile otomatik closingType hesapla, sonucu bilgi kutusu olarak göster |
 
