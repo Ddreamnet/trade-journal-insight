@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, TrendingUp, CircleStop } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/ui/number-input';
@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 import { Trade, ClosingType, StopReason, STOP_REASONS } from '@/types/trade';
 import { cn } from '@/lib/utils';
 
@@ -19,12 +20,20 @@ interface CloseTradeModalProps {
 export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalProps) {
   const [exitPrice, setExitPrice] = useState('');
   const [lotQuantity, setLotQuantity] = useState(trade.remaining_lot.toString());
-  const [closingType, setClosingType] = useState<ClosingType | null>(null);
   const [stopReasons, setStopReasons] = useState<StopReason[]>([]);
   const [closingNote, setClosingNote] = useState('');
 
   const parsedExit = parseFloat(exitPrice);
   const parsedLot = parseInt(lotQuantity, 10);
+
+  const closingType: ClosingType | null = useMemo(() => {
+    if (isNaN(parsedExit) || parsedExit <= 0) return null;
+    if (trade.trade_type === 'buy') {
+      return parsedExit > trade.entry_price ? 'kar_al' : 'stop';
+    } else {
+      return parsedExit < trade.entry_price ? 'kar_al' : 'stop';
+    }
+  }, [parsedExit, trade.trade_type, trade.entry_price]);
 
   // Calculate signed progress percentage
   const progressPercent = useMemo(() => {
@@ -223,35 +232,17 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
               </div>
             )}
 
-            {/* Closing Type Selection */}
-            {progressPercent !== null && (
-              <div>
-                <label className="text-sm font-medium text-muted-foreground mb-3 block">
-                  Kapanış Türü
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    type="button"
-                    variant={closingType === 'kar_al' ? 'buy' : 'outline'}
-                    className="h-14 flex-col gap-1"
-                    onClick={() => {
-                      setClosingType('kar_al');
-                      setStopReasons([]);
-                    }}
-                  >
-                    <TrendingUp className="w-5 h-5" />
-                    <span>Kâr Al</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={closingType === 'stop' ? 'sell' : 'outline'}
-                    className="h-14 flex-col gap-1"
-                    onClick={() => setClosingType('stop')}
-                  >
-                    <CircleStop className="w-5 h-5" />
-                    <span>Stop</span>
-                  </Button>
-                </div>
+            {/* Auto-determined Closing Type Badge */}
+            {closingType && (
+              <div className="flex items-center justify-center">
+                <Badge className={cn(
+                  'text-sm px-4 py-1.5',
+                  closingType === 'kar_al'
+                    ? 'bg-profit/15 text-profit border-profit/30'
+                    : 'bg-loss/15 text-loss border-loss/30'
+                )}>
+                  {closingType === 'kar_al' ? 'Kâr Al' : 'Stop'}
+                </Badge>
               </div>
             )}
 
