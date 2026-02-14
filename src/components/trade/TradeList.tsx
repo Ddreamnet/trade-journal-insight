@@ -73,6 +73,10 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
       .join(', ');
   };
 
+  const getReasonLabelsList = (reasonIds: string[]) => {
+    return reasonIds.map((id) => TRADE_REASONS.find((r) => r.id === id)?.label || id);
+  };
+
   const getStopReasonLabels = (stopReasonIds: string | null) => {
     if (!stopReasonIds) return null;
     return stopReasonIds.split(',')
@@ -165,11 +169,12 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
           <TableRow className="border-border hover:bg-transparent">
             <TableHead className="text-muted-foreground font-medium">Hisse</TableHead>
             <TableHead className="text-muted-foreground font-medium text-center">Tür</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Entry</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">Lot</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">Giriş</TableHead>
             {type === 'active' && (
               <TableHead className="text-muted-foreground font-medium text-center">Anlık</TableHead>
             )}
-            <TableHead className="text-muted-foreground font-medium text-center">Target</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">Hedef</TableHead>
             <TableHead className="text-muted-foreground font-medium text-center">Stop</TableHead>
             <TableHead className="text-muted-foreground font-medium">Sebepler</TableHead>
             <TableHead className="text-muted-foreground font-medium text-center">RR</TableHead>
@@ -245,7 +250,17 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                   </span>
                 </TableCell>
 
-                {/* Entry */}
+                {/* Lot */}
+                <TableCell className="text-center">
+                  <span className={cn(
+                    'font-mono text-sm',
+                    trade.remaining_lot < trade.lot_quantity ? 'text-warning font-semibold' : 'text-foreground'
+                  )}>
+                    {trade.remaining_lot}
+                  </span>
+                </TableCell>
+
+                {/* Giriş */}
                 <TableCell className="text-center">
                   <span className="font-mono text-sm text-foreground">₺{trade.entry_price.toFixed(2)}</span>
                 </TableCell>
@@ -282,19 +297,12 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                 </TableCell>
 
                 {/* Sebepler */}
-                <TableCell className="max-w-[150px]">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="text-xs text-muted-foreground line-clamp-2 cursor-default">
-                          {getReasonLabels(trade.reasons)}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p>{getReasonLabels(trade.reasons)}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                <TableCell>
+                  <div className="space-y-0.5">
+                    {getReasonLabelsList(trade.reasons).map((label, i) => (
+                      <div key={i} className="text-xs text-muted-foreground">{label}</div>
+                    ))}
+                  </div>
                 </TableCell>
 
                 {/* RR */}
@@ -443,9 +451,9 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
             </div>
 
             {/* Row 2: Fiyatlar grid */}
-            <div className={cn('grid gap-2 mb-2', type === 'active' ? 'grid-cols-4' : 'grid-cols-3')}>
+            <div className={cn('grid gap-2 mb-2', type === 'active' ? 'grid-cols-5' : 'grid-cols-3')}>
               <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-                <div className="text-[10px] text-muted-foreground uppercase">Entry</div>
+                <div className="text-[10px] text-muted-foreground uppercase">Giriş</div>
                 <div className="font-mono text-xs text-foreground">₺{trade.entry_price.toFixed(2)}</div>
               </div>
               {type === 'active' && priceInfo && (
@@ -463,13 +471,24 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                 </div>
               )}
               <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-                <div className="text-[10px] text-muted-foreground uppercase">Target</div>
+                <div className="text-[10px] text-muted-foreground uppercase">Hedef</div>
                 <div className="font-mono text-xs text-foreground">₺{trade.target_price.toFixed(2)}</div>
               </div>
               <div className="text-center p-1.5 rounded-lg bg-secondary/50">
                 <div className="text-[10px] text-muted-foreground uppercase">Stop</div>
                 <div className="font-mono text-xs text-foreground">₺{trade.stop_price.toFixed(2)}</div>
               </div>
+              {type === 'active' && (
+                <div className="text-center p-1.5 rounded-lg bg-secondary/50">
+                  <div className="text-[10px] text-muted-foreground uppercase">Lot</div>
+                  <div className={cn(
+                    'font-mono text-xs',
+                    trade.remaining_lot < trade.lot_quantity ? 'text-warning font-semibold' : 'text-foreground'
+                  )}>
+                    {trade.remaining_lot}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Closed trade: Exit + Sonuç */}
@@ -502,7 +521,10 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
 
             {/* Row 3: Sebepler */}
             <div className="text-[10px] text-muted-foreground mb-2">
-              <span className="font-medium">Sebepler:</span> {getReasonLabels(trade.reasons)}
+              <span className="font-medium">Sebepler:</span>
+              {getReasonLabelsList(trade.reasons).map((label, i) => (
+                <div key={i} className="ml-1">{label}</div>
+              ))}
             </div>
 
             {/* Action button */}
@@ -531,8 +553,8 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
           <TableRow className="border-border hover:bg-transparent">
             <TableHead className="text-muted-foreground font-medium">Hisse</TableHead>
             <TableHead className="text-muted-foreground font-medium text-center">Tür</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Entry</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Target</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">Giriş</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">Hedef</TableHead>
             <TableHead className="text-muted-foreground font-medium text-center">Stop</TableHead>
             <TableHead className="text-muted-foreground font-medium text-center">Exit</TableHead>
             <TableHead className="text-muted-foreground font-medium text-center">Lot</TableHead>
@@ -571,15 +593,12 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                   {entry.closing_type === 'kar_al' ? 'Kâr Al' : 'Stop'}
                 </span>
               </TableCell>
-              <TableCell className="max-w-[150px]">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="text-xs text-muted-foreground line-clamp-2 cursor-default">{getReasonLabels(entry.reasons)}</span>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs"><p>{getReasonLabels(entry.reasons)}</p></TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+              <TableCell>
+                <div className="space-y-0.5">
+                  {getReasonLabelsList(entry.reasons).map((label, i) => (
+                    <div key={i} className="text-xs text-muted-foreground">{label}</div>
+                  ))}
+                </div>
               </TableCell>
               <TableCell className="text-center">
                 <span className={cn('font-mono text-sm font-semibold px-2 py-1 rounded-md', (entry.rr_ratio ?? 0) >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
@@ -630,11 +649,11 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
           {/* Row 2: Fiyatlar grid */}
           <div className="grid grid-cols-3 gap-2 mb-2">
             <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-              <div className="text-[10px] text-muted-foreground uppercase">Entry</div>
+              <div className="text-[10px] text-muted-foreground uppercase">Giriş</div>
               <div className="font-mono text-xs text-foreground">₺{entry.entry_price.toFixed(2)}</div>
             </div>
             <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-              <div className="text-[10px] text-muted-foreground uppercase">Target</div>
+              <div className="text-[10px] text-muted-foreground uppercase">Hedef</div>
               <div className="font-mono text-xs text-foreground">₺{entry.target_price.toFixed(2)}</div>
             </div>
             <div className="text-center p-1.5 rounded-lg bg-secondary/50">
@@ -663,7 +682,10 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
 
           {/* Sebepler */}
           <div className="text-[10px] text-muted-foreground">
-            <span className="font-medium">Sebepler:</span> {getReasonLabels(entry.reasons)}
+            <span className="font-medium">Sebepler:</span>
+            {getReasonLabelsList(entry.reasons).map((label, i) => (
+              <div key={i} className="ml-1">{label}</div>
+            ))}
           </div>
         </div>
       ))}

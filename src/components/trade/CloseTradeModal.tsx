@@ -119,13 +119,13 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
             {/* Trade Summary */}
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="p-3 rounded-lg bg-secondary">
-                <div className="text-xs text-muted-foreground mb-1">Entry</div>
+                <div className="text-xs text-muted-foreground mb-1">Giriş</div>
                 <div className="font-mono font-semibold text-foreground">
                   ₺{trade.entry_price.toFixed(2)}
                 </div>
               </div>
               <div className="p-3 rounded-lg bg-secondary">
-                <div className="text-xs text-muted-foreground mb-1">Target</div>
+                <div className="text-xs text-muted-foreground mb-1">Hedef</div>
                 <div className="font-mono font-semibold text-foreground">
                   ₺{trade.target_price.toFixed(2)}
                 </div>

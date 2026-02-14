@@ -244,7 +244,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                    Alış Fiyatı (Entry)
+                    Alış Fiyatı (Giriş)
                   </label>
                   <NumberInput
                     step="0.01"
@@ -260,7 +260,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                    Hedef Fiyatı (Target)
+                    Hedef Fiyatı (Hedef)
                   </label>
                   <NumberInput
                     step="0.01"

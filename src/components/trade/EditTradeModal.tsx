@@ -268,7 +268,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
               {/* Price Inputs */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Entry</label>
+                  <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Giriş</label>
                   <NumberInput
                     step="0.01"
                     min="0.01"
@@ -279,7 +279,7 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Target</label>
+                  <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Hedef</label>
                   <NumberInput
                     step="0.01"
                     min="0.01"
