@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { TrendingUp, TrendingDown, X, StickyNote, Pencil, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trade, TRADE_REASONS, STOP_REASONS, ClosingType } from '@/types/trade';
+import { Trade, ClosedTradeEntry, TRADE_REASONS, STOP_REASONS, ClosingType } from '@/types/trade';
 import { CloseTradeModal } from './CloseTradeModal';
 import { EditTradeModal, TradeUpdateData } from './EditTradeModal';
 import { useMarketData } from '@/contexts/MarketDataContext';
@@ -31,7 +31,8 @@ import {
 } from '@/components/ui/table';
 
 interface TradeListProps {
-  trades: Trade[];
+  trades?: Trade[];
+  closedEntries?: ClosedTradeEntry[];
   type: 'active' | 'closed';
   onCloseTrade?: (tradeId: string, exitPrice: number, closingType: ClosingType, lotQuantity: number, stopReason?: string, closingNote?: string) => void;
   onUpdateTrade?: (tradeId: string, data: TradeUpdateData) => void;
@@ -40,7 +41,7 @@ interface TradeListProps {
   isLoading?: boolean;
 }
 
-export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteTrade, highlightedTradeId, isLoading = false }: TradeListProps) {
+export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade, onUpdateTrade, onDeleteTrade, highlightedTradeId, isLoading = false }: TradeListProps) {
   const [closingTrade, setClosingTrade] = useState<Trade | null>(null);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const { getStockBySymbol } = useMarketData();
@@ -146,7 +147,9 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
     );
   }
 
-  if (trades.length === 0) {
+  const itemCount = type === 'closed' ? closedEntries.length : trades.length;
+
+  if (itemCount === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground rounded-xl bg-card border border-border">
         {type === 'active' ? 'Aktif işlem bulunmuyor' : 'Kapalı işlem bulunmuyor'}
@@ -520,10 +523,198 @@ export function TradeList({ trades, type, onCloseTrade, onUpdateTrade, onDeleteT
     </div>
   );
 
+  // Closed entries desktop table
+  const ClosedEntriesDesktopTable = () => (
+    <div className="hidden md:block rounded-xl bg-card border border-border overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow className="border-border hover:bg-transparent">
+            <TableHead className="text-muted-foreground font-medium">Hisse</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">Tür</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">Entry</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">Target</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">Stop</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">Exit</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">Lot</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">Sonuç</TableHead>
+            <TableHead className="text-muted-foreground font-medium">Sebepler</TableHead>
+            <TableHead className="text-muted-foreground font-medium text-center">RR</TableHead>
+            <TableHead className="text-muted-foreground font-medium w-10 px-1"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {closedEntries.map((entry) => (
+            <TableRow key={entry.id} className="border-border transition-all">
+              <TableCell className="py-3">
+                <div className="flex items-center gap-2">
+                  <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', entry.trade_type === 'buy' ? 'bg-profit/20' : 'bg-loss/20')}>
+                    {entry.trade_type === 'buy' ? <TrendingUp className="w-4 h-4 text-profit" /> : <TrendingDown className="w-4 h-4 text-loss" />}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-foreground text-sm">{entry.stock_symbol}</div>
+                    <div className="text-xs text-muted-foreground truncate max-w-[80px]">{entry.stock_name}</div>
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className={cn('text-xs font-medium px-2 py-1 rounded-full', entry.trade_type === 'buy' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
+                  {entry.trade_type === 'buy' ? 'ALIŞ' : 'SATIŞ'}
+                </span>
+              </TableCell>
+              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">₺{entry.entry_price.toFixed(2)}</span></TableCell>
+              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">₺{entry.target_price.toFixed(2)}</span></TableCell>
+              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">₺{entry.stop_price.toFixed(2)}</span></TableCell>
+              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">₺{entry.exit_price.toFixed(2)}</span></TableCell>
+              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{entry.lot_quantity}</span></TableCell>
+              <TableCell className="text-center">
+                <span className={cn('text-xs font-semibold px-2 py-1 rounded-full', entry.closing_type === 'kar_al' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
+                  {entry.closing_type === 'kar_al' ? 'Kâr Al' : 'Stop'}
+                </span>
+              </TableCell>
+              <TableCell className="max-w-[150px]">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-xs text-muted-foreground line-clamp-2 cursor-default">{getReasonLabels(entry.reasons)}</span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs"><p>{getReasonLabels(entry.reasons)}</p></TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className={cn('font-mono text-sm font-semibold px-2 py-1 rounded-md', (entry.rr_ratio ?? 0) >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
+                  {(entry.rr_ratio ?? 0).toFixed(2)}
+                </span>
+              </TableCell>
+              <TableCell className="py-1 pl-0 pr-2 w-10">
+                {(entry.closing_note || entry.stop_reason) && (
+                  <ClosedEntryNotesDialog entry={entry} />
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
+  // Closed entries mobile list
+  const ClosedEntriesMobileList = () => (
+    <div className="md:hidden space-y-2">
+      {closedEntries.map((entry) => (
+        <div key={entry.id} className="p-3 rounded-xl bg-card border border-border transition-all">
+          {/* Row 1: Hisse + Tür + RR + Note */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', entry.trade_type === 'buy' ? 'bg-profit/20' : 'bg-loss/20')}>
+                {entry.trade_type === 'buy' ? <TrendingUp className="w-4 h-4 text-profit" /> : <TrendingDown className="w-4 h-4 text-loss" />}
+              </div>
+              <div>
+                <div className="font-semibold text-foreground text-sm">{entry.stock_symbol}</div>
+                <div className="text-xs text-muted-foreground">{entry.stock_name}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={cn('text-xs font-medium px-2 py-1 rounded-full', entry.trade_type === 'buy' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
+                {entry.trade_type === 'buy' ? 'ALIŞ' : 'SATIŞ'}
+              </span>
+              <span className={cn('font-mono text-sm font-semibold px-2 py-1 rounded-md', (entry.rr_ratio ?? 0) >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
+                RR {(entry.rr_ratio ?? 0).toFixed(1)}
+              </span>
+              {(entry.closing_note || entry.stop_reason) && (
+                <ClosedEntryNotesDialog entry={entry} />
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Fiyatlar grid */}
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <div className="text-center p-1.5 rounded-lg bg-secondary/50">
+              <div className="text-[10px] text-muted-foreground uppercase">Entry</div>
+              <div className="font-mono text-xs text-foreground">₺{entry.entry_price.toFixed(2)}</div>
+            </div>
+            <div className="text-center p-1.5 rounded-lg bg-secondary/50">
+              <div className="text-[10px] text-muted-foreground uppercase">Target</div>
+              <div className="font-mono text-xs text-foreground">₺{entry.target_price.toFixed(2)}</div>
+            </div>
+            <div className="text-center p-1.5 rounded-lg bg-secondary/50">
+              <div className="text-[10px] text-muted-foreground uppercase">Stop</div>
+              <div className="font-mono text-xs text-foreground">₺{entry.stop_price.toFixed(2)}</div>
+            </div>
+          </div>
+
+          {/* Exit + Lot + Sonuç */}
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <div className="text-center p-1.5 rounded-lg bg-secondary/50">
+              <div className="text-[10px] text-muted-foreground uppercase">Exit</div>
+              <div className="font-mono text-xs text-foreground">₺{entry.exit_price.toFixed(2)}</div>
+            </div>
+            <div className="text-center p-1.5 rounded-lg bg-secondary/50">
+              <div className="text-[10px] text-muted-foreground uppercase">Lot</div>
+              <div className="font-mono text-xs text-foreground">{entry.lot_quantity}</div>
+            </div>
+            <div className={cn('text-center p-1.5 rounded-lg', entry.closing_type === 'kar_al' ? 'bg-profit/20' : 'bg-loss/20')}>
+              <div className="text-[10px] text-muted-foreground uppercase">Sonuç</div>
+              <span className={cn('text-xs font-semibold', entry.closing_type === 'kar_al' ? 'text-profit' : 'text-loss')}>
+                {entry.closing_type === 'kar_al' ? 'Kâr Al' : 'Stop'}
+              </span>
+            </div>
+          </div>
+
+          {/* Sebepler */}
+          <div className="text-[10px] text-muted-foreground">
+            <span className="font-medium">Sebepler:</span> {getReasonLabels(entry.reasons)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // Notes Dialog for closed entries
+  const ClosedEntryNotesDialog = ({ entry }: { entry: ClosedTradeEntry }) => (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button className="p-1 rounded hover:bg-secondary transition-colors" title="Notlar">
+          <StickyNote className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{entry.stock_symbol} - Notlar</DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="max-h-[300px]">
+          <div className="space-y-3">
+            {entry.stop_reason && (
+              <div>
+                <div className="text-xs text-muted-foreground mb-1 font-medium">Stop Sebebi</div>
+                <p className="text-sm text-foreground">{getStopReasonLabels(entry.stop_reason)}</p>
+              </div>
+            )}
+            {entry.closing_note && (
+              <div>
+                <div className="text-xs text-muted-foreground mb-1 font-medium">Not</div>
+                <p className="text-sm text-foreground whitespace-pre-wrap">{entry.closing_note}</p>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+
   return (
     <>
-      <DesktopTable />
-      <MobileList />
+      {type === 'closed' ? (
+        <>
+          <ClosedEntriesDesktopTable />
+          <ClosedEntriesMobileList />
+        </>
+      ) : (
+        <>
+          <DesktopTable />
+          <MobileList />
+        </>
+      )}
 
       {/* Close Trade Modal */}
       {closingTrade && (

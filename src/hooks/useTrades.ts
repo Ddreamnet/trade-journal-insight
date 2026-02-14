@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from '@/hooks/use-toast';
-import { ClosingType } from '@/types/trade';
+import { ClosingType, ClosedTradeEntry } from '@/types/trade';
 
 export interface TradeInsert {
   stock_symbol: string;
@@ -66,6 +66,22 @@ export function useTrades() {
 
       if (error) throw error;
       return data as TradeRow[];
+    },
+    enabled: !!user,
+  });
+
+  const { data: partialCloses = [], isLoading: isLoadingPartials } = useQuery({
+    queryKey: ['trade_partial_closes', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      const { data, error } = await supabase
+        .from('trade_partial_closes')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
     },
     enabled: !!user,
   });
@@ -146,6 +162,7 @@ export function useTrades() {
       queryClient.setQueryData(['trades', user?.id], (old: TradeRow[] = []) =>
         old.map((t) => (t.id === updatedTrade.id ? updatedTrade : t))
       );
+      queryClient.invalidateQueries({ queryKey: ['trade_partial_closes', user?.id] });
       
       const isClosed = updatedTrade.status === 'closed';
       const isKarAl = updatedTrade.closing_type === 'kar_al';
@@ -228,11 +245,36 @@ export function useTrades() {
   const activeTrades = trades.filter((t) => t.status === 'active');
   const closedTrades = trades.filter((t) => t.status === 'closed');
 
+  // Build closedTradeEntries from partial closes merged with parent trade info
+  const closedTradeEntries: ClosedTradeEntry[] = partialCloses.map((pc) => {
+    const parentTrade = trades.find((t) => t.id === pc.trade_id);
+    return {
+      id: pc.id,
+      trade_id: pc.trade_id,
+      stock_symbol: parentTrade?.stock_symbol ?? '',
+      stock_name: parentTrade?.stock_name ?? '',
+      trade_type: (parentTrade?.trade_type ?? 'buy') as 'buy' | 'sell',
+      entry_price: parentTrade?.entry_price ?? 0,
+      target_price: parentTrade?.target_price ?? 0,
+      stop_price: parentTrade?.stop_price ?? 0,
+      reasons: parentTrade?.reasons ?? [],
+      rr_ratio: parentTrade?.rr_ratio ?? null,
+      exit_price: pc.exit_price,
+      closing_type: pc.closing_type,
+      stop_reason: pc.stop_reason,
+      closing_note: pc.closing_note,
+      lot_quantity: pc.lot_quantity,
+      realized_pnl: pc.realized_pnl,
+      created_at: pc.created_at,
+    };
+  });
+
   return {
     trades,
     activeTrades,
     closedTrades,
-    isLoading,
+    closedTradeEntries,
+    isLoading: isLoading || isLoadingPartials,
     error,
     createTrade,
     closeTrade,
