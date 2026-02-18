@@ -4,6 +4,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { EquityCurveChart } from '@/components/reports/EquityCurveChart';
 import { ReturnComparisonChart } from '@/components/reports/ReturnComparisonChart';
 import { PortfolioValueChart } from '@/components/reports/PortfolioValueChart';
+import { AssetsChart } from '@/components/reports/AssetsChart';
 import { TimeRangeSelector } from '@/components/reports/TimeRangeSelector';
 import { BenchmarkSelector } from '@/components/reports/BenchmarkSelector';
 import { TimeRange, BENCHMARKS, Trade } from '@/types/trade';
@@ -254,6 +255,8 @@ export default function Reports() {
         cashFlows={cashFlows}
         partialCloses={partialCloses} />
 
+      {/* Chart 4: Varlıklarım */}
+      <AssetsChart />
 
     </MainLayout>);
 

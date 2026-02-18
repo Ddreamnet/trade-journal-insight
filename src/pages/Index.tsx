@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Wallet } from 'lucide-react';
+import { Plus, Wallet, ArrowRightLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -7,6 +7,7 @@ import { StockSelector } from '@/components/trade/StockSelector';
 import { TradeForm } from '@/components/trade/TradeForm';
 import { TradeList } from '@/components/trade/TradeList';
 import { CashFlowModal } from '@/components/trade/CashFlowModal';
+import { ExchangeModal } from '@/components/trade/ExchangeModal';
 import { Stock, ClosingType } from '@/types/trade';
 import { TradeUpdateData } from '@/components/trade/EditTradeModal';
 import { useTrades } from '@/hooks/useTrades';
@@ -15,6 +16,7 @@ export default function Index() {
   const [isStockSelectorOpen, setIsStockSelectorOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<(Stock & { logoUrl?: string }) | null>(null);
   const [isCashFlowOpen, setIsCashFlowOpen] = useState(false);
+  const [isExchangeOpen, setIsExchangeOpen] = useState(false);
   const [highlightedTradeId, setHighlightedTradeId] = useState<string | null>(null);
 
   const { activeTrades, closedTradeEntries, createTrade, closeTrade, updateTrade, deleteTrade, isLoading } = useTrades();
@@ -82,6 +84,15 @@ export default function Index() {
           <Wallet className="w-4 h-4" />
           Portföy Ekle/Çıkar
         </Button>
+        <Button
+          size="lg"
+          variant="outline"
+          className="w-full sm:w-auto gap-2"
+          onClick={() => setIsExchangeOpen(true)}
+        >
+          <ArrowRightLeft className="w-4 h-4" />
+          Çevirici
+        </Button>
       </div>
 
       {/* Trade Lists */}
@@ -146,6 +157,11 @@ export default function Index() {
       {/* Cash Flow Modal */}
       {isCashFlowOpen && (
         <CashFlowModal onClose={() => setIsCashFlowOpen(false)} />
+      )}
+
+      {/* Exchange Modal */}
+      {isExchangeOpen && (
+        <ExchangeModal onClose={() => setIsExchangeOpen(false)} />
       )}
     </MainLayout>
   );
