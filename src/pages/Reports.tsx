@@ -33,6 +33,7 @@ function getCutoffDate(timeRange: TimeRange): Date {
 
 export default function Reports() {
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('1m');
+  const [barChartTimeRange, setBarChartTimeRange] = useState<TimeRange>('1m');
   const [lineChartBenchmarks, setLineChartBenchmarks] = useState<string[]>([]);
   const [barChartBenchmarks, setBarChartBenchmarks] = useState<string[]>([]);
   const [portfolioSelected, setPortfolioSelected] = useState(true);
@@ -225,7 +226,8 @@ export default function Reports() {
 
       {/* Chart 2: % Sütun Grafiği */}
       <ReturnComparisonChart
-        timeRange={selectedTimeRange}
+        timeRange={barChartTimeRange}
+        onTimeRangeChange={setBarChartTimeRange}
         selectedBenchmarks={barChartBenchmarks}
         benchmarks={BENCHMARKS}
         closedTrades={closedTrades as Trade[]}
