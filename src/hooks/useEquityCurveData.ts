@@ -432,7 +432,7 @@ export function useEquityCurveData(
     return normalized;
   }, [rawPortfolioIndexMap, effectiveStart]);
 
-  // Benchmark data normalized from effectiveStart
+  // Benchmark data normalized from startDate (selected time range start)
   const benchmarkDataMaps = useMemo(() => {
     const result: Record<string, Map<string, number>> = {};
     if (!t0) return result;
@@ -441,12 +441,12 @@ export function useEquityCurveData(
       const seriesData = getSeriesData(benchmarkId as MarketAsset);
       if (seriesData?.points) {
         if (benchmarkId === 'inflation_tr') {
-          const monthlyMap = convertInflationToCompoundIndex(seriesData.points, effectiveStart);
-          result[benchmarkId] = inflationMonthlyToDailyWithCarryForward(monthlyMap, effectiveStart, endDate);
+          const monthlyMap = convertInflationToCompoundIndex(seriesData.points, startDate);
+          result[benchmarkId] = inflationMonthlyToDailyWithCarryForward(monthlyMap, startDate, endDate);
         } else {
           result[benchmarkId] = normalizeBenchmarkFromStartWithCarryForward(
             seriesData.points,
-            effectiveStart,
+            startDate,
             endDate
           );
         }
@@ -454,7 +454,7 @@ export function useEquityCurveData(
     });
 
     return result;
-  }, [selectedBenchmarks, getSeriesData, t0, effectiveStart, endDate]);
+  }, [selectedBenchmarks, getSeriesData, t0, startDate, endDate]);
 
   // Build view series from startDate to endDate
   const chartData = useMemo(() => {
@@ -476,7 +476,7 @@ export function useEquityCurveData(
 
       // Add benchmark values
       for (const [benchmarkId, dataMap] of Object.entries(benchmarkDataMaps)) {
-        const value = isBeforeEffective ? null : (dataMap.get(key) ?? null);
+        const value = dataMap.get(key) ?? null;
 
         switch (benchmarkId) {
           case 'gold':
