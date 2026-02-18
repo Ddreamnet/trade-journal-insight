@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { TimeRangeSelector } from '@/components/reports/TimeRangeSelector';
 import {
   BarChart,
   Bar,
@@ -19,6 +20,7 @@ import { cn } from '@/lib/utils';
 
 interface ReturnComparisonChartProps {
   timeRange: TimeRange;
+  onTimeRangeChange: (range: TimeRange) => void;
   selectedBenchmarks: string[];
   benchmarks: BenchmarkData[];
   closedTrades: Trade[];
@@ -193,6 +195,7 @@ portfolioSelected: boolean)
 
 export function ReturnComparisonChart({
   timeRange,
+  onTimeRangeChange,
   selectedBenchmarks,
   benchmarks,
   closedTrades,
@@ -226,33 +229,27 @@ export function ReturnComparisonChart({
   if (returnData.length < 1) {
     return (
       <div className="rounded-xl bg-card border border-border p-4 mb-6">
-        <h3 className="text-sm font-medium text-foreground mb-2">
-          % Sütun Grafiği
-        </h3>
-        
-
-
-
-
-
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
+          <h3 className="text-sm font-medium text-foreground">% Sütun Grafiği</h3>
+          <TimeRangeSelector selectedRange={timeRange} onSelect={onTimeRangeChange} />
+        </div>
         {children}
       </div>);
-
   }
 
   const hasNoData = returnData.every((d) => d.startValue === d.endValue);
   if (hasNoData) {
     return (
       <div className="rounded-xl bg-card border border-border p-4 mb-6">
-        <h3 className="text-sm font-medium text-foreground mb-2">
-          % Sütun Grafiği
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
+          <h3 className="text-sm font-medium text-foreground">% Sütun Grafiği</h3>
+          <TimeRangeSelector selectedRange={timeRange} onSelect={onTimeRangeChange} />
+        </div>
         <p className="text-sm text-muted-foreground">
           Bu aralık için yeterli veri bulunamadı.
         </p>
         {children}
       </div>);
-
   }
 
   const chartHeight = isMobile ? 180 : 220;
@@ -261,18 +258,16 @@ export function ReturnComparisonChart({
   return (
     <div className="rounded-xl bg-card border border-border p-4 mb-6">
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-        <CollapsibleTrigger className="w-full">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-foreground">
-              % Sütun Grafiği
-            </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
+          <CollapsibleTrigger className="flex items-center gap-2 group">
+            <h3 className="text-sm font-medium text-foreground">% Sütun Grafiği</h3>
             {isOpen ?
             <ChevronUp className="h-4 w-4 text-muted-foreground" /> :
-
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
             }
-          </div>
-        </CollapsibleTrigger>
+          </CollapsibleTrigger>
+          <TimeRangeSelector selectedRange={timeRange} onSelect={onTimeRangeChange} />
+        </div>
 
         {/* Collapsed view: Show chips */}
         {!isOpen &&
