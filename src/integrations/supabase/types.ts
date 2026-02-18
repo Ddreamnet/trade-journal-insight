@@ -293,6 +293,51 @@ export type Database = {
         }
         Relationships: []
       }
+      user_assets: {
+        Row: {
+          amount_usd: number
+          asset_type: string
+          category: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          note: string | null
+          quantity: number
+          quantity_unit: string
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_usd: number
+          asset_type: string
+          category: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          note?: string | null
+          quantity?: number
+          quantity_unit?: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_usd?: number
+          asset_type?: string
+          category?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          note?: string | null
+          quantity?: number
+          quantity_unit?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
