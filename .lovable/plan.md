@@ -1,66 +1,82 @@
 
-# Benchmark Normalizasyonunun Zaman Aralığı Başından Yapılması
+# Sütun Grafiğinde Eksik `allTrades` ve `stockPriceMap` Sorunu
 
-## Mevcut Durum
+## Sorun
 
-Şu an hem portföy çizgisi hem de benchmark'lar (Altın, USD, BIST100 vb.) aynı `effectiveStart` noktasından normalize ediliyor:
+`ReturnComparisonChart.tsx` içinde `useEquityCurveData` hook'u çağrılırken kritik parametreler eksik geçiliyor:
 
-```
-effectiveStart = max(t0, viewStartDate)
-```
-
-Bu şu anlama geliyor: t0 (ilk işlem tarihi) seçili zaman aralığının içine denk geliyorsa, benchmark'lar da o noktadan başlıyor — yani seçili aralığın gerçek başından değil.
-
-## İstenen Davranış
-
-Benchmark çizgileri (Altın, USD, EUR, BIST100, NASDAQ100, Enflasyon) her zaman seçili zaman aralığının tam başından (`startDate`) 100'den başlasın. Örneğin:
-
-- Seçili aralık: 3 Ay
-- 3 ay önceki Altın değeri = 100 kabul edilsin
-- Bugünkü Altın değeri = 112 → grafik 100'den 112'ye çizilsin
-
-Portföy çizgisi değişmez; mevcut `effectiveStart` mantığını korur.
-
-## Teknik Değişiklik
-
-**Tek dosya: `src/hooks/useEquityCurveData.ts`**
-
-`benchmarkDataMaps` useMemo'sunda normalizasyon başlangıç noktası `effectiveStart` yerine `startDate` olacak:
-
-### Önceki kod (satır ~440-457):
 ```ts
-result[benchmarkId] = normalizeBenchmarkFromStartWithCarryForward(
-  seriesData.points,
-  effectiveStart,   // <-- burası değişiyor
-  endDate
+// MEVCUT (eksik):
+const { chartData, t0 } = useEquityCurveData(
+  timeRange,
+  selectedBenchmarks,
+  closedTrades,
+  startingCapital,
+  partialCloses
+  // allTrades → eksik → hook [] varsayıyor
+  // stockPriceMap → eksik → hook new Map() varsayıyor
+  // missingSymbols → eksik → hook [] varsayıyor
 );
-// inflation da effectiveStart kullanıyor
 ```
 
-### Yeni kod:
+Hook'un imzası şu:
 ```ts
-result[benchmarkId] = normalizeBenchmarkFromStartWithCarryForward(
-  seriesData.points,
-  startDate,        // <-- seçili aralığın başı
-  endDate
-);
-// inflation da startDate kullanılacak
+useEquityCurveData(
+  timeRange,
+  selectedBenchmarks,
+  closedTrades,
+  startingCapital,
+  partialCloses,
+  allTrades,       // 6. parametre — açık pozisyonlar için gerekli
+  stockPriceMap,   // 7. parametre — gerçek fiyat verisi
+  priceDataMissing // 8. parametre — fallback mantığı
+)
 ```
 
-Ayrıca `chartData` useMemo'sunda benchmark değerleri şu an `isBeforeEffective` koşuluyla null yapılıyor. Bu koşul benchmark'lar için artık `isBeforeStart` (yani `startDate`'ten önce mi?) olarak değerlendirilecek — ama zaten `currentDay = startDate`'ten başladığı için tüm benchmark değerleri gösterilecek.
+**Sonuç:** Sütun grafiği portföy getirisini hesaplarken unrealized PnL'yi (açık pozisyonların güncel değerini) dahil etmiyor. Sadece `partialCloses` kaynaklı realize edilmiş kâr/zarar üzerinden hesaplıyor. Çizgi grafiğiyle farklı sonuçlar üretiyor.
+
+## Çözüm
+
+`ReturnComparisonChart` bileşenine `allTrades` prop'u eklenir. Bileşen kendi içinde `useStockPriceSeries` hook'unu kullanarak stock fiyatlarını çeker ve `useEquityCurveData`'ya eksiksiz geçer — tıpkı `EquityCurveChart`'ın yaptığı gibi.
+
+## Değiştirilecek Dosyalar
+
+### 1. `src/components/reports/ReturnComparisonChart.tsx`
+
+- `ReturnComparisonChartProps` arayüzüne `allTrades: Trade[]` eklenir
+- `useStockPriceSeries` import edilir, `getTimeRangeDates` import edilir
+- Bileşen içinde `startDate/endDate` hesaplanır
+- `useStockPriceSeries(allTrades, startDate, endDate)` çağrılır
+- `useEquityCurveData`'ya `allTrades`, `stockPriceMap`, `missingSymbols` geçilir
+
+### 2. `src/pages/Reports.tsx`
+
+- `ReturnComparisonChart` bileşenine `allTrades={trades as Trade[]}` prop'u eklenir
+
+## Teknik Akış
+
+```text
+ReturnComparisonChart
+  ├── getTimeRangeDates(timeRange) → startDate, endDate
+  ├── useStockPriceSeries(allTrades, startDate, endDate) → stockPriceMap, missingSymbols
+  └── useEquityCurveData(
+        timeRange, selectedBenchmarks, closedTrades, startingCapital,
+        partialCloses, allTrades, stockPriceMap, missingSymbols   ← tüm parametreler
+      ) → chartData
+```
+
+Bu sayede sütun grafiği de çizgi grafiğiyle aynı veri kaynağından beslenmiş olur.
+
+## Küçük İyileştirme: Enflasyon Tooltip'i
+
+Çizgi grafiğinde enflasyon hover'ında şu an `"100 → 147 TL"` yazıyor, diğer benchmark'lar sadece sayı gösteriyor. Bu tutarsızlık giderilebilir — enflasyon da diğerleri gibi sadece endeks değeri (`147.3` gibi) göstersin.
 
 ## Etki Analizi
 
-| Bileşen | Değişim |
-|---------|---------|
-| Portföy çizgisi | Değişmez, `effectiveStart`'tan normalize edilmeye devam eder |
-| Altın, USD, EUR, BIST100, NASDAQ100, Enflasyon | Artık seçili aralığın başından (`startDate`) 100'den başlar |
-| Tooltip karşılaştırması ("portföyün %X önünde") | Doğal olarak düzelir: her ikisi de kendi başlangıç noktasından ilerlediği için anlık fark gösterilir |
-
-## Değişecek Dosya
-
-| Dosya | Değişiklik |
-|-------|-----------|
-| `src/hooks/useEquityCurveData.ts` | `benchmarkDataMaps` useMemo'sunda `effectiveStart` → `startDate` |
-
-Tek satırlık bir değişiklik olmasına rağmen davranışı önemli ölçüde düzeltiyor: t0 ne olursa olsun, benchmark'lar her zaman seçili aralığın başından senkron başlıyor.
+| Alan | Değişim |
+|------|---------|
+| Sütun grafiği portföy getirisi | Açık pozisyonlar artık dahil, çizgi grafiğiyle tutarlı |
+| Çizgi grafiği | Değişmez |
+| İstatistik kartları | Değişmez |
+| Portföy Değeri grafiği | Değişmez |
+| Varlıklarım grafiği | Değişmez |
