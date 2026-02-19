@@ -231,6 +231,7 @@ export default function Reports() {
         selectedBenchmarks={barChartBenchmarks}
         benchmarks={BENCHMARKS}
         closedTrades={closedTrades as Trade[]}
+        allTrades={trades as Trade[]}
         startingCapital={startingCapital}
         partialCloses={partialCloses}
         portfolioSelected={portfolioSelected}>

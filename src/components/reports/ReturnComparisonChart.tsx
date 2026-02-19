@@ -14,7 +14,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { TimeRange, BenchmarkData, Trade, TIME_RANGES } from '@/types/trade';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useEquityCurveData, ChartDataPoint, PartialCloseRecord } from '@/hooks/useEquityCurveData';
+import { useEquityCurveData, ChartDataPoint, PartialCloseRecord, getTimeRangeDates } from '@/hooks/useEquityCurveData';
+import { useStockPriceSeries } from '@/hooks/useStockPriceSeries';
 import { cn } from '@/lib/utils';
 
 interface ReturnComparisonChartProps {
@@ -23,6 +24,7 @@ interface ReturnComparisonChartProps {
   selectedBenchmarks: string[];
   benchmarks: BenchmarkData[];
   closedTrades: Trade[];
+  allTrades: Trade[];
   startingCapital: number;
   partialCloses: PartialCloseRecord[];
   portfolioSelected: boolean;
@@ -166,6 +168,7 @@ export function ReturnComparisonChart({
   selectedBenchmarks,
   benchmarks,
   closedTrades,
+  allTrades,
   startingCapital,
   partialCloses,
   portfolioSelected,
@@ -174,12 +177,18 @@ export function ReturnComparisonChart({
   const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(!isMobile);
 
+  const { startDate, endDate } = getTimeRangeDates(timeRange, new Date());
+  const { priceMap: stockPriceMap, missingSymbols } = useStockPriceSeries(allTrades, startDate, endDate);
+
   const { chartData, t0 } = useEquityCurveData(
     timeRange,
     selectedBenchmarks,
     closedTrades,
     startingCapital,
-    partialCloses
+    partialCloses,
+    allTrades,
+    stockPriceMap,
+    missingSymbols
   );
 
   const returnData = useMemo(() => {
