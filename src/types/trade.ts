@@ -145,6 +145,7 @@ export interface BenchmarkData {
 
 export const BENCHMARKS: BenchmarkData[] = [
   { id: 'gold', name: 'Altın', symbol: 'XAU', color: '#FFD700' },
+  { id: 'silver', name: 'Gümüş', symbol: 'XAG', color: '#C0C0C0' },
   { id: 'usd', name: 'Dolar', symbol: 'USD', color: '#85BB65' },
   { id: 'eur', name: 'Euro', symbol: 'EUR', color: '#0052B4' },
   { id: 'bist100', name: 'BIST 100', symbol: 'XU100', color: '#E30A17' },

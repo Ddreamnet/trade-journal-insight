@@ -17,7 +17,7 @@ export interface MarketDataResponse {
 }
 
 // Market Series Types for Historical Data
-export type MarketAsset = 'gold' | 'usd' | 'eur' | 'bist100' | 'nasdaq100' | 'inflation_tr';
+export type MarketAsset = 'gold' | 'silver' | 'usd' | 'eur' | 'bist100' | 'nasdaq100' | 'inflation_tr';
 
 export interface MarketSeriesPoint {
   date: string; // YYYY-MM-DD
@@ -33,6 +33,7 @@ export interface MarketSeriesData {
 
 export const ASSET_LABELS: Record<MarketAsset, string> = {
   gold: 'Altın',
+  silver: 'Gümüş',
   usd: 'Dolar',
   eur: 'Euro',
   bist100: 'BIST 100',

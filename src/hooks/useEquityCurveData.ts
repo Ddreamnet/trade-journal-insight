@@ -26,6 +26,7 @@ export interface ChartDataPoint {
   portfolioIndex: number | null;
   portfolioTL: number | null;
   gold?: number | null;
+  silver?: number | null;
   usd?: number | null;
   eur?: number | null;
   bist100?: number | null;
@@ -545,6 +546,9 @@ export function useEquityCurveData(
         switch (benchmarkId) {
           case 'gold':
             point.gold = value;
+            break;
+          case 'silver':
+            point.silver = value;
             break;
           case 'usd':
             point.usd = value;

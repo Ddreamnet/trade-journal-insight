@@ -8,6 +8,7 @@ const corsHeaders = {
 // Asset to data source mapping
 const STOOQ_SYMBOLS: Record<string, string> = {
   gold: "xautry",
+  silver: "xagtry",
   usd: "usdtry",
   eur: "eurtry",
   bist100: "%5Exu100",  // ^xu100 URL encoded
@@ -202,7 +203,7 @@ serve(async (req: Request) => {
     if (!asset || !validAssets.includes(asset)) {
       return new Response(
         JSON.stringify({
-          error: "Invalid asset. Valid: gold, usd, eur, bist100, nasdaq100, inflation_tr",
+          error: "Invalid asset. Valid: gold, silver, usd, eur, bist100, nasdaq100, inflation_tr",
         }),
         {
           status: 400,
