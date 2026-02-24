@@ -1,116 +1,66 @@
 
 
-# Nasdaq100 Grafiğini TL Bazına Çevirme
+# Gumus Verisinin Grafiklerde Gosterilmemesi - Duzeltme Plani
 
-## Mevcut Durum
+## Sorunun Kaynagi
 
-Nasdaq100 verisi Stooq'tan USD cinsinden geliyor (`^ndx`). Normalizasyon doğrudan USD değerleri üzerinden yapılıyor:
+API tarafinda her sey dogru calisiyor -- edge function logs'ta `silver` verisinin basariyla cekildigini ve 200 status donundugunu goruyoruz. Sorun tamamen **frontend grafik bilesenlerinde**: `silver` anahtari benchmark haritalarindan eksik.
 
-```
-index[t] = 100 * nasdaq_usd[t] / nasdaq_usd[t0]
-```
+## Eksik Yerler (3 dosya, 4 degisiklik)
 
-Bu, sadece endeksin dolar bazlı performansını gösteriyor. Kur etkisi dahil edilmiyor.
+### 1. `src/components/reports/EquityCurveChart.tsx` (Cizgi Grafik)
 
-## Hedef
-
-Her gün icin Nasdaq degerini once TL'ye cevirip sonra normalize etmek:
-
-```
-nasdaq_tl[t] = nasdaq_usd[t] * usdtry[t]
-index_tl[t] = 100 * nasdaq_tl[t] / nasdaq_tl[t0]
-```
-
-Bu sayede hem endeks hareketi hem de kur etkisi tek grafikte gorulur.
-
-## Avantaj: USD/TRY Verisi Zaten Mevcut
-
-`usd` benchmark'i Stooq'tan `usdtry` sembolunu cekiyor. Yani ek bir API cagrisina gerek yok -- sadece `nasdaq100` secildiginde `usd` serisinin de fetch edilmesi ve carpim icin kullanilmasi yeterli.
-
-## Degisecek Dosya
-
-**Tek dosya: `src/hooks/useEquityCurveData.ts`**
-
-### Degisiklik 1: Nasdaq100 secilince USD/TRY serisini de fetch et
-
-`useEffect` blogu (satir 295-299) guncellenir. `nasdaq100` selectedBenchmarks icindeyse, `usd` serisi de otomatik fetch edilir:
+`benchmarkKeyMap` objesinde `silver` yok. Gold nasil tanimlanmissa ayni sekilde eklenmeli:
 
 ```ts
-useEffect(() => {
-  selectedBenchmarks.forEach((benchmarkId) => {
-    fetchSeries(benchmarkId as MarketAsset);
-  });
-  // Nasdaq100 seciliyse USD/TRY serisini de cek (TL donusumu icin)
-  if (selectedBenchmarks.includes('nasdaq100')) {
-    fetchSeries('usd' as MarketAsset);
-  }
-}, [selectedBenchmarks, fetchSeries]);
+const benchmarkKeyMap: Record<string, keyof ChartDataPoint> = {
+  gold: 'gold',
+  silver: 'silver',  // EKSIK
+  usd: 'usd',
+  ...
+};
 ```
 
-### Degisiklik 2: Yeni fonksiyon -- Nasdaq100'u TL'ye cevirip normalize et
+### 2. `src/components/reports/ReturnComparisonChart.tsx` (Sutun Grafik)
 
-`normalizeBenchmarkFromStartWithCarryForward` fonksiyonunun yanina yeni bir fonksiyon eklenir:
+`accessor` switch/case blogundan `silver` eksik:
 
 ```ts
-function normalizeNasdaqInTL(
-  nasdaqPoints: MarketSeriesPoint[],
-  usdtryPoints: MarketSeriesPoint[],
-  normStart: Date,
-  endDate: Date
-): Map<string, number> {
-  // 1. Her iki seriyi de date->value Map'ine cevir
-  // 2. normStart'tan endDate'e kadar her gun icin:
-  //    - nasdaq ve usdtry degerlerini bul (carry-forward)
-  //    - nasdaq_tl = nasdaq * usdtry
-  // 3. Baslangic degerini 100'e normalize et
+switch (benchmarkId) {
+  case 'gold': return point.gold;
+  case 'silver': return point.silver;  // EKSIK
+  case 'usd': return point.usd;
+  ...
 }
 ```
 
-Tarih uyusmazligi icin carry-forward (en son bilinen deger) kullanilir -- mevcut `normalizeBenchmarkFromStartWithCarryForward` ile ayni mantik.
+### 3. `src/components/reports/WinRateChart.tsx` (Win Rate Grafik -- ilk uc grafik degilse de tutarlilik icin)
 
-### Degisiklik 3: benchmarkDataMaps icinde nasdaq100 icin ozel dal
-
-`benchmarkDataMaps` useMemo blogu (satir 436-457) guncellenir:
+`benchmarkKeyMap` objesinde `silver` yok:
 
 ```ts
-if (benchmarkId === 'nasdaq100') {
-  const usdSeriesData = getSeriesData('usd' as MarketAsset);
-  if (usdSeriesData?.points) {
-    result[benchmarkId] = normalizeNasdaqInTL(
-      seriesData.points,
-      usdSeriesData.points,
-      startDate,
-      endDate
-    );
-  }
-} else if (benchmarkId === 'inflation_tr') {
-  // mevcut enflasyon mantigi
-} else {
-  // diger benchmarklar icin mevcut normalizasyon
-}
+const benchmarkKeyMap: { [key: string]: keyof ChartDataPoint } = {
+  gold: 'gold',
+  silver: 'silver',  // EKSIK
+  ...
+};
 ```
 
-`getSeriesData` dependency'si zaten mevcut, ek dependency gerekmez.
+### 4. `src/components/reports/PortfolioValueChart.tsx` (Portfoy Degeri)
 
-## Tarih Uyusmazligi Yonetimi
+Tooltip'te `maximumFractionDigits` sadece `gold` icin 2 yapilmis, `silver` icin de ayni olmali:
 
-Nasdaq100 sadece is gunlerinde islem gorur, USD/TRY de benzer sekilde. Ancak tatil gunleri farkli olabilir. Cozum:
+```ts
+maximumFractionDigits: (selectedCurrency === 'gold' || selectedCurrency === 'silver') ? 2 : 0,
+```
 
-- Her iki seri icin de `carry-forward` kullanilir (mevcut sistemle ayni)
-- `normStart`'tan itibaren gun gun ilerlerken, o gun icin veri yoksa en son bilinen deger kullanilir
-- Sadece her iki serinin de en az bir baslangic degeri oldugu durumda normalize edilir
+## Ozet
 
-## Etki Analizi
+| Dosya | Degisiklik | Etki |
+|-------|-----------|------|
+| EquityCurveChart.tsx | `benchmarkKeyMap`'e `silver: 'silver'` ekle | Cizgi grafikte gumus cizgisi gorunur |
+| ReturnComparisonChart.tsx | Switch'e `case 'silver'` ekle | Sutun grafikte gumus sutunu gorunur |
+| WinRateChart.tsx | `benchmarkKeyMap`'e `silver: 'silver'` ekle | Win rate grafikte gumus cizgisi gorunur |
+| PortfolioValueChart.tsx | Tooltip'te silver icin ondalik hassasiyeti ekle | Gumus gram degeri dogru formatlanir |
 
-| Alan | Degisim |
-|------|---------|
-| Nasdaq100 cizgi grafigi | USD bazli -> TL bazli (kur etkisi dahil) |
-| Nasdaq100 sutun grafigi | Ayni hook'u kullandigi icin otomatik olarak TL bazli olur |
-| Diger benchmarklar | Degismez |
-| USD benchmark cizgisi | Degismez (kendi basina normalize edilir) |
-| API cagrilari | Nasdaq100 secildiginde USD/TRY verisi de otomatik cekilir |
-
-## UI Notu
-
-Su an icin ayri bir "USD/TL" toggle eklenmeyecek -- Nasdaq100 her zaman TL bazli gosterilecek. Ileride istenirse bir toggle eklenebilir. Tooltip'te ek aciklama olarak "(TL bazli)" ibaresi eklenebilir.
-
+Toplam 4 dosyada kucuk eklemeler. Veri akisi ve API tarafinda degisiklik gerekmez.
