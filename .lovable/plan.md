@@ -1,66 +1,52 @@
 
 
-# Gumus Verisinin Grafiklerde Gosterilmemesi - Duzeltme Plani
+# USD ve EUR Cizgi Grafikte Duz Gorunme Sorunu - Cozum Plani
 
 ## Sorunun Kaynagi
 
-API tarafinda her sey dogru calisiyor -- edge function logs'ta `silver` verisinin basariyla cekildigini ve 200 status donundugunu goruyoruz. Sorun tamamen **frontend grafik bilesenlerinde**: `silver` anahtari benchmark haritalarindan eksik.
+Bu bir veri veya kod hatasi degil, **gorsel olcekleme sorunudur**. API verileri dogrulanmis ve dogrudir.
 
-## Eksik Yerler (3 dosya, 4 degisiklik)
+TCMB yonetimli kur politikasi (crawling peg) nedeniyle USD/TRY ve EUR/TRY gunluk bazda cok kucuk degisimler gosteriyor (gunluk %0.03-0.18). Diger varliklar (altin, BIST) cok daha buyuk yuzdesel hareketler yaptiginda, Y ekseni genis bir araliga yayiliyor ve dolar/euro cizgileri "dumduz" gorunuyor.
 
-### 1. `src/components/reports/EquityCurveChart.tsx` (Cizgi Grafik)
+Ornek: 1 yillik araliklata altin 100'den 200'e cikarken, dolar 100'den sadece 121'e cikiyor. Ayni Y ekseninde dolar cizgisi duz gorunur.
 
-`benchmarkKeyMap` objesinde `silver` yok. Gold nasil tanimlanmissa ayni sekilde eklenmeli:
+## Cozum: Dinamik Y Ekseni ve Gorsel Iyilestirmeler
 
-```ts
-const benchmarkKeyMap: Record<string, keyof ChartDataPoint> = {
-  gold: 'gold',
-  silver: 'silver',  // EKSIK
-  usd: 'usd',
-  ...
-};
+### 1. Y eksenini sadece gorunen verilere gore optimize et
+
+Recharts YAxis'ta `domain={['auto', 'auto']}` zaten kullaniliyor, ancak bu portfoy + benchmark dahil TUM verileri kapsayan bir aralik olusturuyor. Cizgi uclarindaki deger etiketleri zaten mevcut, bu nedenle asil sorun degerlerin birbirine cok yakin veya cok uzak olmasindan kaynaklaniyor.
+
+### 2. Benchmark secildiginde Y ekseninin alt/ust sinirini %5 padding ile ayarla
+
+`EquityCurveChart.tsx` icinde YAxis domain hesaplamasini iyilestir:
+- Tum gorunen serilerin min/max degerlerini hesapla
+- Daha dar bir araliga sikistir (daha iyi gorsel ayrim)
+- Padding ekleyerek cizgilerin uste/alta yapismasini engelle
+
+```text
+Onceki: domain={['auto', 'auto']}  --> Recharts'in varsayilan hesaplamasi
+Sonraki: domain={[minValue * 0.98, maxValue * 1.02]} --> Daha siki aralik
 ```
 
-### 2. `src/components/reports/ReturnComparisonChart.tsx` (Sutun Grafik)
+### 3. Tooltip'e yuzdesel degisim bilgisi ekle
 
-`accessor` switch/case blogundan `silver` eksik:
+Cizgi duz gorundugunde bile tooltip'te net bilgi versin:
+- "USD: 121.3 (baslangictan +%21.3)" seklinde gosterim
+- Boylece kullanici cizgi duz gorunse de degisimi anlayabilir
 
-```ts
-switch (benchmarkId) {
-  case 'gold': return point.gold;
-  case 'silver': return point.silver;  // EKSIK
-  case 'usd': return point.usd;
-  ...
-}
-```
+## Teknik Degisiklikler
 
-### 3. `src/components/reports/WinRateChart.tsx` (Win Rate Grafik -- ilk uc grafik degilse de tutarlilik icin)
+### Dosya: `src/components/reports/EquityCurveChart.tsx`
 
-`benchmarkKeyMap` objesinde `silver` yok:
+1. **Y ekseni domain hesaplamasi** -- chartData'dan tum gorunen serilerin min/max degerlerini hesapla, %2-5 padding uygula
+2. **Tooltip'te yuzde degisim gosterimi** -- benchmark degerinin 100 bazina gore farkini tooltip'te "baslangictan +%X" olarak goster
 
-```ts
-const benchmarkKeyMap: { [key: string]: keyof ChartDataPoint } = {
-  gold: 'gold',
-  silver: 'silver',  // EKSIK
-  ...
-};
-```
-
-### 4. `src/components/reports/PortfolioValueChart.tsx` (Portfoy Degeri)
-
-Tooltip'te `maximumFractionDigits` sadece `gold` icin 2 yapilmis, `silver` icin de ayni olmali:
-
-```ts
-maximumFractionDigits: (selectedCurrency === 'gold' || selectedCurrency === 'silver') ? 2 : 0,
-```
-
-## Ozet
+### Dosya degisiklikleri ozeti
 
 | Dosya | Degisiklik | Etki |
 |-------|-----------|------|
-| EquityCurveChart.tsx | `benchmarkKeyMap`'e `silver: 'silver'` ekle | Cizgi grafikte gumus cizgisi gorunur |
-| ReturnComparisonChart.tsx | Switch'e `case 'silver'` ekle | Sutun grafikte gumus sutunu gorunur |
-| WinRateChart.tsx | `benchmarkKeyMap`'e `silver: 'silver'` ekle | Win rate grafikte gumus cizgisi gorunur |
-| PortfolioValueChart.tsx | Tooltip'te silver icin ondalik hassasiyeti ekle | Gumus gram degeri dogru formatlanir |
+| EquityCurveChart.tsx | YAxis domain'i dinamik hesapla (min/max + padding) | Dusuk degisimli seriler daha belirgin gorunur |
+| EquityCurveChart.tsx | Tooltip'e yuzde degisim ekle | Kullanici duz cizgide bile degisimi gorebilir |
 
-Toplam 4 dosyada kucuk eklemeler. Veri akisi ve API tarafinda degisiklik gerekmez.
+Toplam 1 dosyada 2 degisiklik. Veri akisi ve API tarafinda degisiklik gerekmez.
+
