@@ -203,6 +203,55 @@ function normalizeBenchmarkFromStartWithCarryForward(
 }
 
 /**
+ * Normalize Nasdaq100 in TL terms: nasdaq_usd[t] * usdtry[t], then normalize to 100
+ */
+function normalizeNasdaqInTL(
+  nasdaqPoints: MarketSeriesPoint[],
+  usdtryPoints: MarketSeriesPoint[],
+  normStart: Date,
+  endDate: Date
+): Map<string, number> {
+  const result = new Map<string, number>();
+  if (!nasdaqPoints.length || !usdtryPoints.length) return result;
+
+  // Build date->value maps
+  const nasdaqByDate = new Map<string, number>(
+    nasdaqPoints.map((p) => [p.date.substring(0, 10), p.value])
+  );
+  const usdtryByDate = new Map<string, number>(
+    usdtryPoints.map((p) => [p.date.substring(0, 10), p.value])
+  );
+
+  // Find start values with carry-forward
+  const nasdaqStart = findValueAtDateWithCarryForward(nasdaqPoints, normStart);
+  const usdtryStart = findValueAtDateWithCarryForward(usdtryPoints, normStart);
+  if (!nasdaqStart || !usdtryStart) return result;
+
+  const tlStart = nasdaqStart * usdtryStart;
+
+  let lastNasdaq = nasdaqStart;
+  let lastUsdtry = usdtryStart;
+  let currentDay = normStart;
+
+  while (currentDay <= endDate) {
+    const key = format(currentDay, 'yyyy-MM-dd');
+
+    const nasdaqVal = nasdaqByDate.get(key);
+    if (nasdaqVal !== undefined) lastNasdaq = nasdaqVal;
+
+    const usdtryVal = usdtryByDate.get(key);
+    if (usdtryVal !== undefined) lastUsdtry = usdtryVal;
+
+    const tlValue = lastNasdaq * lastUsdtry;
+    result.set(key, 100 * (tlValue / tlStart));
+
+    currentDay = addDays(currentDay, 1);
+  }
+
+  return result;
+}
+
+/**
  * Convert inflation monthly rates to compound index starting from normStart
  */
 function convertInflationToCompoundIndex(
@@ -296,6 +345,10 @@ export function useEquityCurveData(
     selectedBenchmarks.forEach((benchmarkId) => {
       fetchSeries(benchmarkId as MarketAsset);
     });
+    // Nasdaq100 seçiliyse USD/TRY serisini de çek (TL dönüşümü için)
+    if (selectedBenchmarks.includes('nasdaq100')) {
+      fetchSeries('usd' as MarketAsset);
+    }
   }, [selectedBenchmarks, fetchSeries]);
 
   // Use allTrades for t0 (earliest trade open date)
@@ -440,7 +493,18 @@ export function useEquityCurveData(
     selectedBenchmarks.forEach((benchmarkId) => {
       const seriesData = getSeriesData(benchmarkId as MarketAsset);
       if (seriesData?.points) {
-        if (benchmarkId === 'inflation_tr') {
+        if (benchmarkId === 'nasdaq100') {
+          // Nasdaq100'ü TL bazına çevir: nasdaq_usd * usdtry, sonra normalize
+          const usdSeriesData = getSeriesData('usd' as MarketAsset);
+          if (usdSeriesData?.points) {
+            result[benchmarkId] = normalizeNasdaqInTL(
+              seriesData.points,
+              usdSeriesData.points,
+              startDate,
+              endDate
+            );
+          }
+        } else if (benchmarkId === 'inflation_tr') {
           const monthlyMap = convertInflationToCompoundIndex(seriesData.points, startDate);
           result[benchmarkId] = inflationMonthlyToDailyWithCarryForward(monthlyMap, startDate, endDate);
         } else {
