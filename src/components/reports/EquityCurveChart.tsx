@@ -164,6 +164,7 @@ export function EquityCurveChart({
 
   const benchmarkKeyMap: Record<string, keyof ChartDataPoint> = {
     gold: 'gold',
+    silver: 'silver',
     usd: 'usd',
     eur: 'eur',
     bist100: 'bist100',

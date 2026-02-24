@@ -41,6 +41,7 @@ interface ChartDataPoint {
   rawDate: string;
   winRate: number | null;
   gold?: number;
+  silver?: number;
   usd?: number;
   eur?: number;
   bist100?: number;
@@ -238,6 +239,7 @@ export function WinRateChart({ timeRange, selectedBenchmarks, benchmarks, filter
 
   const benchmarkKeyMap: { [key: string]: keyof ChartDataPoint } = {
     gold: 'gold',
+    silver: 'silver',
     usd: 'usd',
     eur: 'eur',
     bist100: 'bist100',

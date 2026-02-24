@@ -136,6 +136,7 @@ function calculateReturns(
     const accessor = (point: ChartDataPoint): number | null | undefined => {
       switch (benchmarkId) {
         case 'gold': return point.gold;
+        case 'silver': return point.silver;
         case 'usd': return point.usd;
         case 'eur': return point.eur;
         case 'bist100': return point.bist100;
