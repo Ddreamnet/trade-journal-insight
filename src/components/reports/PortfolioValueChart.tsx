@@ -38,6 +38,7 @@ const CURRENCY_OPTIONS: { id: PortfolioCurrency; label: string }[] = [
   { id: 'USD', label: '$ USD' },
   { id: 'EUR', label: '€ EUR' },
   { id: 'gold', label: '🥇 Altın' },
+  { id: 'silver', label: '🥈 Gümüş' },
 ];
 
 // Custom dot renderer for markers
@@ -101,7 +102,9 @@ function CustomTooltip({
         ? '$'
         : selectedCurrency === 'EUR'
           ? '€'
-          : 'gr';
+          : selectedCurrency === 'silver'
+            ? 'gr'
+            : 'gr';
 
   return (
     <div className="bg-popover border border-border rounded-lg p-3 shadow-lg text-sm">

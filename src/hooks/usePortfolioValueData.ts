@@ -6,7 +6,7 @@ import { MarketAsset } from '@/types/market';
 import { format, parseISO, startOfDay, addDays } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
-export type PortfolioCurrency = 'TL' | 'USD' | 'EUR' | 'gold';
+export type PortfolioCurrency = 'TL' | 'USD' | 'EUR' | 'gold' | 'silver';
 
 interface CashFlowInput {
   flow_type: string;
@@ -77,6 +77,7 @@ export function usePortfolioValueData(
     if (selectedCurrency === 'USD') fetchSeries('usd');
     else if (selectedCurrency === 'EUR') fetchSeries('eur');
     else if (selectedCurrency === 'gold') fetchSeries('gold');
+    else if (selectedCurrency === 'silver') fetchSeries('silver');
   }, [selectedCurrency, fetchSeries]);
 
   // Use allTrades for t0 (earliest trade open date)
@@ -137,7 +138,7 @@ export function usePortfolioValueData(
 
     if (selectedCurrency !== 'TL') {
       const assetId: MarketAsset =
-        selectedCurrency === 'USD' ? 'usd' : selectedCurrency === 'EUR' ? 'eur' : 'gold';
+        selectedCurrency === 'USD' ? 'usd' : selectedCurrency === 'EUR' ? 'eur' : selectedCurrency === 'silver' ? 'silver' : 'gold';
       const seriesData = getSeriesData(assetId);
       if (seriesData?.points && seriesData.points.length > 0) {
         currencyMap = new Map(seriesData.points.map((p) => [p.date.substring(0, 10), p.value]));
