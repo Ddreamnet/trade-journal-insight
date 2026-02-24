@@ -113,7 +113,7 @@ function CustomTooltip({
         {currencySymbol}
         {point.value.toLocaleString('tr-TR', {
           minimumFractionDigits: 0,
-          maximumFractionDigits: selectedCurrency === 'gold' ? 2 : 0,
+          maximumFractionDigits: (selectedCurrency === 'gold' || selectedCurrency === 'silver') ? 2 : 0,
         })}
       </div>
       {selectedCurrency !== 'TL' && (
