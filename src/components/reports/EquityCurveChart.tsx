@@ -84,7 +84,7 @@ function CustomTooltip({
       <div className="flex justify-between gap-4 text-sm">
         <span className="text-muted-foreground">Portföy:</span>
         <span className="font-mono font-semibold text-primary">
-          {portfolioValue.toFixed(1)}
+          {portfolioValue.toFixed(1)} ({portfolioValue >= 100 ? '+' : ''}%{(portfolioValue - 100).toFixed(1)})
         </span>
       </div>
 
@@ -101,6 +101,8 @@ function CustomTooltip({
               : `portföyün %${Math.abs(diff).toFixed(1)} gerisinde`;
 
           const isInflation = p.dataKey === 'inflation_tr';
+          const pctChange = value - 100;
+          const pctText = pctChange >= 0 ? `+%${pctChange.toFixed(1)}` : `-%${Math.abs(pctChange).toFixed(1)}`;
 
           return (
             <div key={p.dataKey} className="text-sm mb-1">
@@ -109,7 +111,7 @@ function CustomTooltip({
                 <span className="font-mono">
                   {isInflation
                     ? `100 → ${value.toFixed(0)} TL`
-                    : value.toFixed(1)}
+                    : `${value.toFixed(1)} (${pctText})`}
                 </span>
               </div>
               {!isInflation && (
@@ -171,6 +173,36 @@ export function EquityCurveChart({
     nasdaq100: 'nasdaq100',
     inflation_tr: 'inflation_tr',
   };
+
+  // Dynamic Y-axis domain calculation
+  const yDomain = useMemo(() => {
+    if (chartData.length === 0) return ['auto', 'auto'] as const;
+
+    const visibleKeys: (keyof ChartDataPoint)[] = ['portfolioIndex'];
+    selectedBenchmarks.forEach((id) => {
+      const key = benchmarkKeyMap[id];
+      if (key) visibleKeys.push(key);
+    });
+
+    let min = Infinity;
+    let max = -Infinity;
+
+    chartData.forEach((point) => {
+      visibleKeys.forEach((key) => {
+        const val = point[key] as number | null | undefined;
+        if (val !== null && val !== undefined) {
+          if (val < min) min = val;
+          if (val > max) max = val;
+        }
+      });
+    });
+
+    if (!isFinite(min) || !isFinite(max)) return ['auto', 'auto'] as const;
+
+    const range = max - min;
+    const padding = Math.max(range * 0.05, 1); // en az 1 birim padding
+    return [Math.floor(min - padding), Math.ceil(max + padding)] as const;
+  }, [chartData, selectedBenchmarks]);
 
   const lastValues = useMemo(() => {
     const result: Record<string, number | null> = { portfolioIndex: null };
@@ -241,7 +273,7 @@ export function EquityCurveChart({
             stroke="hsl(var(--muted-foreground))"
             fontSize={12}
             tickLine={false}
-            domain={['auto', 'auto']}
+            domain={yDomain as [number, number]}
           />
           <Tooltip
             content={<CustomTooltip benchmarks={benchmarks} />}
