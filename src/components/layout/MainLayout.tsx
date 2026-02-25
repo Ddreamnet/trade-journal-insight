@@ -4,7 +4,8 @@ import { TickerTape } from './TickerTape';
 import { MarketDataStatus } from './MarketDataStatus';
 import { usePortfolioCash } from '@/hooks/usePortfolioCash';
 import { useAuth } from '@/hooks/useAuth';
-import { Wallet } from 'lucide-react';
+import { useMarketData } from '@/contexts/MarketDataContext';
+import { Wallet, TrendingUp, TrendingDown } from 'lucide-react';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -13,6 +14,7 @@ interface MainLayoutProps {
 export function MainLayout({ children }: MainLayoutProps) {
   const { isAuthenticated } = useAuth();
   const { availableCash, isCashLoading } = usePortfolioCash();
+  const { xu100 } = useMarketData();
 
   return (
     <div className="min-h-screen liquid-bg">
@@ -26,6 +28,18 @@ export function MainLayout({ children }: MainLayoutProps) {
               <span className="text-muted-foreground">Bakiye:</span>
               <span className={`font-mono font-semibold ${availableCash >= 0 ? 'text-emerald-400' : 'text-destructive'}`}>
                 {isCashLoading ? '...' : `₺${availableCash.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+              </span>
+            </div>
+          )}
+          {xu100 && (
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="text-muted-foreground font-medium">XU100</span>
+              <span className="font-mono font-semibold text-foreground">
+                {xu100.last.toLocaleString('tr-TR')}
+              </span>
+              <span className={`flex items-center gap-0.5 font-mono text-xs ${xu100.chgPct >= 0 ? 'text-emerald-400' : 'text-destructive'}`}>
+                {xu100.chgPct >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {xu100.chgPct >= 0 ? '+' : ''}{xu100.chgPct.toFixed(2)}%
               </span>
             </div>
           )}

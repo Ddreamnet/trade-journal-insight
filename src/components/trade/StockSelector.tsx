@@ -17,17 +17,36 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
   const [searchQuery, setSearchQuery] = useState('');
   const { stocks } = useMarketData();
 
+  const { xu030 } = useMarketData();
+
   // Convert MarketStock to Stock format and filter
   const filteredStocks = useMemo(() => {
-    const stockList: (Stock & { logoUrl?: string })[] = stocks.map((s, index) => ({
-      id: `${index + 1}`,
-      symbol: s.symbol,
-      name: s.symbol, // API'den isim gelmiyorsa sembol kullan
-      currentPrice: s.last,
-      change: s.chg,
-      changePercent: s.chgPct,
-      logoUrl: s.logoUrl
-    }));
+    const stockList: (Stock & { logoUrl?: string; isIndex?: boolean })[] = [];
+
+    // Pin XU030 at top
+    if (xu030) {
+      stockList.push({
+        id: 'xu030',
+        symbol: 'XU030',
+        name: 'BIST 30 Endeksi',
+        currentPrice: xu030.last,
+        change: 0,
+        changePercent: xu030.chgPct,
+        isIndex: true
+      });
+    }
+
+    stocks.forEach((s, index) => {
+      stockList.push({
+        id: `${index + 1}`,
+        symbol: s.symbol,
+        name: s.symbol,
+        currentPrice: s.last,
+        change: s.chg,
+        changePercent: s.chgPct,
+        logoUrl: s.logoUrl
+      });
+    });
 
     if (!searchQuery) return stockList;
     
@@ -37,7 +56,7 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
         stock.symbol.toLowerCase().includes(query) ||
         stock.name.toLowerCase().includes(query)
     );
-  }, [stocks, searchQuery]);
+  }, [stocks, xu030, searchQuery]);
 
   const handleSelect = (stock: Stock) => {
     onSelect(stock);
@@ -89,17 +108,31 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
                 <button
                   key={stock.id}
                   onClick={() => handleSelect(stock)}
-                  className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-secondary transition-colors text-left"
+                  className={cn(
+                    "w-full flex items-center justify-between p-3 rounded-lg hover:bg-secondary transition-colors text-left",
+                    (stock as any).isIndex && "border border-primary/30 bg-primary/5"
+                  )}
                 >
                   <div className="flex items-center gap-3">
-                    <StockLogo 
-                      symbol={stock.symbol} 
-                      logoUrl={stock.logoUrl}
-                      size="md"
-                    />
+                    {(stock as any).isIndex ? (
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                        <TrendingUp className="w-5 h-5 text-primary" />
+                      </div>
+                    ) : (
+                      <StockLogo 
+                        symbol={stock.symbol} 
+                        logoUrl={(stock as any).logoUrl}
+                        size="md"
+                      />
+                    )}
                     <div>
-                      <div className="font-semibold text-foreground">
-                        {stock.symbol}
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-foreground">
+                          {stock.symbol}
+                        </span>
+                        {(stock as any).isIndex && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/20 text-primary">Endeks</span>
+                        )}
                       </div>
                       <div className="text-sm text-muted-foreground">
                         {stock.name}
