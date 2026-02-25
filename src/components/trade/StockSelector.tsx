@@ -108,23 +108,14 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
                 <button
                   key={stock.id}
                   onClick={() => handleSelect(stock)}
-                  className={cn(
-                    "w-full flex items-center justify-between p-3 rounded-lg hover:bg-secondary transition-colors text-left",
-                    (stock as any).isIndex && "border border-primary/30 bg-primary/5"
-                  )}
+                  className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-secondary transition-colors text-left"
                 >
                   <div className="flex items-center gap-3">
-                    {(stock as any).isIndex ? (
-                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                        <TrendingUp className="w-5 h-5 text-primary" />
-                      </div>
-                    ) : (
-                      <StockLogo 
-                        symbol={stock.symbol} 
-                        logoUrl={(stock as any).logoUrl}
-                        size="md"
-                      />
-                    )}
+                    <StockLogo 
+                      symbol={stock.symbol} 
+                      logoUrl={(stock as any).logoUrl}
+                      size="md"
+                    />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-foreground">
