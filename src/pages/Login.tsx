@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
 import logo from '@/assets/logo.png';
 import { Button } from '@/components/ui/button';
@@ -184,6 +185,12 @@ export default function Login() {
               {isLogin ? 'Kayıt Ol' : 'Giriş Yap'}
             </button>
           </p>
+
+          <div className="text-center mt-4">
+            <Link to="/blog" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              Blog'u Görüntüle →
+            </Link>
+          </div>
         </div>
 
         {/* Bottom decoration */}
