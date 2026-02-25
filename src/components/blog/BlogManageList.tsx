@@ -53,21 +53,26 @@ export function BlogManageList() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-1 p-1 bg-secondary rounded-lg w-fit">
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
-            className={cn(
-              'px-3 py-2 rounded-md text-sm font-medium transition-all',
-              filter === f.id
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1 p-1 bg-secondary rounded-lg w-fit">
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              className={cn(
+                'px-3 py-2 rounded-md text-sm font-medium transition-all',
+                filter === f.id
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <Link to="/blog" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+          Blogu Görüntüle →
+        </Link>
       </div>
 
       {/* List */}
