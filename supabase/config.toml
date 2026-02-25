@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.stock-series]
 verify_jwt = false
+
+[functions.bist-indices]
+verify_jwt = false

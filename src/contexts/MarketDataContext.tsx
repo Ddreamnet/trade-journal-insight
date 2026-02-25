@@ -2,6 +2,11 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { MarketStock, MarketDataResponse } from '@/types/market';
 import { supabase } from '@/integrations/supabase/client';
 
+export interface IndexData {
+  last: number;
+  chgPct: number;
+}
+
 interface MarketDataContextType {
   stocks: MarketStock[];
   lastUpdated: string | null;
@@ -10,6 +15,8 @@ interface MarketDataContextType {
   isFallback: boolean;
   refetch: () => Promise<void>;
   getStockBySymbol: (symbol: string) => MarketStock | undefined;
+  xu100: IndexData | null;
+  xu030: IndexData | null;
 }
 
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
@@ -56,8 +63,21 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFallback, setIsFallback] = useState(false);
+  const [xu100, setXu100] = useState<IndexData | null>(null);
+  const [xu030, setXu030] = useState<IndexData | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const stocksHashRef = useRef<string>('');
+
+  const fetchIndices = useCallback(async () => {
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('bist-indices');
+      if (fnError) throw new Error(fnError.message);
+      if (data?.indices?.XU100) setXu100(data.indices.XU100);
+      if (data?.indices?.XU030) setXu030(data.indices.XU030);
+    } catch (err) {
+      console.error('Index fetch error:', err);
+    }
+  }, []);
 
   const fetchMarketData = useCallback(async () => {
     setIsLoading(true);
@@ -112,8 +132,10 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     fetchMarketData();
+    fetchIndices();
     intervalRef.current = setInterval(() => {
       fetchMarketData();
+      fetchIndices();
     }, POLLING_INTERVAL);
 
     return () => {
@@ -121,7 +143,7 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
         clearInterval(intervalRef.current);
       }
     };
-  }, [fetchMarketData]);
+  }, [fetchMarketData, fetchIndices]);
 
   const value: MarketDataContextType = {
     stocks,
@@ -130,7 +152,9 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
     error,
     isFallback,
     refetch: fetchMarketData,
-    getStockBySymbol
+    getStockBySymbol,
+    xu100,
+    xu030
   };
 
   return (
