@@ -98,9 +98,7 @@ export function AssetsChart() {
         ? `re_${asset.id}`
         : asset.asset_type;
 
-      const label = asset.category === 'real_estate' && asset.title
-        ? `${ASSET_LABELS[asset.asset_type] || asset.asset_type} – ${asset.title}`
-        : ASSET_LABELS[asset.asset_type] || asset.asset_type;
+      const label = ASSET_LABELS[asset.asset_type] || asset.asset_type;
 
       // Merge same asset_type (e.g. two USD entries)
       const existing = slices.find(s => s.key === key);
