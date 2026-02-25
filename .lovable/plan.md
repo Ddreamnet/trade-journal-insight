@@ -1,88 +1,50 @@
 
 
-# XU100 ve XU030 Endeks Verisi Entegrasyonu
+# BIST 100'den BIST TUM'e Gecis (Bigpara Kaynagi)
 
-## Ozet
+## Neden Hangikredi Kullanilamaz?
 
-Bigpara (hurriyet.com.tr) endeksler sayfasindan XU100 ve XU030 anlik verilerini cekecek yeni bir edge function olusturulacak. XU100 degeri Bakiye ile Son: arasinda gosterilecek, XU030 ise StockSelector'da hisselerin en ustunde yer alacak ve islem acilabilecek.
+Hangikredi'nin BIST 500 sayfasi JavaScript ile render ediliyor - sayfa HTML'inde tablo verisi bos geliyor. BIST 100 sayfasi ise server-side rendered oldugu icin scrape edilebiliyordu. Bu nedenle BIST 500/TUM icin farkli bir kaynak kullanmak gerekiyor.
 
-## Veri Kaynagi
+## Cozum
 
-**Bigpara Endeksler Sayfasi**: `https://bigpara.hurriyet.com.tr/borsa/endeksler/`
+**Bigpara BIST TUM** sayfasi (`bigpara.hurriyet.com.tr/borsa/canli-borsa/bist-tum/`) 500+ hisseyi server-side rendered HTML olarak sunuyor. Mevcut `bist100` edge function'in parsing mantigi Bigpara'ya uyarlanacak. Logo URL'leri icin Hangikredi CDN pattern'i kullanilacak.
 
-HTML yapisi dogrulanmistir. Her endeks bir `<ul>` satirinda ve `<li>` hucrelerdedir:
-- Hucre 1: Sembol (XU100, XU030 vb.)
-- Hucre 2: Son deger (ornek: 13.810)
-- Hucre 3: Onceki kapanis
-- Hucre 4: Degisim yuzde (ornek: -1,71)
-- Hucre 5: En yuksek
-- Hucre 6: En dusuk
+## Bigpara HTML Yapisi
 
-Bu sayfa API key gerektirmez, dogrudan HTML scrape edilir.
+Her hisse bir `<ul class="live-stock-item" data-symbol="AKBNK">` icinde:
+- **Sembol**: `data-symbol` attribute
+- **Son fiyat**: `<li class="... node-c">91,00</li>`
+- **Yuksek**: `<li class="... node-h">92,85</li>`
+- **Dusuk**: `<li class="... node-i">89,75</li>`
+- **Degisim %**: `<li class="... node-e">-0,6</li>`
+- **Saat**: `<li class="... node-s">18:10:00</li>`
 
 ## Degisiklikler
 
-### 1. Yeni Edge Function: `supabase/functions/bist-indices/index.ts`
+### 1. Edge Function Guncelleme: `supabase/functions/bist100/index.ts`
 
-Bigpara endeksler sayfasini scrape edip sadece XU100 ve XU030 verilerini donduren edge function:
-- 60 saniyelik in-memory cache (mevcut bist100 patterniyle ayni)
-- CORS headers
-- Dondurulecek veri formati:
+Tek dosya degisikligi. Icerik tamamen yeniden yazilacak:
 
-```text
-{
-  updatedAt: "...",
-  indices: {
-    XU100: { last: 13810, chgPct: -1.71 },
-    XU030: { last: 15439, chgPct: -1.42 }
-  }
-}
-```
+- **URL**: `https://bigpara.hurriyet.com.tr/borsa/canli-borsa/bist-tum/` olarak guncellenecek
+- **Parsing**: Bigpara'nin `<ul class="live-stock-item" data-symbol="...">` yapisina gore yeni regex'ler yazilacak
+- **Logo URL'leri**: Her sembol icin `https://cdn.hangikredi.com/symbols/{symbol_lowercase}.png` pattern'i kullanilacak (mevcut logolarin kaynagi ayni CDN)
+- **Response formati**: Tamamen ayni kalacak (`{ updatedAt, source, items: [{ symbol, last, low, high, chg, chgPct, time, logoUrl }] }`)
+- **Cache TTL**: 60 saniye (degismiyor)
 
-### 2. `supabase/config.toml` guncelleme
+### 2. Frontend Degisikligi: YOK
 
-```text
-[functions.bist-indices]
-verify_jwt = false
-```
+Response formati birebir ayni kaldigi icin:
+- `MarketDataContext.tsx` - degisiklik yok
+- `StockSelector.tsx` - degisiklik yok
+- `StockLogo.tsx` - degisiklik yok (logoUrl prop'u ile calisiyor, fallback destegi mevcut)
+- `TradeForm.tsx` - degisiklik yok
 
-### 3. MarketDataContext'e endeks verileri ekleme
-
-`src/contexts/MarketDataContext.tsx` icine:
-- `xu100` ve `xu030` state'leri ekleme (last, chgPct)
-- `bist-indices` edge function'ini cagiran fetch ekleme (bist100 ile ayni polling cycle)
-- Context'e `xu100` ve `xu030` degerlerini expose etme
-
-### 4. MainLayout'ta XU100 gosterimi
-
-`src/components/layout/MainLayout.tsx`:
-- Bakiye ile MarketDataStatus (Son:) arasina XU100 degeri ekleme
-- Masaustunde: Bakiye ... XU100 ... Son: seklinde yatay hizada
-- Mobilde: Bakiye ve Son: arasinda ortalanmis
-- Yesil/kirmizi renk chgPct'ye gore
-- Format: "XU100 13.810 -1,71%" seklinde kompakt gosterim
-
-```text
-Mobil gorunum (tek satir):
-[Bakiye: 50.000]  [XU100 13.810 -1.71%]  [Son: 18:10 (refresh)]
-```
-
-### 5. StockSelector'da XU030 ekleme
-
-`src/components/trade/StockSelector.tsx`:
-- Hisse listesinin en ustune XU030 endeksini sabit olarak ekleme
-- MarketDataContext'ten xu030 verisini cekme
-- Ozel bir badge/etiketle "Endeks" olarak isaretleme
-- Tiklandiginda normal hisse gibi TradeForm'a gondermesi icin Stock formatina donusturme
-
-## Teknik Degisiklikler Ozeti
+## Teknik Ozet
 
 | Dosya | Degisiklik |
 |-------|-----------|
-| `supabase/functions/bist-indices/index.ts` | Yeni edge function - bigpara scrape |
-| `supabase/config.toml` | `bist-indices` verify_jwt = false |
-| `src/contexts/MarketDataContext.tsx` | xu100/xu030 state + fetch + expose |
-| `src/components/layout/MainLayout.tsx` | XU100 gosterimi bakiye ile son arasinda |
-| `src/components/trade/StockSelector.tsx` | XU030 endeksini listenin basina ekleme |
+| `supabase/functions/bist100/index.ts` | Veri kaynagi Bigpara'ya gecis, parsing mantigi guncelleme, logo URL ekleme |
 
-Toplam 5 dosya degisikligi. Mevcut islevsellige dokunulmaz, sadece yeni veri katmani eklenir.
+Toplam 1 dosya degisikligi. Frontend'e dokunulmaz. ~100 hisse yerine ~500+ hisse gelecek, diger her sey ayni calisacak.
+
