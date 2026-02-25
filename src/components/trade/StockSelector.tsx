@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 interface StockSelectorProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (stock: Stock & { logoUrl?: string }) => void;
+  onSelect: (stock: Stock & {logoUrl?: string;}) => void;
 }
 
 export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps) {
@@ -21,7 +21,7 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
 
   // Convert MarketStock to Stock format and filter
   const filteredStocks = useMemo(() => {
-    const stockList: (Stock & { logoUrl?: string; isIndex?: boolean })[] = [];
+    const stockList: (Stock & {logoUrl?: string;isIndex?: boolean;})[] = [];
 
     // Pin XU030 at top
     if (xu030) {
@@ -49,12 +49,12 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
     });
 
     if (!searchQuery) return stockList;
-    
+
     const query = searchQuery.toLowerCase();
     return stockList.filter(
       (stock) =>
-        stock.symbol.toLowerCase().includes(query) ||
-        stock.name.toLowerCase().includes(query)
+      stock.symbol.toLowerCase().includes(query) ||
+      stock.name.toLowerCase().includes(query)
     );
   }, [stocks, xu030, searchQuery]);
 
@@ -71,8 +71,8 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
+        onClick={onClose} />
+
 
       {/* Modal */}
       <div className="relative w-full max-w-lg max-h-[80vh] bg-background-secondary border border-border rounded-t-2xl sm:rounded-2xl overflow-hidden animate-slide-in-right sm:animate-fade-in">
@@ -91,39 +91,39 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
-              autoFocus
-            />
+              autoFocus />
+
           </div>
         </div>
 
         {/* Stock List */}
         <div className="overflow-y-auto max-h-[60vh] p-2">
-          {filteredStocks.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+          {filteredStocks.length === 0 ?
+          <div className="text-center py-8 text-muted-foreground">
               Hisse bulunamadı
-            </div>
-          ) : (
-            <div className="grid gap-1">
-              {filteredStocks.map((stock) => (
-                <button
-                  key={stock.id}
-                  onClick={() => handleSelect(stock)}
-                  className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-secondary transition-colors text-left"
-                >
+            </div> :
+
+          <div className="grid gap-1">
+              {filteredStocks.map((stock) =>
+            <button
+              key={stock.id}
+              onClick={() => handleSelect(stock)}
+              className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-secondary transition-colors text-left">
+
                   <div className="flex items-center gap-3">
-                    <StockLogo 
-                      symbol={stock.symbol} 
-                      logoUrl={(stock as any).logoUrl}
-                      size="md"
-                    />
+                    <StockLogo
+                  symbol={stock.symbol}
+                  logoUrl={(stock as any).logoUrl}
+                  size="md" />
+
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-foreground">
                           {stock.symbol}
                         </span>
-                        {(stock as any).isIndex && (
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/20 text-primary">Endeks</span>
-                        )}
+                        {(stock as any).isIndex
+
+                    }
                       </div>
                       <div className="text-sm text-muted-foreground">
                         {stock.name}
@@ -135,16 +135,16 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
                       ₺{stock.currentPrice.toFixed(2)}
                     </div>
                     <div
-                      className={cn(
-                        'flex items-center justify-end gap-1 text-sm',
-                        stock.change >= 0 ? 'text-profit' : 'text-loss'
-                      )}
-                    >
-                      {stock.change >= 0 ? (
-                        <TrendingUp className="w-3 h-3" />
-                      ) : (
-                        <TrendingDown className="w-3 h-3" />
-                      )}
+                  className={cn(
+                    'flex items-center justify-end gap-1 text-sm',
+                    stock.change >= 0 ? 'text-profit' : 'text-loss'
+                  )}>
+
+                      {stock.change >= 0 ?
+                  <TrendingUp className="w-3 h-3" /> :
+
+                  <TrendingDown className="w-3 h-3" />
+                  }
                       <span>
                         {stock.change >= 0 ? '+' : ''}
                         {stock.changePercent.toFixed(2)}%
@@ -152,11 +152,11 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
                     </div>
                   </div>
                 </button>
-              ))}
+            )}
             </div>
-          )}
+          }
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
