@@ -84,6 +84,19 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
       .join(', ');
   };
 
+  // Calculate RR based on exit price for closed trades
+  const getClosedRR = (trade: { trade_type: string; entry_price: number; exit_price?: number | null; stop_price: number }) => {
+    if (!trade.exit_price) return null;
+    const reward = trade.trade_type === 'buy'
+      ? trade.exit_price - trade.entry_price
+      : trade.entry_price - trade.exit_price;
+    const risk = trade.trade_type === 'buy'
+      ? trade.entry_price - trade.stop_price
+      : trade.stop_price - trade.entry_price;
+    if (risk <= 0) return null;
+    return Math.round((reward / risk) * 100) / 100;
+  };
+
   const getCurrentPriceInfo = (trade: Trade) => {
     const marketStock = getStockBySymbol(trade.stock_symbol);
     if (!marketStock) return null;
@@ -307,14 +320,19 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
 
                 {/* RR */}
                 <TableCell className="text-center">
-                  <span
-                    className={cn(
-                      'font-mono text-sm font-semibold px-2 py-1 rounded-md',
-                      (trade.rr_ratio ?? 0) >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
-                    )}
-                  >
-                    {(trade.rr_ratio ?? 0).toFixed(2)}
-                  </span>
+                  {(() => {
+                    const rr = type === 'closed' ? (getClosedRR(trade) ?? trade.rr_ratio ?? 0) : (trade.rr_ratio ?? 0);
+                    return (
+                      <span
+                        className={cn(
+                          'font-mono text-sm font-semibold px-2 py-1 rounded-md',
+                          rr >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
+                        )}
+                      >
+                        {rr.toFixed(2)}
+                      </span>
+                    );
+                  })()}
                 </TableCell>
 
                 {/* Closed trade columns */}
@@ -426,14 +444,19 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                 >
                   {trade.trade_type === 'buy' ? 'ALIŞ' : 'SATIŞ'}
                 </span>
-                <span
-                  className={cn(
-                    'font-mono text-sm font-semibold px-2 py-1 rounded-md',
-                    (trade.rr_ratio ?? 0) >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
-                  )}
-                >
-                  RR {(trade.rr_ratio ?? 0).toFixed(1)}
-                </span>
+                {(() => {
+                  const rr = type === 'closed' ? (getClosedRR(trade) ?? trade.rr_ratio ?? 0) : (trade.rr_ratio ?? 0);
+                  return (
+                    <span
+                      className={cn(
+                        'font-mono text-sm font-semibold px-2 py-1 rounded-md',
+                        rr >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
+                      )}
+                    >
+                      RR {rr.toFixed(1)}
+                    </span>
+                  );
+                })()}
                 {/* Edit + Note Icons */}
                 <div className="flex items-center gap-0.5">
                   <button
@@ -601,9 +624,14 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                 </div>
               </TableCell>
               <TableCell className="text-center">
-                <span className={cn('font-mono text-sm font-semibold px-2 py-1 rounded-md', (entry.rr_ratio ?? 0) >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
-                  {(entry.rr_ratio ?? 0).toFixed(2)}
-                </span>
+                {(() => {
+                  const rr = getClosedRR(entry) ?? entry.rr_ratio ?? 0;
+                  return (
+                    <span className={cn('font-mono text-sm font-semibold px-2 py-1 rounded-md', rr >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
+                      {rr.toFixed(2)}
+                    </span>
+                  );
+                })()}
               </TableCell>
               <TableCell className="py-1 pl-0 pr-2 w-10">
                 {(entry.closing_note || entry.stop_reason) && (
@@ -637,9 +665,14 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
               <span className={cn('text-xs font-medium px-2 py-1 rounded-full', entry.trade_type === 'buy' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
                 {entry.trade_type === 'buy' ? 'ALIŞ' : 'SATIŞ'}
               </span>
-              <span className={cn('font-mono text-sm font-semibold px-2 py-1 rounded-md', (entry.rr_ratio ?? 0) >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
-                RR {(entry.rr_ratio ?? 0).toFixed(1)}
-              </span>
+              {(() => {
+                const rr = getClosedRR(entry) ?? entry.rr_ratio ?? 0;
+                return (
+                  <span className={cn('font-mono text-sm font-semibold px-2 py-1 rounded-md', rr >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
+                    RR {rr.toFixed(1)}
+                  </span>
+                );
+              })()}
               {(entry.closing_note || entry.stop_reason) && (
                 <ClosedEntryNotesDialog entry={entry} />
               )}
