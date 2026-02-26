@@ -221,11 +221,16 @@ export function usePortfolioValueData(
       const valueTL = runningCash + runningPnL + unrealizedPnL;
 
       // Currency conversion with carry-forward
+      const TROY_OUNCE_TO_GRAM = 31.1035;
       let value = valueTL;
       if (currencyMap) {
         const rate = currencyMap.get(key);
         if (rate !== undefined && rate > 0) lastCurrencyRate = rate;
-        value = valueTL / lastCurrencyRate;
+        // Gold and silver prices from Stooq are per troy ounce, convert to per gram
+        const effectiveRate = (selectedCurrency === 'gold' || selectedCurrency === 'silver')
+          ? lastCurrencyRate / TROY_OUNCE_TO_GRAM
+          : lastCurrencyRate;
+        value = valueTL / effectiveRate;
       }
 
       points.push({
