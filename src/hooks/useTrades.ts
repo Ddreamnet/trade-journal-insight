@@ -242,6 +242,123 @@ export function useTrades() {
     },
   });
 
+  const revertPartialClose = useMutation({
+    mutationFn: async ({ entryId, tradeId }: { entryId: string; tradeId: string }) => {
+      if (!user) throw new Error('Not authenticated');
+
+      // 1. Get the partial close record
+      const { data: pc, error: pcError } = await supabase
+        .from('trade_partial_closes')
+        .select('*')
+        .eq('id', entryId)
+        .single();
+      if (pcError) throw pcError;
+
+      // 2. Get current trade
+      const { data: trade, error: tradeError } = await supabase
+        .from('trades')
+        .select('*')
+        .eq('id', tradeId)
+        .single();
+      if (tradeError) throw tradeError;
+
+      // 3. Delete partial close record
+      const { error: delPcError } = await supabase
+        .from('trade_partial_closes')
+        .delete()
+        .eq('id', entryId);
+      if (delPcError) throw delPcError;
+
+      // 4. Restore remaining_lot and revert status if fully closed
+      const newRemaining = trade.remaining_lot + pc.lot_quantity;
+      const updateData: Record<string, unknown> = { remaining_lot: newRemaining };
+      
+      if (trade.status === 'closed') {
+        updateData.status = 'active';
+        updateData.exit_price = null;
+        updateData.closing_type = null;
+        updateData.stop_reason = null;
+        updateData.closing_note = null;
+        updateData.closed_at = null;
+        updateData.is_successful = null;
+        updateData.progress_percent = null;
+      }
+
+      const { error: updateError } = await supabase
+        .from('trades')
+        .update(updateData)
+        .eq('id', tradeId);
+      if (updateError) throw updateError;
+
+      // 5. Delete related PnL events from portfolio_events
+      const { data: pnlEvents } = await supabase
+        .from('portfolio_events')
+        .select('id')
+        .eq('trade_id', tradeId)
+        .eq('event_type', 'pnl');
+
+      if (pnlEvents && pnlEvents.length > 0) {
+        const eventIds = pnlEvents.map(e => e.id);
+        // Delete related snapshots first
+        for (const eid of eventIds) {
+          await supabase.from('portfolio_snapshots').delete().eq('event_id', eid);
+        }
+        // Delete the events
+        await supabase.from('portfolio_events').delete().eq('trade_id', tradeId).eq('event_type', 'pnl');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trades', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['trade_partial_closes', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio_events'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio_snapshots'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolioCash'] });
+      queryClient.invalidateQueries({ queryKey: ['equityCurve'] });
+      toast({ title: 'Geri alındı', description: 'İşlem kapanışı geri alındı.' });
+    },
+    onError: (error) => {
+      toast({ title: 'Hata', description: 'Geri alma başarısız: ' + error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteClosedTrade = useMutation({
+    mutationFn: async ({ entryId, tradeId }: { entryId: string; tradeId: string }) => {
+      if (!user) throw new Error('Not authenticated');
+
+      // 1. Delete all partial closes for this trade
+      await supabase.from('trade_partial_closes').delete().eq('trade_id', tradeId);
+
+      // 2. Delete related portfolio events & snapshots
+      const { data: pnlEvents } = await supabase
+        .from('portfolio_events')
+        .select('id')
+        .eq('trade_id', tradeId);
+
+      if (pnlEvents && pnlEvents.length > 0) {
+        for (const ev of pnlEvents) {
+          await supabase.from('portfolio_snapshots').delete().eq('event_id', ev.id);
+        }
+        await supabase.from('portfolio_events').delete().eq('trade_id', tradeId);
+      }
+
+      // 3. Delete the trade itself
+      const { error } = await supabase.from('trades').delete().eq('id', tradeId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trades', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['trade_partial_closes', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio_events'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio_snapshots'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolioCash'] });
+      queryClient.invalidateQueries({ queryKey: ['equityCurve'] });
+      toast({ title: 'Silindi', description: 'İşlem tamamen silindi.' });
+    },
+    onError: (error) => {
+      toast({ title: 'Hata', description: 'Silme başarısız: ' + error.message, variant: 'destructive' });
+    },
+  });
+
   const activeTrades = trades.filter((t) => t.status === 'active');
   const closedTrades = trades.filter((t) => t.status === 'closed');
 
@@ -280,5 +397,7 @@ export function useTrades() {
     closeTrade,
     updateTrade,
     deleteTrade,
+    revertPartialClose,
+    deleteClosedTrade,
   };
 }
