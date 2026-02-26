@@ -19,7 +19,7 @@ export default function Index() {
   const [isExchangeOpen, setIsExchangeOpen] = useState(false);
   const [highlightedTradeId, setHighlightedTradeId] = useState<string | null>(null);
 
-  const { activeTrades, closedTradeEntries, createTrade, closeTrade, updateTrade, deleteTrade, isLoading } = useTrades();
+  const { activeTrades, closedTradeEntries, createTrade, closeTrade, updateTrade, deleteTrade, revertPartialClose, deleteClosedTrade, isLoading } = useTrades();
 
   const handleStockSelect = (stock: Stock & { logoUrl?: string }) => {
     setSelectedStock(stock);
@@ -61,6 +61,14 @@ export default function Index() {
 
   const handleDeleteTrade = async (tradeId: string) => {
     await deleteTrade.mutateAsync(tradeId);
+  };
+
+  const handleRevertClose = async (entryId: string, tradeId: string) => {
+    await revertPartialClose.mutateAsync({ entryId, tradeId });
+  };
+
+  const handleDeleteClosedTrade = async (entryId: string, tradeId: string) => {
+    await deleteClosedTrade.mutateAsync({ entryId, tradeId });
   };
 
   return (
@@ -133,6 +141,8 @@ export default function Index() {
             closedEntries={closedTradeEntries}
             type="closed"
             isLoading={isLoading}
+            onRevertClose={handleRevertClose}
+            onDeleteClosedTrade={handleDeleteClosedTrade}
           />
         </TabsContent>
       </Tabs>

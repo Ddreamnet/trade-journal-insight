@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, X, StickyNote, Pencil, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, X, StickyNote, AlertTriangle, Undo2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trade, ClosedTradeEntry, TRADE_REASONS, STOP_REASONS, ClosingType } from '@/types/trade';
@@ -15,6 +15,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Tooltip,
   TooltipContent,
@@ -37,13 +47,17 @@ interface TradeListProps {
   onCloseTrade?: (tradeId: string, exitPrice: number, closingType: ClosingType, lotQuantity: number, stopReason?: string, closingNote?: string) => void;
   onUpdateTrade?: (tradeId: string, data: TradeUpdateData) => void;
   onDeleteTrade?: (tradeId: string) => void;
+  onRevertClose?: (entryId: string, tradeId: string) => void;
+  onDeleteClosedTrade?: (entryId: string, tradeId: string) => void;
   highlightedTradeId?: string | null;
   isLoading?: boolean;
 }
 
-export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade, onUpdateTrade, onDeleteTrade, highlightedTradeId, isLoading = false }: TradeListProps) {
+export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade, onUpdateTrade, onDeleteTrade, onRevertClose, onDeleteClosedTrade, highlightedTradeId, isLoading = false }: TradeListProps) {
   const [closingTrade, setClosingTrade] = useState<Trade | null>(null);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const [closedActionEntry, setClosedActionEntry] = useState<ClosedTradeEntry | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'revert' | 'delete' | null>(null);
   const { getStockBySymbol } = useMarketData();
 
   const handleCloseConfirm = (exitPrice: number, closingType: ClosingType, lotQuantity: number, stopReason?: string, closingNote?: string) => {
@@ -65,6 +79,21 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
       onDeleteTrade(tradeId);
       setEditingTrade(null);
     }
+  };
+
+  const handleClosedAction = (action: 'revert' | 'delete') => {
+    setConfirmAction(action);
+  };
+
+  const handleConfirmAction = () => {
+    if (!closedActionEntry || !confirmAction) return;
+    if (confirmAction === 'revert' && onRevertClose) {
+      onRevertClose(closedActionEntry.id, closedActionEntry.trade_id);
+    } else if (confirmAction === 'delete' && onDeleteClosedTrade) {
+      onDeleteClosedTrade(closedActionEntry.id, closedActionEntry.trade_id);
+    }
+    setConfirmAction(null);
+    setClosedActionEntry(null);
   };
 
   const getReasonLabels = (reasonIds: string[]) => {
@@ -145,6 +174,59 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
     </Dialog>
   );
 
+  // Clickable stock area component for active trades
+  const ClickableStockArea = ({ trade }: { trade: Trade }) => (
+    <button
+      onClick={() => setEditingTrade(trade)}
+      className="flex items-center gap-2 cursor-pointer rounded-lg p-1 -m-1 hover:bg-secondary/60 transition-colors"
+    >
+      <div
+        className={cn(
+          'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+          trade.trade_type === 'buy' ? 'bg-profit/20' : 'bg-loss/20'
+        )}
+      >
+        {trade.trade_type === 'buy' ? (
+          <TrendingUp className="w-4 h-4 text-profit" />
+        ) : (
+          <TrendingDown className="w-4 h-4 text-loss" />
+        )}
+      </div>
+      <div className="text-left">
+        <div className="font-semibold text-foreground text-sm flex items-center gap-1">
+          {trade.stock_symbol}
+          {type === 'active' && trade.lot_quantity === 0 && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <AlertTriangle className="w-3 h-3 text-warning" />
+                </TooltipTrigger>
+                <TooltipContent>Lot bilgisi eksik</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
+        <div className="text-xs text-muted-foreground truncate max-w-[80px]">{trade.stock_name}</div>
+      </div>
+    </button>
+  );
+
+  // Clickable stock area for closed entries
+  const ClickableClosedStockArea = ({ entry }: { entry: ClosedTradeEntry }) => (
+    <button
+      onClick={() => setClosedActionEntry(entry)}
+      className="flex items-center gap-2 cursor-pointer rounded-lg p-1 -m-1 hover:bg-secondary/60 transition-colors"
+    >
+      <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', entry.trade_type === 'buy' ? 'bg-profit/20' : 'bg-loss/20')}>
+        {entry.trade_type === 'buy' ? <TrendingUp className="w-4 h-4 text-profit" /> : <TrendingDown className="w-4 h-4 text-loss" />}
+      </div>
+      <div className="text-left">
+        <div className="font-semibold text-foreground text-sm">{entry.stock_symbol}</div>
+        <div className="text-xs text-muted-foreground truncate max-w-[80px]">{entry.stock_name}</div>
+      </div>
+    </button>
+  );
+
   if (isLoading) {
     return (
       <div className="rounded-xl bg-card border border-border overflow-hidden">
@@ -215,38 +297,21 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                   highlightedTradeId === trade.id && 'highlight-new bg-primary/10'
                 )}
               >
-                {/* Hisse */}
+                {/* Hisse - Clickable */}
                 <TableCell className="py-3">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={cn(
-                        'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                        trade.trade_type === 'buy' ? 'bg-profit/20' : 'bg-loss/20'
-                      )}
-                    >
-                      {trade.trade_type === 'buy' ? (
-                        <TrendingUp className="w-4 h-4 text-profit" />
-                      ) : (
-                        <TrendingDown className="w-4 h-4 text-loss" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-foreground text-sm flex items-center gap-1">
-                        {trade.stock_symbol}
-                        {type === 'active' && trade.lot_quantity === 0 && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <AlertTriangle className="w-3 h-3 text-warning" />
-                              </TooltipTrigger>
-                              <TooltipContent>Lot bilgisi eksik</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
+                  {type === 'active' ? (
+                    <ClickableStockArea trade={trade} />
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', trade.trade_type === 'buy' ? 'bg-profit/20' : 'bg-loss/20')}>
+                        {trade.trade_type === 'buy' ? <TrendingUp className="w-4 h-4 text-profit" /> : <TrendingDown className="w-4 h-4 text-loss" />}
                       </div>
-                      <div className="text-xs text-muted-foreground truncate max-w-[80px]">{trade.stock_name}</div>
+                      <div>
+                        <div className="font-semibold text-foreground text-sm">{trade.stock_symbol}</div>
+                        <div className="text-xs text-muted-foreground truncate max-w-[80px]">{trade.stock_name}</div>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </TableCell>
 
                 {/* İşlem Türü */}
@@ -371,16 +436,9 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                   </TableCell>
                 )}
 
-                {/* Edit + Note Icons */}
+                {/* Note Icon only (pencil removed for active) */}
                 <TableCell className="py-1 pl-0 pr-2 w-10">
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setEditingTrade(trade)}
-                      className="p-1 rounded hover:bg-secondary transition-colors"
-                      title="Düzenle"
-                    >
-                      <Pencil className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                    </button>
                     {(trade.closing_note || trade.stop_reason) && (
                       <NotesDialog trade={trade} />
                     )}
@@ -410,29 +468,19 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
           >
             {/* Row 1: Hisse + Tür + RR + Icons */}
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                    trade.trade_type === 'buy' ? 'bg-profit/20' : 'bg-loss/20'
-                  )}
-                >
-                  {trade.trade_type === 'buy' ? (
-                    <TrendingUp className="w-4 h-4 text-profit" />
-                  ) : (
-                    <TrendingDown className="w-4 h-4 text-loss" />
-                  )}
-                </div>
-                <div>
-                  <div className="font-semibold text-foreground text-sm flex items-center gap-1">
-                    {trade.stock_symbol}
-                    {type === 'active' && trade.lot_quantity === 0 && (
-                      <AlertTriangle className="w-3 h-3 text-warning" />
-                    )}
+              {type === 'active' ? (
+                <ClickableStockArea trade={trade} />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', trade.trade_type === 'buy' ? 'bg-profit/20' : 'bg-loss/20')}>
+                    {trade.trade_type === 'buy' ? <TrendingUp className="w-4 h-4 text-profit" /> : <TrendingDown className="w-4 h-4 text-loss" />}
                   </div>
-                  <div className="text-xs text-muted-foreground">{trade.stock_name}</div>
+                  <div>
+                    <div className="font-semibold text-foreground text-sm">{trade.stock_symbol}</div>
+                    <div className="text-xs text-muted-foreground">{trade.stock_name}</div>
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="flex items-center gap-2">
                 <span
                   className={cn(
@@ -457,15 +505,8 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                     </span>
                   );
                 })()}
-                {/* Edit + Note Icons */}
+                {/* Note Icon only */}
                 <div className="flex items-center gap-0.5">
-                  <button
-                    onClick={() => setEditingTrade(trade)}
-                    className="p-1 rounded hover:bg-secondary transition-colors"
-                    title="Düzenle"
-                  >
-                    <Pencil className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                  </button>
                   {(trade.closing_note || trade.stop_reason) && (
                     <NotesDialog trade={trade} />
                   )}
@@ -591,15 +632,7 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
           {closedEntries.map((entry) => (
             <TableRow key={entry.id} className="border-border transition-all">
               <TableCell className="py-3">
-                <div className="flex items-center gap-2">
-                  <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', entry.trade_type === 'buy' ? 'bg-profit/20' : 'bg-loss/20')}>
-                    {entry.trade_type === 'buy' ? <TrendingUp className="w-4 h-4 text-profit" /> : <TrendingDown className="w-4 h-4 text-loss" />}
-                  </div>
-                  <div>
-                    <div className="font-semibold text-foreground text-sm">{entry.stock_symbol}</div>
-                    <div className="text-xs text-muted-foreground truncate max-w-[80px]">{entry.stock_name}</div>
-                  </div>
-                </div>
+                <ClickableClosedStockArea entry={entry} />
               </TableCell>
               <TableCell className="text-center">
                 <span className={cn('text-xs font-medium px-2 py-1 rounded-full', entry.trade_type === 'buy' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
@@ -652,15 +685,7 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
         <div key={entry.id} className="p-3 rounded-xl bg-card border border-border transition-all">
           {/* Row 1: Hisse + Tür + RR + Note */}
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', entry.trade_type === 'buy' ? 'bg-profit/20' : 'bg-loss/20')}>
-                {entry.trade_type === 'buy' ? <TrendingUp className="w-4 h-4 text-profit" /> : <TrendingDown className="w-4 h-4 text-loss" />}
-              </div>
-              <div>
-                <div className="font-semibold text-foreground text-sm">{entry.stock_symbol}</div>
-                <div className="text-xs text-muted-foreground">{entry.stock_name}</div>
-              </div>
-            </div>
+            <ClickableClosedStockArea entry={entry} />
             <div className="flex items-center gap-2">
               <span className={cn('text-xs font-medium px-2 py-1 rounded-full', entry.trade_type === 'buy' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
                 {entry.trade_type === 'buy' ? 'ALIŞ' : 'SATIŞ'}
@@ -789,6 +814,55 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
           onDelete={handleDelete}
         />
       )}
+
+      {/* Closed Trade Action Dialog */}
+      <Dialog open={!!closedActionEntry && !confirmAction} onOpenChange={(open) => { if (!open) setClosedActionEntry(null); }}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>{closedActionEntry?.stock_symbol} - İşlem Seçenekleri</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-2">
+            <Button
+              variant="outline"
+              className="w-full gap-2 justify-start"
+              onClick={() => handleClosedAction('revert')}
+            >
+              <Undo2 className="w-4 h-4" />
+              Kapanışı Geri Al
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full gap-2 justify-start"
+              onClick={() => handleClosedAction('delete')}
+            >
+              <Trash2 className="w-4 h-4" />
+              İşlemi Sil
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Alert Dialog */}
+      <AlertDialog open={!!confirmAction} onOpenChange={(open) => { if (!open) setConfirmAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmAction === 'revert' ? 'Kapanışı Geri Al' : 'İşlemi Sil'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction === 'revert'
+                ? 'Bu kapanış geri alınacak ve işlem aktif portföye dönecek. Devam etmek istiyor musunuz?'
+                : 'Bu işlem tamamen silinecek ve geri alınamaz. Devam etmek istiyor musunuz?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>İptal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmAction}>
+              {confirmAction === 'revert' ? 'Geri Al' : 'Sil'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
