@@ -1,85 +1,48 @@
 
 
-# Aktif ve Kapali Portfoy Etklesim Degisiklikleri
+# Altin ve Gumus Gram Hesaplama Duzeltmesi
 
-## Ozet
+## Sorun
 
-Aktif portfoylerde duzenleme ikonu kaldirilip hisse gorseli+ismi tiklanabilir hale getirilecek. Kapali portfoylerde de ayni alan tiklanabilir olacak ve acilan dialogda "Geri Al" ve "Sil" secenekleri sunulacak.
+Stooq API'sinden gelen XAUTRY ve XAGTRY fiyatlari **troy ons** (31.1035 gram) bazindadir. Ancak `usePortfolioValueData` hook'u bu fiyati dogrudan boler gibi kullaniyor:
 
-## 1. Aktif Portfoy: Hisse Alani Tiklanabilir Olsun
+```
+value = valueTL / lastCurrencyRate
+```
 
-**Dosya:** `src/components/trade/TradeList.tsx`
+Ornek: 105.392 TL / 224.000 TL/ons = 0,47 ons seklinde hesaplaniyor ama tooltip'te "gr" (gram) olarak gosteriliyor. Dogru hesap: 105.392 / (224.000 / 31.1035) = ~14,6 gram olmali.
 
-- Desktop ve mobile gorunumde hisse gorseli + isim alani `cursor-pointer` ve `hover` efekti ile buton haline getirilecek
-- Tiklandiginda mevcut `setEditingTrade(trade)` cagirilacak (ayni EditTradeModal acilacak)
-- Kalem (Pencil) ikonu **aktif islemler icin** kaldirilacak
-- Not (StickyNote) ikonu oldugu gibi kalacak
+## Cozum
 
-## 2. Kapali Portfoy: Hisse Alani Tiklanabilir + Yeni Dialog
+**Dosya:** `src/hooks/usePortfolioValueData.ts`
 
-**Dosya:** `src/components/trade/TradeList.tsx`
+Kur donusumu yapilan satirda (228. satir), altin ve gumus icin ons fiyatini gram fiyatina cevirmek gerekiyor:
 
-- Kapali portfoylerde (ClosedEntries) hisse gorseli + isim alanina tiklandiginda yeni bir dialog acilacak
-- Bu dialog iki secenek sunacak:
-  - **Geri Al**: Kapanisi geri alir, islem aktif portfoye doner
-  - **Sil**: Islemi tamamen siler (hic acilmamis gibi)
-- Her iki islem icin onay (AlertDialog) gosterilecek
+```typescript
+const TROY_OUNCE_TO_GRAM = 31.1035;
 
-## 3. Geri Alma Islemi (Revert)
+// Currency conversion
+if (currencyMap) {
+  const rate = currencyMap.get(key);
+  if (rate !== undefined && rate > 0) lastCurrencyRate = rate;
+  
+  // Gold and silver prices from Stooq are per troy ounce, convert to per gram
+  const effectiveRate = (selectedCurrency === 'gold' || selectedCurrency === 'silver')
+    ? lastCurrencyRate / TROY_OUNCE_TO_GRAM
+    : lastCurrencyRate;
+  
+  value = valueTL / effectiveRate;
+}
+```
 
-**Dosya:** `src/hooks/useTrades.ts`
+Bu sayede:
+- **Altin**: 105.392 TL / (224.000 / 31.1035) = ~14,6 gram (dogru)
+- **Gumus**: Ayni mantikla gram bazinda dogru hesaplanacak
+- **USD/EUR**: Hicbir degisiklik yok
 
-Yeni bir `revertPartialClose` mutation eklenecek:
+## Etki
 
-1. `trade_partial_closes` tablosundan ilgili kayit silinecek
-2. Parent trade'in `remaining_lot` degeri geri arttirilacak (kapatilan lot kadar)
-3. Eger trade statusu `closed` ise (tam kapanmissa), status `active`'e cevirilecek ve `exit_price`, `closing_type`, `stop_reason`, `closing_note`, `closed_at` alanlari temizlenecek
-4. Ilgili `portfolio_events` kaydi da silinecek (PnL eventi)
-5. Tum ilgili query'ler invalidate edilecek: `trades`, `trade_partial_closes`, `portfolio_events`, `portfolio_snapshots`, `portfolioCash`, `equityCurve`
-
-**Onemli:** `portfolio_events` tablosunda `trade_id` alani var. Kapanisa ait PnL event'i bu trade_id ile bulunup silinecek. Ancak partial close'larda PnL event'i `trade_partial_closes` trigger'i uzerinden degil, `close_trade_partial` RPC icinde olusturulmuyor - mevcut trigger `create_pnl_event_on_trade_close` sadece tam kapanislarda calisiyor. Bu nedenle geri alma islemi sirasinda portfolio_events'ten ilgili kaydin silinmesi gerekecek.
-
-## 4. Silme Islemi (Delete Closed Trade)
-
-**Dosya:** `src/hooks/useTrades.ts`
-
-Yeni bir `deleteClosedTrade` mutation eklenecek:
-
-1. `trade_partial_closes` tablosundan bu trade'e ait tum kayitlar silinecek
-2. `portfolio_events` tablosundan bu trade_id ile iliskili tum PnL eventleri silinecek
-3. `trades` tablosundan trade silinecek
-4. Tum ilgili query'ler invalidate edilecek
-
-## 5. TradeList Props Guncelleme
-
-**Dosya:** `src/components/trade/TradeList.tsx`
-
-TradeListProps'a yeni callback'ler eklenecek:
-- `onRevertClose?: (entryId: string, tradeId: string) => void`
-- `onDeleteClosedTrade?: (entryId: string, tradeId: string) => void`
-
-## 6. Index Sayfasi Entegrasyonu
-
-**Dosya:** `src/pages/Index.tsx`
-
-- Kapali portfoy TradeList'e yeni handler'lar baglanacak
-- `useTrades` hook'undan yeni mutation'lar alinacak
-- Handler fonksiyonlari olusturulacak
-
-## 7. Grafik Guncellemesi
-
-Mevcut grafik hook'lari (`useEquityCurveData`, `usePortfolioValueData`) zaten `portfolio_events` ve `portfolio_snapshots` query'lerine bagli. Bu query'ler invalidate edildiginde grafikler otomatik guncellenecek. Ek olarak `portfolioCash` query'si de invalidate edilecek ki kullanilabilir nakit dogru gosterilsin.
-
-## Degisecek Dosyalar
-
-| Dosya | Degisiklik |
-|-------|-----------|
-| `src/components/trade/TradeList.tsx` | Hisse alani tiklanabilir, pencil ikonu kaldirilma, kapali portfoy dialog ekleme |
-| `src/hooks/useTrades.ts` | `revertPartialClose` ve `deleteClosedTrade` mutation'lari |
-| `src/pages/Index.tsx` | Yeni handler'larin baglanmasi |
-
-## Riskler
-
-- **Snapshot tutarsizligi**: `portfolio_snapshots` tablosu trigger ile olusturuluyor. PnL event silindiginde ilgili snapshot da silinmeli veya recalculate edilmeli. En guvenli yol: ilgili snapshot'i da silmek ve sonraki snapshot'lari yeniden hesaplatmak. Ancak bu karmasik olabilir. Alternatif olarak sadece `portfolio_events`'ten silip snapshot'larin stale kalmasina izin verebiliriz - bu durumda equity curve verileri tam dogru olmayabilir. En iyi yaklasim: Geri alma/silme isleminde ilgili event_id'ye ait snapshot'i da silmek.
-- **Partial close cascade**: Bir trade'in birden fazla partial close'u olabilir. Geri alma tek bir partial close icin calisacak. Tum trade'i silme ise hepsini temizleyecek.
+- Sadece `src/hooks/usePortfolioValueData.ts` dosyasinda tek bir degisiklik
+- Diger grafiklerdeki benchmark karsilastirmalari bu hook'u kullanmadigi icin etkilenmez
+- Tooltip formati zaten "gr" gosteriyor, sadece deger dogru olacak
 
