@@ -52,27 +52,16 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
 
   const hasDirectionalError = directionalErrors.length > 0;
 
-  const rrRatio = useMemo(() => {
-    if (isNaN(parsedEntry) || isNaN(parsedTarget) || isNaN(parsedStop)) return null;
-    if (parsedEntry <= 0 || parsedTarget <= 0 || parsedStop <= 0) return null;
-    if (hasDirectionalError) return null;
-
-    if (tradeType === 'buy') {
-      const risk = parsedEntry - parsedStop;
-      if (risk <= 0) return null;
-      return (parsedTarget - parsedEntry) / risk;
-    } else {
-      const risk = parsedStop - parsedEntry;
-      if (risk <= 0) return null;
-      return (parsedEntry - parsedTarget) / risk;
-    }
-  }, [parsedEntry, parsedTarget, parsedStop, tradeType, hasDirectionalError]);
+  const rrRatio = useMemo(
+    () => calculateRR(tradeType, parsedEntry, parsedTarget, parsedStop, hasDirectionalError),
+    [parsedEntry, parsedTarget, parsedStop, tradeType, hasDirectionalError]
+  );
 
   // Position amount calculation
-  const positionAmount = useMemo(() => {
-    if (isNaN(parsedEntry) || isNaN(parsedLot) || parsedLot <= 0) return null;
-    return parsedEntry * parsedLot;
-  }, [parsedEntry, parsedLot]);
+  const positionAmount = useMemo(
+    () => calculatePositionAmount(parsedEntry, parsedLot),
+    [parsedEntry, parsedLot]
+  );
 
   const toggleReason = (reasonId: StopReason) => {
     setReasons((prev) =>
