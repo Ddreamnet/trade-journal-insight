@@ -8,6 +8,8 @@ import { tr } from 'date-fns/locale';
 
 export type PortfolioCurrency = 'TL' | 'USD' | 'EUR' | 'gold' | 'silver';
 
+const TROY_OUNCE_TO_GRAM = 31.1035;
+
 interface CashFlowInput {
   flow_type: string;
   amount: number;
