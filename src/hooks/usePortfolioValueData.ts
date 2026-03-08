@@ -58,15 +58,10 @@ export function usePortfolioValueData(
   );
 
   // Group partial closes by trade_id for fast lookup
-  const partialClosesByTrade = useMemo(() => {
-    const map = new Map<string, PartialCloseRecord[]>();
-    for (const pc of partialCloses) {
-      const existing = map.get(pc.trade_id) || [];
-      existing.push(pc);
-      map.set(pc.trade_id, existing);
-    }
-    return map;
-  }, [partialCloses]);
+  const partialClosesByTrade = useMemo(
+    () => groupPartialClosesByTrade(partialCloses),
+    [partialCloses]
+  );
 
   const missingSet = useMemo(() => new Set(priceDataMissing), [priceDataMissing]);
 
