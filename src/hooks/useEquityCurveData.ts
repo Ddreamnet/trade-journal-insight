@@ -11,6 +11,11 @@ import {
   subMonths,
 } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import {
+  PartialCloseRecord,
+  groupPartialClosesByTrade,
+  calculateUnrealizedPnL,
+} from '@/lib/portfolioCalc';
 
 export interface PartialCloseRecord {
   id: string;
