@@ -1,6 +1,7 @@
 import { useMemo, useEffect } from 'react';
 import { Trade } from '@/types/trade';
-import { PartialCloseRecord, calculateT0FromTrades } from './useEquityCurveData';
+import { PartialCloseRecord, groupPartialClosesByTrade, calculateUnrealizedPnL } from '@/lib/portfolioCalc';
+import { calculateT0FromTrades } from './useEquityCurveData';
 import { useMarketSeries } from '@/contexts/MarketSeriesContext';
 import { MarketAsset } from '@/types/market';
 import { format, parseISO, startOfDay, addDays } from 'date-fns';
