@@ -78,27 +78,10 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
   const hasAnyNegativeError = hasNegativeEntry || hasNegativeTarget || hasNegativeStop;
 
   // Directional validation
-  const directionalErrors = useMemo(() => {
-    const errors: string[] = [];
-    if (isNaN(parsedEntry) || parsedEntry <= 0) return errors;
-
-    if (tradeType === 'buy') {
-      if (!isNaN(parsedTarget) && parsedTarget > 0 && parsedTarget <= parsedEntry) {
-        errors.push('AL işleminde hedef fiyat giriş fiyatından büyük olmalı');
-      }
-      if (!isNaN(parsedStop) && parsedStop > 0 && parsedStop >= parsedEntry) {
-        errors.push('AL işleminde stop fiyat giriş fiyatından küçük olmalı');
-      }
-    } else {
-      if (!isNaN(parsedTarget) && parsedTarget > 0 && parsedTarget >= parsedEntry) {
-        errors.push('SAT işleminde hedef fiyat giriş fiyatından küçük olmalı');
-      }
-      if (!isNaN(parsedStop) && parsedStop > 0 && parsedStop <= parsedEntry) {
-        errors.push('SAT işleminde stop fiyat giriş fiyatından büyük olmalı');
-      }
-    }
-    return errors;
-  }, [tradeType, parsedEntry, parsedTarget, parsedStop]);
+  const directionalErrors = useMemo(
+    () => validateDirectional(tradeType, parsedEntry, parsedTarget, parsedStop),
+    [tradeType, parsedEntry, parsedTarget, parsedStop]
+  );
 
   const hasDirectionalError = directionalErrors.length > 0;
 
