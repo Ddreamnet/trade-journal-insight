@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { validateDirectional, calculateRR, calculatePositionAmount } from '@/lib/tradeValidation';
 import { X, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NumberInput } from '@/components/ui/number-input';
