@@ -223,7 +223,6 @@ export function usePortfolioValueData(
       const valueTL = runningCash + runningPnL + unrealizedPnL;
 
       // Currency conversion with carry-forward
-      const TROY_OUNCE_TO_GRAM = 31.1035;
       let value = valueTL;
       if (currencyMap) {
         const rate = currencyMap.get(key);

@@ -15,31 +15,9 @@ export interface TradeInsert {
   lot_quantity?: number;
 }
 
-export interface TradeRow {
-  id: string;
-  user_id: string;
-  stock_symbol: string;
-  stock_name: string;
-  trade_type: 'buy' | 'sell';
-  entry_price: number;
-  target_price: number;
-  stop_price: number;
-  reasons: string[];
-  rr_ratio: number | null;
-  status: 'active' | 'closed';
-  exit_price: number | null;
-  progress_percent: number | null;
-  is_successful: boolean | null;
-  created_at: string;
-  updated_at: string;
-  closed_at: string | null;
-  closing_note: string | null;
-  position_amount: number | null;
-  closing_type: ClosingType | null;
-  stop_reason: string | null;
-  lot_quantity: number;
-  remaining_lot: number;
-}
+// TradeRow is now unified with Trade from @/types/trade
+import { Trade } from '@/types/trade';
+type TradeRow = Trade;
 
 export interface CloseTradeParams {
   tradeId: string;
