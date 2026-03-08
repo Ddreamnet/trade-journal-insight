@@ -17,8 +17,9 @@ const MarketSeriesContext = createContext<MarketSeriesContextType | null>(null);
 const STORAGE_KEY = 'market-series-cache';
 const CACHE_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 
-// Edge function URL
-const API_URL = 'https://pjqbpkblutbdpfzzwxmr.supabase.co/functions/v1/market-series';
+// Use Supabase project URL from client config
+const SUPABASE_PROJECT_URL = 'https://pjqbpkblutbdpfzzwxmr.supabase.co';
+const API_URL = `${SUPABASE_PROJECT_URL}/functions/v1/market-series`;
 // Fallback to cPanel PHP endpoint if edge function fails
 const PHP_API_URL = '/api/market-series.php';
 

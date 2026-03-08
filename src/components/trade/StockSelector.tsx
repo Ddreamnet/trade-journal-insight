@@ -15,9 +15,7 @@ interface StockSelectorProps {
 
 export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const { stocks } = useMarketData();
-
-  const { xu030 } = useMarketData();
+  const { stocks, xu030 } = useMarketData();
 
   // Convert MarketStock to Stock format and filter
   const filteredStocks = useMemo(() => {

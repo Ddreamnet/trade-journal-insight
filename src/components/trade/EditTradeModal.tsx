@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { validateDirectional, calculateRR, calculatePositionAmount } from '@/lib/tradeValidation';
 import { X, Trash2, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
@@ -77,54 +78,26 @@ export function EditTradeModal({ trade, onClose, onSave, onDelete, isSubmitting 
   const hasAnyNegativeError = hasNegativeEntry || hasNegativeTarget || hasNegativeStop;
 
   // Directional validation
-  const directionalErrors = useMemo(() => {
-    const errors: string[] = [];
-    if (isNaN(parsedEntry) || parsedEntry <= 0) return errors;
-
-    if (tradeType === 'buy') {
-      if (!isNaN(parsedTarget) && parsedTarget > 0 && parsedTarget <= parsedEntry) {
-        errors.push('AL işleminde hedef fiyat giriş fiyatından büyük olmalı');
-      }
-      if (!isNaN(parsedStop) && parsedStop > 0 && parsedStop >= parsedEntry) {
-        errors.push('AL işleminde stop fiyat giriş fiyatından küçük olmalı');
-      }
-    } else {
-      if (!isNaN(parsedTarget) && parsedTarget > 0 && parsedTarget >= parsedEntry) {
-        errors.push('SAT işleminde hedef fiyat giriş fiyatından küçük olmalı');
-      }
-      if (!isNaN(parsedStop) && parsedStop > 0 && parsedStop <= parsedEntry) {
-        errors.push('SAT işleminde stop fiyat giriş fiyatından büyük olmalı');
-      }
-    }
-    return errors;
-  }, [tradeType, parsedEntry, parsedTarget, parsedStop]);
+  const directionalErrors = useMemo(
+    () => validateDirectional(tradeType, parsedEntry, parsedTarget, parsedStop),
+    [tradeType, parsedEntry, parsedTarget, parsedStop]
+  );
 
   const hasDirectionalError = directionalErrors.length > 0;
 
   // Legacy lot warning
   const isLegacyLot = trade.lot_quantity === 0 && !isClosed;
 
-  const rrRatio = useMemo(() => {
-    if (isNaN(parsedEntry) || isNaN(parsedTarget) || isNaN(parsedStop)) return null;
-    if (parsedEntry <= 0 || parsedTarget <= 0 || parsedStop <= 0) return null;
-    if (hasDirectionalError) return null;
-
-    if (tradeType === 'buy') {
-      const risk = parsedEntry - parsedStop;
-      if (risk <= 0) return null;
-      return (parsedTarget - parsedEntry) / risk;
-    } else {
-      const risk = parsedStop - parsedEntry;
-      if (risk <= 0) return null;
-      return (parsedEntry - parsedTarget) / risk;
-    }
-  }, [parsedEntry, parsedTarget, parsedStop, tradeType, hasDirectionalError]);
+  const rrRatio = useMemo(
+    () => calculateRR(tradeType, parsedEntry, parsedTarget, parsedStop, hasDirectionalError),
+    [parsedEntry, parsedTarget, parsedStop, tradeType, hasDirectionalError]
+  );
 
   // Position amount calculation
-  const positionAmount = useMemo(() => {
-    if (isNaN(parsedEntry) || isNaN(parsedLot) || parsedLot <= 0) return null;
-    return parsedEntry * parsedLot;
-  }, [parsedEntry, parsedLot]);
+  const positionAmount = useMemo(
+    () => calculatePositionAmount(parsedEntry, parsedLot),
+    [parsedEntry, parsedLot]
+  );
 
   const toggleReason = (reasonId: TradeReason) => {
     setReasons((prev) => (prev.includes(reasonId) ? prev.filter((r) => r !== reasonId) : [...prev, reasonId]));
