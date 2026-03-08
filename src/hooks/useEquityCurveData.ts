@@ -373,52 +373,9 @@ export function useEquityCurveData(
       cumulativeRealized += dayRealized;
 
       // Calculate unrealized PnL for all trades open on this day
-      let unrealizedPnL = 0;
-
-      for (const trade of allTrades) {
-        const tradeOpen = startOfDay(parseISO(trade.created_at));
-        const tradeClosed = trade.closed_at ? startOfDay(parseISO(trade.closed_at)) : null;
-
-        // Is this trade open on this day?
-        if (tradeOpen > currentDay) continue;
-        if (tradeClosed && tradeClosed <= currentDay) continue;
-
-        // Get remaining lot at this day
-        const tradePC = partialClosesByTrade.get(trade.id) || [];
-        const remainingLot = getRemainingLotAtDay(trade, key, tradePC);
-        if (remainingLot <= 0) continue;
-
-        // Get current price
-        let currentPrice: number;
-        const symbolPrices = stockPriceMap.get(trade.stock_symbol);
-
-        if (symbolPrices && symbolPrices.size > 0) {
-          // Use actual price data
-          currentPrice = symbolPrices.get(key) ?? trade.entry_price;
-        } else if (missingSet.has(trade.stock_symbol)) {
-          // Fallback: linear interpolation if closed, entry price if active
-          if (trade.closed_at && trade.exit_price) {
-            currentPrice = linearInterpolatePrice(
-              trade.entry_price,
-              trade.exit_price,
-              tradeOpen,
-              tradeClosed,
-              currentDay
-            );
-          } else {
-            currentPrice = trade.entry_price;
-          }
-        } else {
-          currentPrice = trade.entry_price;
-        }
-
-        // Calculate unrealized PnL
-        if (trade.trade_type === 'buy') {
-          unrealizedPnL += (currentPrice - trade.entry_price) * remainingLot;
-        } else {
-          unrealizedPnL += (trade.entry_price - currentPrice) * remainingLot;
-        }
-      }
+      const unrealizedPnL = calculateUnrealizedPnL(
+        allTrades, currentDay, key, partialClosesByTrade, stockPriceMap, missingSet
+      );
 
       const portfolioValue = startingCapital + cumulativeRealized + unrealizedPnL;
 
