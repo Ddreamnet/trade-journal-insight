@@ -114,7 +114,7 @@ export function useStockPriceSeries(
     queryFn: async (): Promise<StockSeriesResponse> => {
       if (symbols.length === 0) return {};
 
-      const projectUrl = 'https://pjqbpkblutbdpfzzwxmr.supabase.co';
+      const projectUrl = import.meta.env.VITE_SUPABASE_URL || 'https://pjqbpkblutbdpfzzwxmr.supabase.co';
       const response = await fetch(
         `${projectUrl}/functions/v1/stock-series?symbols=${encodeURIComponent(symbolsKey)}`,
         {

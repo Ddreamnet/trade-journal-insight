@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -8,7 +8,16 @@ interface AuthState {
   isLoading: boolean;
 }
 
-export function useAuth() {
+interface AuthContextType extends AuthState {
+  isAuthenticated: boolean;
+  signIn: (email: string, password: string) => Promise<{ data: any; error: any }>;
+  signUp: (email: string, password: string, name?: string) => Promise<{ data: any; error: any }>;
+  signOut: () => Promise<{ error: any }>;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     session: null,
@@ -16,9 +25,8 @@ export function useAuth() {
   });
 
   useEffect(() => {
-    // Set up auth state listener BEFORE checking session
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (_event, session) => {
         setAuthState({
           user: session?.user ?? null,
           session,
@@ -27,7 +35,6 @@ export function useAuth() {
       }
     );
 
-    // Check current session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setAuthState({
         user: session?.user ?? null,
@@ -42,10 +49,7 @@ export function useAuth() {
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     return { data, error };
   }, []);
 
@@ -55,9 +59,7 @@ export function useAuth() {
       password,
       options: {
         emailRedirectTo: window.location.origin,
-        data: {
-          full_name: name,
-        },
+        data: { full_name: name },
       },
     });
     return { data, error };
@@ -68,13 +70,21 @@ export function useAuth() {
     return { error };
   }, []);
 
-  return {
-    user: authState.user,
-    session: authState.session,
-    isLoading: authState.isLoading,
+  const value: AuthContextType = {
+    ...authState,
     isAuthenticated: !!authState.session,
     signIn,
     signUp,
     signOut,
   };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthContextType {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 }
