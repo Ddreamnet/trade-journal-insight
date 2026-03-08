@@ -106,39 +106,7 @@ function calculateCumulativeRealizedPnL(partialCloses: PartialCloseRecord[]): Ma
  * For a given trade, compute remaining_lot at a specific day
  * by subtracting partial closes that happened on or before that day
  */
-function getRemainingLotAtDay(
-  trade: Trade,
-  dayKey: string,
-  tradePartialCloses: PartialCloseRecord[]
-): number {
-  let closed = 0;
-  for (const pc of tradePartialCloses) {
-    const pcKey = format(startOfDay(parseISO(pc.created_at)), 'yyyy-MM-dd');
-    if (pcKey <= dayKey) {
-      closed += pc.lot_quantity;
-    }
-  }
-  return Math.max(0, trade.lot_quantity - closed);
-}
-
-/**
- * Linear interpolation fallback for trades without price data
- */
-function linearInterpolatePrice(
-  entryPrice: number,
-  exitPrice: number | null,
-  openDate: Date,
-  closeDate: Date | null,
-  currentDay: Date
-): number {
-  if (!closeDate || !exitPrice) return entryPrice;
-
-  const totalDays = Math.max(1, (closeDate.getTime() - openDate.getTime()) / (1000 * 60 * 60 * 24));
-  const elapsedDays = Math.max(0, (currentDay.getTime() - openDate.getTime()) / (1000 * 60 * 60 * 24));
-  const progress = Math.min(1, elapsedDays / totalDays);
-
-  return entryPrice + (exitPrice - entryPrice) * progress;
-}
+// getRemainingLotAtDay and linearInterpolatePrice are now in @/lib/portfolioCalc
 
 // Find value at date with carry-forward
 function findValueAtDateWithCarryForward(
