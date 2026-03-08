@@ -17,13 +17,8 @@ import {
   calculateUnrealizedPnL,
 } from '@/lib/portfolioCalc';
 
-export interface PartialCloseRecord {
-  id: string;
-  trade_id: string;
-  realized_pnl: number | null;
-  lot_quantity: number;
-  created_at: string;
-}
+// Re-export for backward compatibility
+export type { PartialCloseRecord } from '@/lib/portfolioCalc';
 
 export interface ChartDataPoint {
   date: string;
