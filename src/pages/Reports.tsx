@@ -143,12 +143,26 @@ export default function Reports() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <div className="p-4 rounded-xl bg-card border border-border">
-          <div className="flex items-center gap-2 mb-2">
-            <BarChart3 className="w-4 h-4 text-primary" />
-            <span className="text-xs text-muted-foreground">Toplam İşlem</span>
-          </div>
-          <div className="text-2xl font-bold text-foreground font-mono">
-            {isLoading ? '-' : stats.totalTrades}
+          <div className="flex items-center justify-center h-full">
+            <div className="flex-1 text-center">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <BarChart3 className="w-3 h-3 text-primary" />
+                <span className="text-xs text-muted-foreground">Toplam İşlem</span>
+              </div>
+              <div className="text-2xl font-bold text-foreground font-mono">
+                {isLoading ? '-' : stats.totalTrades}
+              </div>
+            </div>
+            <Separator orientation="vertical" className="h-10 mx-2" />
+            <div className="flex-1 text-center">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <TrendingUp className="w-3 h-3 text-primary" />
+                <span className="text-xs text-muted-foreground">Toplam RR</span>
+              </div>
+              <div className={`text-2xl font-bold font-mono ${stats.totalRR >= 0 ? 'text-profit' : 'text-loss'}`}>
+                {isLoading ? '-' : stats.totalRR.toFixed(2)}
+              </div>
+            </div>
           </div>
         </div>
 
