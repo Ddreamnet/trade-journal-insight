@@ -121,7 +121,13 @@ export default function Reports() {
     successCount / (successCount + failCount) * 100 :
     0;
 
-    return { totalTrades, totalPnL, successCount, failCount, winRate: winRate.toFixed(1) };
+    // Total RR from all closed trades in range
+    const totalRR = closedInRange.reduce((sum, t) => {
+      const rr = getClosedRR(t);
+      return sum + (rr ?? 0);
+    }, 0);
+
+    return { totalTrades, totalPnL, successCount, failCount, winRate: winRate.toFixed(1), totalRR };
   }, [partialCloses, closedTrades, selectedTimeRange]);
 
   return (
