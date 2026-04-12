@@ -102,36 +102,58 @@ async function fetchStooqData(asset: string): Promise<SeriesPoint[]> {
   return points;
 }
 
-async function fetchSyntheticSilverTRY(): Promise<SeriesPoint[]> {
-  // Silver doesn't have a direct TRY pair on most sources
-  // Compute: XAG/USD × USD/TRY = XAG/TRY
-  const [silverUsdCsv, usdTryCsv] = await Promise.all([
-    fetch("https://stooq.com/q/d/l/?s=xagusd&i=d", {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
-    }).then(r => r.text()),
-    fetch("https://stooq.com/q/d/l/?s=usdtry&i=d", {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
-    }).then(r => r.text()),
-  ]);
+async function fetchYahooV8Chart(symbol: string): Promise<SeriesPoint[]> {
+  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?range=3y&interval=1d`;
+  console.log(`[market-series] Yahoo v8 chart: ${symbol}`);
 
-  const silverUsd = parseCSVPoints(silverUsdCsv);
-  const usdTry = parseCSVPoints(usdTryCsv);
+  const response = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Yahoo v8 HTTP ${response.status}: ${body.substring(0, 100)}`);
+  }
+
+  const data = await response.json();
+  const result = data?.chart?.result?.[0];
+  if (!result?.timestamp) throw new Error(`Yahoo v8 no data for ${symbol}`);
+
+  const timestamps: number[] = result.timestamp;
+  const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
+  const points: SeriesPoint[] = [];
+
+  for (let i = 0; i < timestamps.length; i++) {
+    const close = closes[i];
+    if (close != null && !isNaN(close)) {
+      const d = new Date(timestamps[i] * 1000);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      points.push({ date: dateStr, value: Math.round(close * 100) / 100 });
+    }
+  }
+  return points;
+}
+
+async function fetchSyntheticSilverTRY(): Promise<SeriesPoint[]> {
+  // Silver TRY = SI=F (silver USD/oz) × USD/TRY
+  const [silverUsd, usdTry] = await Promise.all([
+    fetchYahooV8Chart("SI=F"),
+    fetchYahooV8Chart("USDTRY=X"),
+  ]);
 
   if (silverUsd.length === 0 || usdTry.length === 0) {
     throw new Error("Cannot compute synthetic silver TRY: missing component data");
   }
 
-  // Build USD/TRY lookup map
   const usdMap = new Map<string, number>();
   for (const p of usdTry) usdMap.set(p.date, p.value);
 
-  // Multiply silver USD × USD/TRY for each date
   const points: SeriesPoint[] = [];
   let lastUsdTry = 0;
   for (const p of silverUsd) {
     const usdRate = usdMap.get(p.date) ?? lastUsdTry;
     if (usdRate > 0) {
       lastUsdTry = usdRate;
+      // SI=F is per troy ounce, keep as-is (same unit as gold XAUTRY)
       points.push({ date: p.date, value: Math.round(p.value * usdRate * 100) / 100 });
     }
   }
