@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { BarChart3, Trophy, Wallet, CheckCircle2, XCircle } from 'lucide-react';
+import { BarChart3, Trophy, Wallet, CheckCircle2, XCircle, TrendingUp } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { EquityCurveChart } from '@/components/reports/EquityCurveChart';
 import { ReturnComparisonChart } from '@/components/reports/ReturnComparisonChart';
@@ -10,6 +10,7 @@ import { BenchmarkSelector } from '@/components/reports/BenchmarkSelector';
 import { TimeRange, BENCHMARKS, Trade } from '@/types/trade';
 import { PartialCloseRecord } from '@/hooks/useEquityCurveData';
 import { useTrades } from '@/hooks/useTrades';
+import { getClosedRR } from '@/lib/tradeUtils';
 import { usePortfolioCash } from '@/hooks/usePortfolioCash';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -120,7 +121,13 @@ export default function Reports() {
     successCount / (successCount + failCount) * 100 :
     0;
 
-    return { totalTrades, totalPnL, successCount, failCount, winRate: winRate.toFixed(1) };
+    // Total RR from all closed trades in range
+    const totalRR = closedInRange.reduce((sum, t) => {
+      const rr = getClosedRR(t);
+      return sum + (rr ?? 0);
+    }, 0);
+
+    return { totalTrades, totalPnL, successCount, failCount, winRate: winRate.toFixed(1), totalRR };
   }, [partialCloses, closedTrades, selectedTimeRange]);
 
   return (
@@ -136,12 +143,26 @@ export default function Reports() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <div className="p-4 rounded-xl bg-card border border-border">
-          <div className="flex items-center gap-2 mb-2">
-            <BarChart3 className="w-4 h-4 text-primary" />
-            <span className="text-xs text-muted-foreground">Toplam İşlem</span>
-          </div>
-          <div className="text-2xl font-bold text-foreground font-mono">
-            {isLoading ? '-' : stats.totalTrades}
+          <div className="flex items-center justify-center h-full">
+            <div className="flex-1 text-center">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <BarChart3 className="w-3 h-3 text-primary" />
+                <span className="text-xs text-muted-foreground">Toplam İşlem</span>
+              </div>
+              <div className="text-2xl font-bold text-foreground font-mono">
+                {isLoading ? '-' : stats.totalTrades}
+              </div>
+            </div>
+            <Separator orientation="vertical" className="h-10 mx-2" />
+            <div className="flex-1 text-center">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <TrendingUp className="w-3 h-3 text-primary" />
+                <span className="text-xs text-muted-foreground">Toplam RR</span>
+              </div>
+              <div className={`text-2xl font-bold font-mono ${stats.totalRR >= 0 ? 'text-profit' : 'text-loss'}`}>
+                {isLoading ? '-' : stats.totalRR.toFixed(2)}
+              </div>
+            </div>
           </div>
         </div>
 
