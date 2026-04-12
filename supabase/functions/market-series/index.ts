@@ -25,49 +25,101 @@ interface SeriesPoint {
   value: number;
 }
 
-async function fetchStooqData(asset: string): Promise<SeriesPoint[]> {
-  const symbol = STOOQ_SYMBOLS[asset];
-  if (!symbol) {
-    throw new Error(`Unknown Stooq asset: ${asset}`);
-  }
+// Yahoo Finance symbol mapping (primary source)
+const YAHOO_SYMBOLS: Record<string, string> = {
+  gold: "XAUTRY=X",
+  silver: "XAGTRY=X",
+  usd: "USDTRY=X",
+  eur: "EURTRY=X",
+  bist100: "XU100.IS",
+  nasdaq100: "%5ENDX",
+};
 
-  const url = `https://stooq.com/q/d/l/?s=${symbol}&i=d`;
-  console.log(`Fetching Stooq data for ${asset}: ${url}`);
-
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Stooq fetch failed: ${response.status}`);
-  }
-
-  const csv = await response.text();
+function parseCSVPoints(csv: string): SeriesPoint[] {
   const lines = csv.trim().split("\n");
-
-  // Skip header line
   const dataLines = lines.slice(1);
   const points: SeriesPoint[] = [];
 
   for (const line of dataLines) {
     const parts = line.split(",");
     if (parts.length >= 5) {
-      const date = parts[0]; // Date column
-      const close = parseFloat(parts[4]); // Close column
-
+      const date = parts[0];
+      const close = parseFloat(parts[4]);
       if (date && !isNaN(close)) {
         points.push({ date, value: close });
       }
     }
   }
 
-  // Sort by date ascending
   points.sort((a, b) => a.date.localeCompare(b.date));
-
-  // Keep last 3 years (~1095 days)
   return points.slice(-1095);
+}
+
+async function fetchYahooData(asset: string): Promise<SeriesPoint[]> {
+  const symbol = YAHOO_SYMBOLS[asset];
+  if (!symbol) throw new Error(`No Yahoo symbol for ${asset}`);
+
+  const now = Math.floor(Date.now() / 1000);
+  const threeYearsAgo = now - 3 * 365 * 24 * 3600;
+  const url = `https://query1.finance.yahoo.com/v7/finance/download/${symbol}?period1=${threeYearsAgo}&period2=${now}&interval=1d&events=history`;
+
+  console.log(`[market-series] Yahoo fetch: ${asset} -> ${symbol}`);
+  const response = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Yahoo HTTP ${response.status} for ${symbol}: ${body.substring(0, 100)}`);
+  }
+
+  const csv = await response.text();
+  const points = parseCSVPoints(csv);
+  console.log(`[market-series] Yahoo parsed ${points.length} points for ${asset}`);
+
+  if (points.length === 0) throw new Error(`Yahoo returned 0 points for ${asset}`);
+  return points;
+}
+
+async function fetchStooqData(asset: string): Promise<SeriesPoint[]> {
+  const symbol = STOOQ_SYMBOLS[asset];
+  if (!symbol) throw new Error(`Unknown Stooq asset: ${asset}`);
+
+  const url = `https://stooq.com/q/d/l/?s=${symbol}&i=d`;
+  console.log(`[market-series] Stooq fetch: ${asset} -> ${symbol}`);
+
+  const response = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+  });
+
+  if (!response.ok) throw new Error(`Stooq fetch failed: ${response.status}`);
+
+  const csv = await response.text();
+  const points = parseCSVPoints(csv);
+  console.log(`[market-series] Stooq parsed ${points.length} points for ${asset}`);
+
+  if (points.length === 0) throw new Error(`Stooq returned 0 points for ${asset}`);
+  return points;
+}
+
+async function fetchMarketData(asset: string): Promise<{ points: SeriesPoint[]; source: string }> {
+  // Try Yahoo first, then Stooq fallback
+  try {
+    const points = await fetchYahooData(asset);
+    return { points, source: "Yahoo Finance" };
+  } catch (yahooErr) {
+    console.warn(`[market-series] Yahoo failed for ${asset}: ${yahooErr instanceof Error ? yahooErr.message : yahooErr}`);
+  }
+
+  try {
+    console.log(`[market-series] Stooq fallback: ${asset}`);
+    const points = await fetchStooqData(asset);
+    return { points, source: "Stooq" };
+  } catch (stooqErr) {
+    console.warn(`[market-series] Stooq failed for ${asset}: ${stooqErr instanceof Error ? stooqErr.message : stooqErr}`);
+  }
+
+  throw new Error(`All data sources failed for ${asset}`);
 }
 
 // Fallback TÜİK inflation data (monthly CPI % change) when EVDS API fails
@@ -227,7 +279,7 @@ serve(async (req: Request) => {
     }
 
     // Fetch fresh data
-    console.log(`Fetching fresh data for ${asset}`);
+    console.log(`[market-series] Fetching fresh data for ${asset}`);
     let points: SeriesPoint[];
     let source: string;
 
@@ -235,8 +287,23 @@ serve(async (req: Request) => {
       points = await fetchInflationData();
       source = "TCMB EVDS";
     } else {
-      points = await fetchStooqData(asset);
-      source = "Stooq";
+      try {
+        points = await fetchStooqData(asset);
+        source = "Stooq";
+      } catch (fetchErr) {
+        console.error(`[market-series] FAIL ${asset}:`, fetchErr);
+        // Return empty result instead of 502
+        const emptyResponse = {
+          asset,
+          updatedAt: new Date().toISOString(),
+          points: [],
+          source: "unavailable",
+          error: fetchErr instanceof Error ? fetchErr.message : "Data source failed",
+        };
+        return new Response(JSON.stringify(emptyResponse), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const responseData = {
