@@ -347,7 +347,14 @@ serve(async (req: Request) => {
 
   try {
     const url = new URL(req.url);
-    const asset = url.searchParams.get("asset");
+    // Support both query params (GET) and body (POST)
+    let asset = url.searchParams.get("asset");
+    if (!asset && req.method === "POST") {
+      try {
+        const body = await req.json();
+        asset = body?.asset ?? null;
+      } catch { /* ignore parse errors */ }
+    }
 
     const validAssets = [...Object.keys(STOOQ_SYMBOLS), "inflation_tr"];
 
