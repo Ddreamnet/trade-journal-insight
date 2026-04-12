@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-// Price series fetched from stock-series edge function
+import { supabase } from '@/integrations/supabase/client';
 import { Trade } from '@/types/trade';
 import { format, parseISO, addDays, startOfDay } from 'date-fns';
 
@@ -17,7 +17,7 @@ interface StockSeriesResponse {
 }
 
 export interface StockPriceData {
-  priceMap: Map<string, Map<string, number>>; // symbol -> dateKey -> closePrice
+  priceMap: Map<string, Map<string, number>>;
   missingSymbols: string[];
   isLoading: boolean;
 }
@@ -36,8 +36,6 @@ function detectActiveSymbols(
     const tradeOpen = startOfDay(parseISO(trade.created_at));
     const tradeClosed = trade.closed_at ? startOfDay(parseISO(trade.closed_at)) : null;
 
-    // Trade has overlap with view window if:
-    // opened before endDate AND (not closed OR closed after startDate)
     const opensBeforeEnd = tradeOpen <= endDate;
     const closesAfterStart = !tradeClosed || tradeClosed >= startDate;
 
@@ -114,20 +112,17 @@ export function useStockPriceSeries(
     queryFn: async (): Promise<StockSeriesResponse> => {
       if (symbols.length === 0) return {};
 
-      const projectUrl = import.meta.env.VITE_SUPABASE_URL || 'https://pjqbpkblutbdpfzzwxmr.supabase.co';
-      const response = await fetch(
-        `${projectUrl}/functions/v1/stock-series?symbols=${encodeURIComponent(symbolsKey)}`,
-        {
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      // Use supabase.functions.invoke() — handles auth headers automatically
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('stock-series', {
+        body: { symbols: symbolsKey },
+      });
 
-      if (!response.ok) {
-        console.error('stock-series fetch failed:', response.status);
+      if (fnError) {
+        console.error('[StockPriceSeries] Edge function error:', fnError.message);
         return {};
       }
 
-      return response.json();
+      return fnData as StockSeriesResponse;
     },
     enabled: symbols.length > 0,
     staleTime: 30 * 60 * 1000, // 30 min
