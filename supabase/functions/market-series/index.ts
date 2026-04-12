@@ -262,81 +262,100 @@ const FALLBACK_INFLATION_DATA: SeriesPoint[] = [
   { date: "2025-10-01", value: 1.92 },
   { date: "2025-11-01", value: 1.63 },
   { date: "2025-12-01", value: 1.24 },
-  // 2026 (projected/estimated)
+  // 2026
   { date: "2026-01-01", value: 3.50 },
+  { date: "2026-02-01", value: 2.27 },
+  { date: "2026-03-01", value: 2.46 },
+  { date: "2026-04-01", value: 2.00 },
 ];
+
+async function tryFetchEVDS(url: string, apiKey: string, fieldName: string, label: string): Promise<SeriesPoint[]> {
+  console.log(`[market-series] ${label} fetch: ${url}`);
+
+  const response = await fetch(url, {
+    headers: {
+      "key": apiKey,
+      "Accept": "application/json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`${label} HTTP ${response.status}`);
+  }
+
+  // Content-type guard: EVDS sometimes returns HTML login pages
+  const ct = response.headers.get("content-type") || "";
+  if (!ct.includes("json")) {
+    throw new Error(`${label} returned non-JSON content-type: ${ct}`);
+  }
+
+  const data = await response.json();
+
+  if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
+    throw new Error(`${label} returned empty items`);
+  }
+
+  console.log(`[market-series] ${label} items: ${data.items.length}`);
+  const points: SeriesPoint[] = [];
+
+  for (const item of data.items) {
+    const dateStr = item.Tarih;
+    const value = parseFloat(item[fieldName]);
+
+    if (dateStr && !isNaN(value)) {
+      const parts = dateStr.split("-");
+      if (parts.length === 3) {
+        const isoDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        points.push({ date: isoDate, value });
+      }
+    }
+  }
+
+  points.sort((a, b) => a.date.localeCompare(b.date));
+  if (points.length === 0) throw new Error(`${label} parsed 0 valid points`);
+  return points;
+}
 
 async function fetchInflationData(): Promise<SeriesPoint[]> {
   const apiKey = Deno.env.get("EVDS_API_KEY");
-  
-  // If no API key, use fallback immediately
+
   if (!apiKey) {
-    console.log("EVDS_API_KEY not configured, using fallback TÜİK data");
+    console.log("[market-series] EVDS_API_KEY not configured, using fallback");
     return FALLBACK_INFLATION_DATA;
   }
 
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setFullYear(startDate.getFullYear() - 3);
+  startDate.setMonth(startDate.getMonth() - 1);
+
+  const startStr = `01-${String(startDate.getMonth() + 1).padStart(2, '0')}-${startDate.getFullYear()}`;
+  const endStr = `01-${String(endDate.getMonth() + 1).padStart(2, '0')}-${endDate.getFullYear()}`;
+
+  // 1. Try EVDS3 (new endpoint, new series TP.FG.J0)
   try {
-    // TÜFE CPI Index (TP.FE.OKTG01) with monthly percent change (formulas=1)
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setFullYear(startDate.getFullYear() - 3);
-    startDate.setMonth(startDate.getMonth() - 1);
-
-    const startStr = `01-${String(startDate.getMonth() + 1).padStart(2, '0')}-${startDate.getFullYear()}`;
-    const endStr = `01-${String(endDate.getMonth() + 1).padStart(2, '0')}-${endDate.getFullYear()}`;
-
-    const url = `https://evds2.tcmb.gov.tr/service/evds/series=TP.FE.OKTG01&startDate=${startStr}&endDate=${endStr}&type=json&frequency=5&formulas=1`;
-    
-    console.log(`Fetching EVDS inflation data: ${url}`);
-
-    const response = await fetch(url, {
-      headers: {
-        "key": apiKey,
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("EVDS response error:", response.status, text);
-      console.log("Falling back to TÜİK hardcoded data");
-      return FALLBACK_INFLATION_DATA;
-    }
-
-    const data = await response.json();
-    
-    if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
-      console.error("EVDS returned empty or invalid data, using fallback");
-      return FALLBACK_INFLATION_DATA;
-    }
-    
-    console.log("EVDS items count:", data.items.length);
-
-    const points: SeriesPoint[] = [];
-
-    for (const item of data.items) {
-      const dateStr = item.Tarih;
-      const value = parseFloat(item.TP_FE_OKTG01);
-
-      if (dateStr && !isNaN(value)) {
-        const parts = dateStr.split("-");
-        if (parts.length === 3) {
-          const isoDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-          points.push({ date: isoDate, value });
-        }
-      }
-    }
-
-    points.sort((a, b) => a.date.localeCompare(b.date));
-    console.log(`EVDS returned ${points.length} inflation data points`);
-    
-    return points.length > 0 ? points : FALLBACK_INFLATION_DATA;
-  } catch (error) {
-    console.error("EVDS fetch error:", error);
-    console.log("Using fallback TÜİK inflation data");
-    return FALLBACK_INFLATION_DATA;
+    const url3 = `https://evds3.tcmb.gov.tr/igmevdsms-dis/series=TP.FG.J0&startDate=${startStr}&endDate=${endStr}&type=json&frequency=5&formulas=1`;
+    const points = await tryFetchEVDS(url3, apiKey, "TP_FG_J0", "EVDS3");
+    console.log(`[market-series] EVDS3 success: ${points.length} points`);
+    return points;
+  } catch (e) {
+    console.warn(`[market-series] EVDS3 failed: ${e instanceof Error ? e.message : e}`);
   }
+
+  // 2. Try EVDS2 (legacy fallback)
+  try {
+    const url2 = `https://evds2.tcmb.gov.tr/service/evds/series=TP.FE.OKTG01&startDate=${startStr}&endDate=${endStr}&type=json&frequency=5&formulas=1`;
+    const points = await tryFetchEVDS(url2, apiKey, "TP_FE_OKTG01", "EVDS2");
+    console.log(`[market-series] EVDS2 success: ${points.length} points`);
+    return points;
+  } catch (e) {
+    console.warn(`[market-series] EVDS2 failed: ${e instanceof Error ? e.message : e}`);
+  }
+
+  // 3. Hardcoded fallback
+  console.log("[market-series] All EVDS sources failed, using fallback TÜİK data");
+  return FALLBACK_INFLATION_DATA;
 }
 
 serve(async (req: Request) => {
