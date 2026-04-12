@@ -133,15 +133,25 @@ async function fetchYahooV8Chart(symbol: string): Promise<SeriesPoint[]> {
   return points;
 }
 
-async function fetchSyntheticSilverTRY(): Promise<SeriesPoint[]> {
-  // Silver TRY = SI=F (silver USD/oz) × USD/TRY
-  const [silverUsd, usdTry] = await Promise.all([
-    fetchYahooV8Chart("SI=F"),
+// Yahoo v8 chart symbols (different from v7 download symbols)
+const YAHOO_V8_SYMBOLS: Record<string, string> = {
+  gold: "GC=F",       // Gold futures USD
+  silver: "SI=F",     // Silver futures USD
+  usd: "USDTRY=X",
+  eur: "EURTRY=X",
+  bist100: "XU100.IS",
+  nasdaq100: "^NDX",
+};
+
+async function fetchSyntheticTRY(usdSymbol: string, label: string): Promise<SeriesPoint[]> {
+  // asset_TRY = asset_USD × USD/TRY
+  const [assetUsd, usdTry] = await Promise.all([
+    fetchYahooV8Chart(usdSymbol),
     fetchYahooV8Chart("USDTRY=X"),
   ]);
 
-  if (silverUsd.length === 0 || usdTry.length === 0) {
-    throw new Error("Cannot compute synthetic silver TRY: missing component data");
+  if (assetUsd.length === 0 || usdTry.length === 0) {
+    throw new Error(`Cannot compute synthetic ${label} TRY: missing component data`);
   }
 
   const usdMap = new Map<string, number>();
@@ -149,49 +159,66 @@ async function fetchSyntheticSilverTRY(): Promise<SeriesPoint[]> {
 
   const points: SeriesPoint[] = [];
   let lastUsdTry = 0;
-  for (const p of silverUsd) {
+  for (const p of assetUsd) {
     const usdRate = usdMap.get(p.date) ?? lastUsdTry;
     if (usdRate > 0) {
       lastUsdTry = usdRate;
-      // SI=F is per troy ounce, keep as-is (same unit as gold XAUTRY)
       points.push({ date: p.date, value: Math.round(p.value * usdRate * 100) / 100 });
     }
   }
 
-  console.log(`[market-series] Synthetic silver TRY: ${points.length} points`);
-  if (points.length === 0) throw new Error("Synthetic silver TRY produced 0 points");
+  console.log(`[market-series] Synthetic ${label} TRY: ${points.length} points`);
+  if (points.length === 0) throw new Error(`Synthetic ${label} TRY produced 0 points`);
   return points;
 }
 
 async function fetchMarketData(asset: string): Promise<{ points: SeriesPoint[]; source: string }> {
-  // Try Yahoo first, then Stooq, then synthetic for silver
+  const errors: string[] = [];
+
+  // 1. Try Yahoo v7 download
   try {
     const points = await fetchYahooData(asset);
     return { points, source: "Yahoo Finance" };
-  } catch (yahooErr) {
-    console.warn(`[market-series] Yahoo failed for ${asset}: ${yahooErr instanceof Error ? yahooErr.message : yahooErr}`);
+  } catch (e) {
+    errors.push(`Yahoo v7: ${e instanceof Error ? e.message : e}`);
+    console.warn(`[market-series] ${errors[errors.length - 1]}`);
   }
 
-  try {
-    console.log(`[market-series] Stooq fallback: ${asset}`);
-    const points = await fetchStooqData(asset);
-    return { points, source: "Stooq" };
-  } catch (stooqErr) {
-    console.warn(`[market-series] Stooq failed for ${asset}: ${stooqErr instanceof Error ? stooqErr.message : stooqErr}`);
-  }
-
-  // For silver: try synthetic XAG/USD × USD/TRY
-  if (asset === "silver") {
+  // 2. Try Yahoo v8 chart API (direct TRY pairs for usd/eur/bist100)
+  const v8Symbol = YAHOO_V8_SYMBOLS[asset];
+  if (v8Symbol && !["gold", "silver"].includes(asset)) {
     try {
-      console.log(`[market-series] Synthetic fallback: silver`);
-      const points = await fetchSyntheticSilverTRY();
-      return { points, source: "Stooq (synthetic)" };
-    } catch (synthErr) {
-      console.warn(`[market-series] Synthetic silver failed: ${synthErr instanceof Error ? synthErr.message : synthErr}`);
+      const points = await fetchYahooV8Chart(v8Symbol);
+      if (points.length > 0) return { points, source: "Yahoo v8" };
+    } catch (e) {
+      errors.push(`Yahoo v8: ${e instanceof Error ? e.message : e}`);
+      console.warn(`[market-series] ${errors[errors.length - 1]}`);
     }
   }
 
-  throw new Error(`All data sources failed for ${asset}`);
+  // 3. Try Stooq
+  try {
+    const points = await fetchStooqData(asset);
+    return { points, source: "Stooq" };
+  } catch (e) {
+    errors.push(`Stooq: ${e instanceof Error ? e.message : e}`);
+    console.warn(`[market-series] ${errors[errors.length - 1]}`);
+  }
+
+  // 4. For gold/silver: synthetic USD × USDTRY via Yahoo v8
+  if (asset === "gold" || asset === "silver") {
+    const usdSymbol = asset === "gold" ? "GC=F" : "SI=F";
+    try {
+      console.log(`[market-series] Synthetic fallback: ${asset}`);
+      const points = await fetchSyntheticTRY(usdSymbol, asset);
+      return { points, source: "Yahoo v8 (synthetic)" };
+    } catch (e) {
+      errors.push(`Synthetic: ${e instanceof Error ? e.message : e}`);
+      console.warn(`[market-series] ${errors[errors.length - 1]}`);
+    }
+  }
+
+  throw new Error(`All data sources failed for ${asset}: ${errors.join('; ')}`);
 }
 
 // Fallback TÜİK inflation data (monthly CPI % change) when EVDS API fails
