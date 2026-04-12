@@ -288,8 +288,9 @@ serve(async (req: Request) => {
       source = "TCMB EVDS";
     } else {
       try {
-        points = await fetchStooqData(asset);
-        source = "Stooq";
+        const result = await fetchMarketData(asset);
+        points = result.points;
+        source = result.source;
       } catch (fetchErr) {
         console.error(`[market-series] FAIL ${asset}:`, fetchErr);
         // Return empty result instead of 502
