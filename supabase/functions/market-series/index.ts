@@ -102,8 +102,47 @@ async function fetchStooqData(asset: string): Promise<SeriesPoint[]> {
   return points;
 }
 
+async function fetchSyntheticSilverTRY(): Promise<SeriesPoint[]> {
+  // Silver doesn't have a direct TRY pair on most sources
+  // Compute: XAG/USD × USD/TRY = XAG/TRY
+  const [silverUsdCsv, usdTryCsv] = await Promise.all([
+    fetch("https://stooq.com/q/d/l/?s=xagusd&i=d", {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+    }).then(r => r.text()),
+    fetch("https://stooq.com/q/d/l/?s=usdtry&i=d", {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+    }).then(r => r.text()),
+  ]);
+
+  const silverUsd = parseCSVPoints(silverUsdCsv);
+  const usdTry = parseCSVPoints(usdTryCsv);
+
+  if (silverUsd.length === 0 || usdTry.length === 0) {
+    throw new Error("Cannot compute synthetic silver TRY: missing component data");
+  }
+
+  // Build USD/TRY lookup map
+  const usdMap = new Map<string, number>();
+  for (const p of usdTry) usdMap.set(p.date, p.value);
+
+  // Multiply silver USD × USD/TRY for each date
+  const points: SeriesPoint[] = [];
+  let lastUsdTry = 0;
+  for (const p of silverUsd) {
+    const usdRate = usdMap.get(p.date) ?? lastUsdTry;
+    if (usdRate > 0) {
+      lastUsdTry = usdRate;
+      points.push({ date: p.date, value: Math.round(p.value * usdRate * 100) / 100 });
+    }
+  }
+
+  console.log(`[market-series] Synthetic silver TRY: ${points.length} points`);
+  if (points.length === 0) throw new Error("Synthetic silver TRY produced 0 points");
+  return points;
+}
+
 async function fetchMarketData(asset: string): Promise<{ points: SeriesPoint[]; source: string }> {
-  // Try Yahoo first, then Stooq fallback
+  // Try Yahoo first, then Stooq, then synthetic for silver
   try {
     const points = await fetchYahooData(asset);
     return { points, source: "Yahoo Finance" };
@@ -117,6 +156,17 @@ async function fetchMarketData(asset: string): Promise<{ points: SeriesPoint[]; 
     return { points, source: "Stooq" };
   } catch (stooqErr) {
     console.warn(`[market-series] Stooq failed for ${asset}: ${stooqErr instanceof Error ? stooqErr.message : stooqErr}`);
+  }
+
+  // For silver: try synthetic XAG/USD × USD/TRY
+  if (asset === "silver") {
+    try {
+      console.log(`[market-series] Synthetic fallback: silver`);
+      const points = await fetchSyntheticSilverTRY();
+      return { points, source: "Stooq (synthetic)" };
+    } catch (synthErr) {
+      console.warn(`[market-series] Synthetic silver failed: ${synthErr instanceof Error ? synthErr.message : synthErr}`);
+    }
   }
 
   throw new Error(`All data sources failed for ${asset}`);
