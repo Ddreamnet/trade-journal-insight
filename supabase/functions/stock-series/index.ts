@@ -61,7 +61,15 @@ serve(async (req: Request) => {
 
   try {
     const url = new URL(req.url);
-    const symbolsParam = url.searchParams.get("symbols");
+    let symbolsParam = url.searchParams.get("symbols");
+
+    // Support POST body as well (supabase.functions.invoke sends POST with JSON body)
+    if (!symbolsParam && req.method === "POST") {
+      try {
+        const body = await req.json();
+        symbolsParam = body?.symbols ?? null;
+      } catch { /* ignore parse errors */ }
+    }
 
     if (!symbolsParam) {
       return new Response(
