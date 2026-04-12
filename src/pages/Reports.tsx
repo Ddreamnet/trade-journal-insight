@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { BarChart3, Trophy, Wallet, CheckCircle2, XCircle } from 'lucide-react';
+import { BarChart3, Trophy, Wallet, CheckCircle2, XCircle, TrendingUp } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { EquityCurveChart } from '@/components/reports/EquityCurveChart';
 import { ReturnComparisonChart } from '@/components/reports/ReturnComparisonChart';
