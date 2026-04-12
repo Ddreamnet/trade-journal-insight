@@ -10,6 +10,7 @@ import { BenchmarkSelector } from '@/components/reports/BenchmarkSelector';
 import { TimeRange, BENCHMARKS, Trade } from '@/types/trade';
 import { PartialCloseRecord } from '@/hooks/useEquityCurveData';
 import { useTrades } from '@/hooks/useTrades';
+import { getClosedRR } from '@/lib/tradeUtils';
 import { usePortfolioCash } from '@/hooks/usePortfolioCash';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
