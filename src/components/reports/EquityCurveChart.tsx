@@ -172,6 +172,7 @@ export function EquityCurveChart({
     bist100: 'bist100',
     nasdaq100: 'nasdaq100',
     inflation_tr: 'inflation_tr',
+    btcusdt: 'btcusdt',
   };
 
   // Dynamic Y-axis domain calculation

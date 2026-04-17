@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth, AuthProvider } from '@/hooks/useAuth';
 import { MarketDataProvider } from '@/contexts/MarketDataContext';
 import { MarketSeriesProvider } from '@/contexts/MarketSeriesContext';
+import { PortfolioProvider } from '@/contexts/PortfolioContext';
 import Index from './pages/Index';
 import Login from './pages/Login';
 import Reports from './pages/Reports';
@@ -13,6 +14,7 @@ import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
 import PanelBlog from './pages/PanelBlog';
 import PanelBlogEditor from './pages/PanelBlogEditor';
+import Islemlerim from './pages/Islemlerim';
 import NotFound from './pages/NotFound';
 
 const queryClient = new QueryClient();
@@ -41,6 +43,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<RouteGuard mode="public"><Login /></RouteGuard>} />
       <Route path="/" element={<RouteGuard mode="protected"><Index /></RouteGuard>} />
+      <Route path="/islemlerim" element={<RouteGuard mode="protected"><Islemlerim /></RouteGuard>} />
       <Route path="/raporlarim" element={<RouteGuard mode="protected"><Reports /></RouteGuard>} />
       {/* Public Blog Routes */}
       <Route path="/blog" element={<Blog />} />
@@ -59,15 +62,17 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <MarketDataProvider>
-            <MarketSeriesProvider>
-              <Toaster />
-              <Sonner />
-              <BrowserRouter>
-                <AppRoutes />
-              </BrowserRouter>
-            </MarketSeriesProvider>
-          </MarketDataProvider>
+          <PortfolioProvider>
+            <MarketDataProvider>
+              <MarketSeriesProvider>
+                <Toaster />
+                <Sonner />
+                <BrowserRouter>
+                  <AppRoutes />
+                </BrowserRouter>
+              </MarketSeriesProvider>
+            </MarketDataProvider>
+          </PortfolioProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

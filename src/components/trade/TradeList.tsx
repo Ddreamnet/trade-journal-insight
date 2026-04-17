@@ -6,6 +6,7 @@ import { CloseTradeModal } from './CloseTradeModal';
 import { EditTradeModal, TradeUpdateData } from './EditTradeModal';
 import { useMarketData } from '@/contexts/MarketDataContext';
 import { cn } from '@/lib/utils';
+import { formatPrice } from '@/lib/currency';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ActiveStockCell, ClosedStockCell, StaticStockCell } from './TradeStockCell';
 import { TradeNotesDialog } from './TradeNotesDialog';
@@ -202,14 +203,14 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                 </TableCell>
 
                 <TableCell className="text-center">
-                  <span className="font-mono text-sm text-foreground">₺{trade.entry_price.toFixed(2)}</span>
+                  <span className="font-mono text-sm text-foreground">{formatPrice(trade.entry_price, trade.stock_symbol)}</span>
                 </TableCell>
 
                 {type === 'active' && (
                   <TableCell className="text-center">
                     {priceInfo ? (
                       <div>
-                        <span className="font-mono text-sm text-foreground">₺{priceInfo.currentPrice.toFixed(2)}</span>
+                        <span className="font-mono text-sm text-foreground">{formatPrice(priceInfo.currentPrice, trade.stock_symbol)}</span>
                         <div className={cn('text-xs font-medium', priceInfo.isPositive ? 'text-profit' : 'text-loss')}>
                           {priceInfo.priceDiff >= 0 ? '+' : ''}{priceInfo.priceDiff.toFixed(2)} ({priceInfo.priceDiffPercent >= 0 ? '+' : ''}{priceInfo.priceDiffPercent.toFixed(2)}%)
                         </div>
@@ -220,8 +221,8 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                   </TableCell>
                 )}
 
-                <TableCell className="text-center"><span className="font-mono text-sm text-foreground">₺{trade.target_price.toFixed(2)}</span></TableCell>
-                <TableCell className="text-center"><span className="font-mono text-sm text-foreground">₺{trade.stop_price.toFixed(2)}</span></TableCell>
+                <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{formatPrice(trade.target_price, trade.stock_symbol)}</span></TableCell>
+                <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{formatPrice(trade.stop_price, trade.stock_symbol)}</span></TableCell>
 
                 <TableCell>
                   <div className="space-y-0.5">
@@ -236,7 +237,7 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                 {type === 'closed' && (
                   <>
                     <TableCell className="text-center">
-                      <span className="font-mono text-sm text-foreground">{trade.exit_price ? `₺${trade.exit_price.toFixed(2)}` : '-'}</span>
+                      <span className="font-mono text-sm text-foreground">{trade.exit_price ? formatPrice(trade.exit_price, trade.stock_symbol) : '-'}</span>
                     </TableCell>
                     <TableCell className="text-center">
                       <span className={cn('text-xs font-semibold px-2 py-1 rounded-full', trade.closing_type === 'kar_al' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
@@ -299,12 +300,12 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
             <div className={cn('grid gap-2 mb-2', type === 'active' ? 'grid-cols-5' : 'grid-cols-3')}>
               <div className="text-center p-1.5 rounded-lg bg-secondary/50">
                 <div className="text-[10px] text-muted-foreground uppercase">Giriş</div>
-                <div className="font-mono text-xs text-foreground">₺{trade.entry_price.toFixed(2)}</div>
+                <div className="font-mono text-xs text-foreground">{formatPrice(trade.entry_price, trade.stock_symbol)}</div>
               </div>
               {type === 'active' && priceInfo && (
                 <div className="text-center p-1.5 rounded-lg bg-secondary/50">
                   <div className="text-[10px] text-muted-foreground uppercase">Anlık</div>
-                  <div className="font-mono text-xs text-foreground">₺{priceInfo.currentPrice.toFixed(2)}</div>
+                  <div className="font-mono text-xs text-foreground">{formatPrice(priceInfo.currentPrice, trade.stock_symbol)}</div>
                   <div className={cn('text-[10px] font-medium', priceInfo.isPositive ? 'text-profit' : 'text-loss')}>
                     {priceInfo.priceDiffPercent >= 0 ? '+' : ''}{priceInfo.priceDiffPercent.toFixed(1)}%
                   </div>
@@ -312,11 +313,11 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
               )}
               <div className="text-center p-1.5 rounded-lg bg-secondary/50">
                 <div className="text-[10px] text-muted-foreground uppercase">Hedef</div>
-                <div className="font-mono text-xs text-foreground">₺{trade.target_price.toFixed(2)}</div>
+                <div className="font-mono text-xs text-foreground">{formatPrice(trade.target_price, trade.stock_symbol)}</div>
               </div>
               <div className="text-center p-1.5 rounded-lg bg-secondary/50">
                 <div className="text-[10px] text-muted-foreground uppercase">Stop</div>
-                <div className="font-mono text-xs text-foreground">₺{trade.stop_price.toFixed(2)}</div>
+                <div className="font-mono text-xs text-foreground">{formatPrice(trade.stop_price, trade.stock_symbol)}</div>
               </div>
               {type === 'active' && (
                 <div className="text-center p-1.5 rounded-lg bg-secondary/50">
@@ -333,7 +334,7 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div className="text-center p-1.5 rounded-lg bg-secondary/50">
                   <div className="text-[10px] text-muted-foreground uppercase">Exit</div>
-                  <div className="font-mono text-xs text-foreground">₺{trade.exit_price.toFixed(2)}</div>
+                  <div className="font-mono text-xs text-foreground">{formatPrice(trade.exit_price, trade.stock_symbol)}</div>
                 </div>
                 <div className={cn('text-center p-1.5 rounded-lg', trade.closing_type === 'kar_al' ? 'bg-profit/20' : 'bg-loss/20')}>
                   <div className="text-[10px] text-muted-foreground uppercase">Sonuç</div>
@@ -390,10 +391,10 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
                 <ClosedStockCell entry={entry} onClick={setClosedActionEntry} />
               </TableCell>
               <TableCell className="text-center"><TypeBadge tradeType={entry.trade_type} /></TableCell>
-              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">₺{entry.entry_price.toFixed(2)}</span></TableCell>
-              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">₺{entry.target_price.toFixed(2)}</span></TableCell>
-              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">₺{entry.stop_price.toFixed(2)}</span></TableCell>
-              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">₺{entry.exit_price.toFixed(2)}</span></TableCell>
+              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{formatPrice(entry.entry_price, entry.stock_symbol)}</span></TableCell>
+              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{formatPrice(entry.target_price, entry.stock_symbol)}</span></TableCell>
+              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{formatPrice(entry.stop_price, entry.stock_symbol)}</span></TableCell>
+              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{formatPrice(entry.exit_price, entry.stock_symbol)}</span></TableCell>
               <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{entry.lot_quantity}</span></TableCell>
               <TableCell className="text-center">
                 <span className={cn('text-xs font-semibold px-2 py-1 rounded-full', entry.closing_type === 'kar_al' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
@@ -435,22 +436,22 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
           <div className="grid grid-cols-3 gap-2 mb-2">
             <div className="text-center p-1.5 rounded-lg bg-secondary/50">
               <div className="text-[10px] text-muted-foreground uppercase">Giriş</div>
-              <div className="font-mono text-xs text-foreground">₺{entry.entry_price.toFixed(2)}</div>
+              <div className="font-mono text-xs text-foreground">{formatPrice(entry.entry_price, entry.stock_symbol)}</div>
             </div>
             <div className="text-center p-1.5 rounded-lg bg-secondary/50">
               <div className="text-[10px] text-muted-foreground uppercase">Hedef</div>
-              <div className="font-mono text-xs text-foreground">₺{entry.target_price.toFixed(2)}</div>
+              <div className="font-mono text-xs text-foreground">{formatPrice(entry.target_price, entry.stock_symbol)}</div>
             </div>
             <div className="text-center p-1.5 rounded-lg bg-secondary/50">
               <div className="text-[10px] text-muted-foreground uppercase">Stop</div>
-              <div className="font-mono text-xs text-foreground">₺{entry.stop_price.toFixed(2)}</div>
+              <div className="font-mono text-xs text-foreground">{formatPrice(entry.stop_price, entry.stock_symbol)}</div>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2 mb-2">
             <div className="text-center p-1.5 rounded-lg bg-secondary/50">
               <div className="text-[10px] text-muted-foreground uppercase">Exit</div>
-              <div className="font-mono text-xs text-foreground">₺{entry.exit_price.toFixed(2)}</div>
+              <div className="font-mono text-xs text-foreground">{formatPrice(entry.exit_price, entry.stock_symbol)}</div>
             </div>
             <div className="text-center p-1.5 rounded-lg bg-secondary/50">
               <div className="text-[10px] text-muted-foreground uppercase">Lot</div>

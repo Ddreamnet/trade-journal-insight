@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { useMarketData } from '@/contexts/MarketDataContext';
 import { cn } from '@/lib/utils';
+import { formatPrice } from '@/lib/currency';
 
 const SPEED = 50; // px/s
 
@@ -67,7 +68,7 @@ export const TickerTape = React.memo(function TickerTape() {
                 {stock.symbol}
               </span>
               <span className="font-mono text-sm text-foreground">
-                ₺{stock.last.toFixed(2)}
+                {formatPrice(stock.last, stock.currency ?? stock.symbol)}
               </span>
               <div
                 className={cn(

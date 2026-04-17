@@ -69,6 +69,7 @@ export type Database = {
           flow_type: string
           id: string
           note: string | null
+          portfolio_id: string
           user_id: string
         }
         Insert: {
@@ -77,6 +78,7 @@ export type Database = {
           flow_type: string
           id?: string
           note?: string | null
+          portfolio_id: string
           user_id: string
         }
         Update: {
@@ -85,6 +87,45 @@ export type Database = {
           flow_type?: string
           id?: string
           note?: string | null
+          portfolio_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_cash_flows_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portfolios: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          id: string
+          name: string
+          status: Database["public"]["Enums"]["portfolio_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          status?: Database["public"]["Enums"]["portfolio_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          status?: Database["public"]["Enums"]["portfolio_status"]
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -168,6 +209,44 @@ export type Database = {
           },
         ]
       }
+      portfolio_value_snapshots: {
+        Row: {
+          created_at: string
+          id: string
+          portfolio_id: string
+          snapshot_date: string
+          user_id: string
+          value_try: number | null
+          value_usd: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          portfolio_id: string
+          snapshot_date: string
+          user_id: string
+          value_try?: number | null
+          value_usd?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          portfolio_id?: string
+          snapshot_date?: string
+          user_id?: string
+          value_try?: number | null
+          value_usd?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_value_snapshots_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trade_partial_closes: {
         Row: {
           closing_note: string | null
@@ -176,6 +255,7 @@ export type Database = {
           exit_price: number
           id: string
           lot_quantity: number
+          portfolio_id: string
           realized_pnl: number | null
           stop_reason: string | null
           trade_id: string
@@ -188,6 +268,7 @@ export type Database = {
           exit_price: number
           id?: string
           lot_quantity: number
+          portfolio_id: string
           realized_pnl?: number | null
           stop_reason?: string | null
           trade_id: string
@@ -200,6 +281,7 @@ export type Database = {
           exit_price?: number
           id?: string
           lot_quantity?: number
+          portfolio_id?: string
           realized_pnl?: number | null
           stop_reason?: string | null
           trade_id?: string
@@ -211,6 +293,13 @@ export type Database = {
             columns: ["trade_id"]
             isOneToOne: false
             referencedRelation: "trades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_partial_closes_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolios"
             referencedColumns: ["id"]
           },
         ]
@@ -226,6 +315,7 @@ export type Database = {
           id: string
           is_successful: boolean | null
           lot_quantity: number
+          portfolio_id: string
           position_amount: number | null
           progress_percent: number | null
           reasons: string[] | null
@@ -251,6 +341,7 @@ export type Database = {
           id?: string
           is_successful?: boolean | null
           lot_quantity?: number
+          portfolio_id: string
           position_amount?: number | null
           progress_percent?: number | null
           reasons?: string[] | null
@@ -276,6 +367,7 @@ export type Database = {
           id?: string
           is_successful?: boolean | null
           lot_quantity?: number
+          portfolio_id?: string
           position_amount?: number | null
           progress_percent?: number | null
           reasons?: string[] | null
@@ -291,7 +383,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "trades_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_assets: {
         Row: {
@@ -302,6 +402,7 @@ export type Database = {
           id: string
           metadata: Json | null
           note: string | null
+          portfolio_id: string
           quantity: number
           quantity_unit: string
           title: string | null
@@ -316,6 +417,7 @@ export type Database = {
           id?: string
           metadata?: Json | null
           note?: string | null
+          portfolio_id: string
           quantity?: number
           quantity_unit?: string
           title?: string | null
@@ -330,20 +432,32 @@ export type Database = {
           id?: string
           metadata?: Json | null
           note?: string | null
+          portfolio_id?: string
           quantity?: number
           quantity_unit?: string
           title?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_assets_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      calculate_available_cash: { Args: { p_user_id: string }; Returns: number }
+      calculate_available_cash: {
+        Args: { p_user_id: string; p_portfolio_id?: string | null }
+        Returns: number
+      }
       calculate_progress_percent: {
         Args: {
           p_entry_price: number
@@ -378,6 +492,7 @@ export type Database = {
         Args: {
           p_entry_price: number
           p_lot_quantity: number
+          p_portfolio_id: string
           p_reasons?: string[]
           p_stock_name: string
           p_stock_symbol: string
@@ -389,12 +504,13 @@ export type Database = {
         Returns: string
       }
       create_withdraw_with_check: {
-        Args: { p_amount: number; p_note?: string; p_user_id: string }
+        Args: { p_amount: number; p_note?: string; p_portfolio_id: string; p_user_id: string }
         Returns: string
       }
     }
     Enums: {
       portfolio_event_type: "deposit" | "withdraw" | "pnl"
+      portfolio_status: "active" | "closed"
       trade_status: "active" | "closed"
       trade_type: "buy" | "sell"
     }
@@ -525,6 +641,7 @@ export const Constants = {
   public: {
     Enums: {
       portfolio_event_type: ["deposit", "withdraw", "pnl"],
+      portfolio_status: ["active", "closed"],
       trade_status: ["active", "closed"],
       trade_type: ["buy", "sell"],
     },

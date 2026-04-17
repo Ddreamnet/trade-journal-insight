@@ -1,22 +1,26 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { BarChart3, Trophy, Wallet, CheckCircle2, XCircle, TrendingUp } from 'lucide-react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { EquityCurveChart } from '@/components/reports/EquityCurveChart';
 import { ReturnComparisonChart } from '@/components/reports/ReturnComparisonChart';
 import { PortfolioValueChart } from '@/components/reports/PortfolioValueChart';
 import { AssetsChart } from '@/components/reports/AssetsChart';
+import { StockComparisonChart } from '@/components/reports/StockComparisonChart';
 import { TimeRangeSelector } from '@/components/reports/TimeRangeSelector';
 import { BenchmarkSelector } from '@/components/reports/BenchmarkSelector';
+import { PortfolioReportFilter } from '@/components/portfolio/PortfolioReportFilter';
 import { TimeRange, BENCHMARKS, Trade } from '@/types/trade';
 import { PartialCloseRecord } from '@/hooks/useEquityCurveData';
 import { useTrades } from '@/hooks/useTrades';
 import { getClosedRR } from '@/lib/tradeUtils';
 import { usePortfolioCash } from '@/hooks/usePortfolioCash';
+import { usePortfolioContext } from '@/contexts/PortfolioContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { subMonths, subYears, parseISO, isAfter } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
+import { ShareChartButton } from '@/components/ui/ShareChartButton';
 
 const STARTING_CAPITAL_KEY = 'reports-starting-capital';
 
@@ -33,6 +37,7 @@ function getCutoffDate(timeRange: TimeRange): Date {
 }
 
 export default function Reports() {
+  const equityCardRef = useRef<HTMLDivElement>(null);
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('1m');
   const [barChartTimeRange, setBarChartTimeRange] = useState<TimeRange>('1m');
   const [lineChartBenchmarks, setLineChartBenchmarks] = useState<string[]>([]);
@@ -48,23 +53,41 @@ export default function Reports() {
   });
 
   const { user } = useAuth();
-  const { trades, closedTrades, isLoading } = useTrades();
-  const { cashFlows } = usePortfolioCash();
+  const { trades: allTradesRaw, closedTrades: allClosedTradesRaw, isLoading } = useTrades();
+  const { reportFilter, reportPortfolioIds, portfolios } = usePortfolioContext();
+  const { cashFlows } = usePortfolioCash(reportPortfolioIds);
 
-  // Fetch partial closes for PnL calculations
-  const { data: partialCloses = [] } = useQuery({
+  // Rapor filtresine göre portföy set'i
+  const portfolioIdSet = useMemo(() => new Set(reportPortfolioIds), [reportPortfolioIds]);
+
+  const trades = useMemo(
+    () => (allTradesRaw as Trade[]).filter(t => portfolioIdSet.has(t.portfolio_id)),
+    [allTradesRaw, portfolioIdSet]
+  );
+  const closedTrades = useMemo(
+    () => (allClosedTradesRaw as Trade[]).filter(t => portfolioIdSet.has(t.portfolio_id)),
+    [allClosedTradesRaw, portfolioIdSet]
+  );
+
+  // Fetch partial closes for PnL calculations (portfolio-filtered client side)
+  const { data: allPartialClosesRaw = [] } = useQuery({
     queryKey: ['trade_partial_closes_reports', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const { data, error } = await supabase.
-      from('trade_partial_closes').
-      select('id, trade_id, realized_pnl, lot_quantity, created_at').
-      order('created_at', { ascending: true });
+      const { data, error } = await supabase
+        .from('trade_partial_closes')
+        .select('id, trade_id, portfolio_id, realized_pnl, lot_quantity, created_at')
+        .order('created_at', { ascending: true });
       if (error) throw error;
-      return data as PartialCloseRecord[];
+      return data as (PartialCloseRecord & { portfolio_id: string })[];
     },
-    enabled: !!user
+    enabled: !!user,
   });
+
+  const partialCloses = useMemo(
+    () => allPartialClosesRaw.filter(pc => portfolioIdSet.has(pc.portfolio_id)),
+    [allPartialClosesRaw, portfolioIdSet]
+  );
 
   // Auto-set starting capital from first trade's position_amount
   useEffect(() => {
@@ -130,14 +153,37 @@ export default function Reports() {
     return { totalTrades, totalPnL, successCount, failCount, winRate: winRate.toFixed(1), totalRR };
   }, [partialCloses, closedTrades, selectedTimeRange]);
 
+  // AssetsChart'a verilen snapshotPortfolioId — sadece tek portföy filtresi seçildiğinde otomatik snapshot yaz
+  const snapshotPortfolioId =
+    reportFilter.mode === 'single' && reportFilter.portfolioId
+      ? reportFilter.portfolioId
+      : reportFilter.mode === 'all' && portfolios.length === 1
+      ? portfolios[0].id
+      : undefined;
+
+  // Aktif filtre için görsel etiket
+  const filterLabel = useMemo(() => {
+    if (reportFilter.mode === 'all') return 'Tüm portföyler';
+    if (reportFilter.mode === 'active') return 'Aktif portföyler';
+    if (reportFilter.mode === 'closed') return 'Kapalı portföyler';
+    const p = portfolios.find(x => x.id === reportFilter.portfolioId);
+    return p?.name ?? 'Portföy';
+  }, [reportFilter, portfolios]);
+
   return (
     <MainLayout>
       {/* Page Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Raporlarım</h1>
-        <p className="text-muted-foreground">
-          İşlem performansınızı analiz edin
-        </p>
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Raporlarım</h1>
+          <p className="text-muted-foreground">
+            İşlem performansınızı analiz edin · <span className="text-foreground font-medium">{filterLabel}</span>
+          </p>
+        </div>
+        <div className="w-full sm:w-64">
+          <div className="text-xs text-muted-foreground mb-1">Portföy filtresi</div>
+          <PortfolioReportFilter className="w-full" />
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -213,7 +259,7 @@ export default function Reports() {
       </div>
 
       {/* Chart 1: % Çizgi Grafiği */}
-      <div className="rounded-xl bg-card border border-border p-4 mb-6">
+      <div ref={equityCardRef} className="rounded-xl bg-card border border-border p-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <h2 className="text-lg font-semibold text-foreground">% Çizgi Grafiği</h2>
           <TimeRangeSelector
@@ -237,11 +283,9 @@ export default function Reports() {
             benchmarks={BENCHMARKS}
             selectedBenchmarks={lineChartBenchmarks}
             onToggle={toggleLineChartBenchmark} />
-
-          
-
-
-
+        </div>
+        <div className="flex justify-center pt-3 pb-1">
+          <ShareChartButton targetRef={equityCardRef} filename="equity-curve" />
         </div>
       </div>
 
@@ -280,7 +324,13 @@ export default function Reports() {
         partialCloses={partialCloses} />
 
       {/* Chart 4: Varlıklarım */}
-      <AssetsChart />
+      <AssetsChart
+        portfolioIds={reportPortfolioIds}
+        snapshotPortfolioId={snapshotPortfolioId}
+      />
+
+      {/* Chart 5: Karşılaştırma */}
+      <StockComparisonChart />
 
     </MainLayout>);
 

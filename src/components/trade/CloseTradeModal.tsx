@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Trade, ClosingType, StopReason, STOP_REASONS } from '@/types/trade';
 import { cn } from '@/lib/utils';
+import { formatPrice, getCurrencySymbol } from '@/lib/currency';
 
 interface CloseTradeModalProps {
   trade: Trade;
@@ -130,19 +131,19 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
               <div className="p-3 rounded-lg bg-secondary">
                 <div className="text-xs text-muted-foreground mb-1">Giriş</div>
                 <div className="font-mono font-semibold text-foreground">
-                  ₺{trade.entry_price.toFixed(2)}
+                  {formatPrice(trade.entry_price, trade.stock_symbol)}
                 </div>
               </div>
               <div className="p-3 rounded-lg bg-secondary">
                 <div className="text-xs text-muted-foreground mb-1">Hedef</div>
                 <div className="font-mono font-semibold text-foreground">
-                  ₺{trade.target_price.toFixed(2)}
+                  {formatPrice(trade.target_price, trade.stock_symbol)}
                 </div>
               </div>
               <div className="p-3 rounded-lg bg-secondary">
                 <div className="text-xs text-muted-foreground mb-1">Stop</div>
                 <div className="font-mono font-semibold text-foreground">
-                  ₺{trade.stop_price.toFixed(2)}
+                  {formatPrice(trade.stop_price, trade.stock_symbol)}
                 </div>
               </div>
             </div>
@@ -209,7 +210,7 @@ export function CloseTradeModal({ trade, onClose, onConfirm }: CloseTradeModalPr
                   'font-mono font-bold',
                   realizedPnl >= 0 ? 'text-profit' : 'text-loss'
                 )}>
-                  {realizedPnl >= 0 ? '+' : ''}₺{realizedPnl.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                  {realizedPnl >= 0 ? '+' : '-'}{getCurrencySymbol(trade.stock_symbol)}{Math.abs(realizedPnl).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
                 </span>
               </div>
             )}

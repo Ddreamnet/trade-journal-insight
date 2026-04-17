@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   X, Plus, Minus, Wallet, ChevronLeft, Building2,
   Coins, DollarSign, Info, Loader2
@@ -19,6 +19,8 @@ import { tr } from 'date-fns/locale';
 
 interface CashFlowModalProps {
   onClose: () => void;
+  portfolioId: string;
+  portfolioName: string;
 }
 
 type Step = 'category' | 'type' | 'amount';
@@ -57,9 +59,9 @@ const ASSET_LABEL: Record<string, string> = {
   bitcoin: 'Bitcoin', ethereum: 'Ethereum', altin: 'Altın', gumus: 'Gümüş',
 };
 
-export function CashFlowModal({ onClose }: CashFlowModalProps) {
-  const { cashFlows, availableCash, addDeposit, addWithdraw } = usePortfolioCash();
-  const { assets, addAsset } = useUserAssets();
+export function CashFlowModal({ onClose, portfolioId, portfolioName }: CashFlowModalProps) {
+  const { cashFlows, availableCash, addDeposit, addWithdraw } = usePortfolioCash(portfolioId);
+  const { assets, addAsset } = useUserAssets(portfolioId);
   const { getSeriesData, fetchSeries, isLoading: isSeriesLoading } = useMarketSeries();
 
   // Deposit flow state
@@ -79,16 +81,27 @@ export function CashFlowModal({ onClose }: CashFlowModalProps) {
   const [withdrawNote, setWithdrawNote] = useState('');
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
+  // Real estate currency selection
+  const [realEstateCurrency, setRealEstateCurrency] = useState<'TRY' | 'USD'>('TRY');
+
   // Gold price from API
   const [goldPriceUsd, setGoldPriceUsd] = useState<number | null>(null);
 
-  // Fetch gold price when commodity step + altin selected
+  // Fetch USD/gold series when needed
   useEffect(() => {
-    if (category === 'commodity' && step === 'amount') {
-      fetchSeries('gold');
+    if ((category === 'commodity' || category === 'real_estate') && step === 'amount') {
       fetchSeries('usd');
+      if (category === 'commodity') fetchSeries('gold');
     }
   }, [category, step, fetchSeries]);
+
+  const usdTryRate = useMemo(() => {
+    const usdData = getSeriesData('usd');
+    if (usdData?.points?.length) {
+      return usdData.points[usdData.points.length - 1].value;
+    }
+    return null;
+  }, [getSeriesData]);
 
   useEffect(() => {
     if (commodityType !== 'altin') return;
@@ -120,6 +133,7 @@ export function CashFlowModal({ onClose }: CashFlowModalProps) {
     setCashType(null);
     setRealEstateType(null);
     setCommodityType(null);
+    setRealEstateCurrency('TRY');
     setTitle('');
     setQuantity('');
     setAmount('');
@@ -174,11 +188,15 @@ export function CashFlowModal({ onClose }: CashFlowModalProps) {
     setIsSubmitting(true);
     try {
       if (category === 'cash' && cashType === 'tl') {
-        // TL → portfolio_cash_flows deposit
-        await addDeposit.mutateAsync({ amount: parsedAmount, note: note.trim() || undefined });
+        await addDeposit.mutateAsync({
+          portfolioId,
+          amount: parsedAmount,
+          note: note.trim() || undefined,
+        });
       } else if (category === 'cash' && cashType === 'usd') {
-        const qty = parsedAmount; // USD amount = quantity
+        const qty = parsedAmount;
         await addAsset.mutateAsync({
+          portfolio_id: portfolioId,
           category: 'cash',
           asset_type: 'usd',
           quantity: qty,
@@ -188,26 +206,37 @@ export function CashFlowModal({ onClose }: CashFlowModalProps) {
         });
       } else if (category === 'cash' && cashType === 'eur') {
         await addAsset.mutateAsync({
+          portfolio_id: portfolioId,
           category: 'cash',
           asset_type: 'eur',
           quantity: parsedAmount,
           quantity_unit: 'eur',
-          amount_usd: parsedAmount, // stored as USD-equiv value user entered
+          amount_usd: parsedAmount,
           note: note.trim() || undefined,
         });
       } else if (category === 'real_estate') {
+        const amountUsd =
+          realEstateCurrency === 'TRY' && usdTryRate
+            ? parsedAmount / usdTryRate
+            : parsedAmount;
         await addAsset.mutateAsync({
+          portfolio_id: portfolioId,
           category: 'real_estate',
           asset_type: realEstateType as AssetType,
           title: title.trim(),
           quantity: 1,
           quantity_unit: 'unit',
-          amount_usd: parsedAmount,
+          amount_usd: amountUsd,
           note: note.trim() || undefined,
+          metadata: {
+            native_currency: realEstateCurrency,
+            native_amount: parsedAmount,
+          },
         });
       } else if (category === 'commodity') {
         const ct = COMMODITY_TYPES.find(c => c.id === commodityType)!;
         await addAsset.mutateAsync({
+          portfolio_id: portfolioId,
           category: 'commodity',
           asset_type: commodityType as AssetType,
           quantity: ct.unit !== 'unit' ? parsedQuantity : 1,
@@ -227,7 +256,11 @@ export function CashFlowModal({ onClose }: CashFlowModalProps) {
     if (isNaN(amt) || amt <= 0 || isWithdrawing) return;
     setIsWithdrawing(true);
     try {
-      await addWithdraw.mutateAsync({ amount: amt, note: withdrawNote.trim() || undefined });
+      await addWithdraw.mutateAsync({
+        portfolioId,
+        amount: amt,
+        note: withdrawNote.trim() || undefined,
+      });
       setWithdrawAmount('');
       setWithdrawNote('');
     } finally {
@@ -267,9 +300,12 @@ export function CashFlowModal({ onClose }: CashFlowModalProps) {
         {/* Header */}
         <div className="border-b border-border p-4 shrink-0">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold text-foreground">Portföy Yönetimi</h2>
+            <div className="flex items-center gap-2 min-w-0">
+              <Wallet className="w-5 h-5 text-primary shrink-0" />
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-foreground leading-tight truncate">Portföy Yönetimi</h2>
+                <div className="text-xs text-muted-foreground truncate">{portfolioName}</div>
+              </div>
             </div>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="w-5 h-5" />
@@ -475,10 +511,47 @@ export function CashFlowModal({ onClose }: CashFlowModalProps) {
                       </div>
                     )}
 
+                    {/* Real estate currency selector */}
+                    {category === 'real_estate' && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Para Birimi</label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setRealEstateCurrency('TRY')}
+                            className={cn(
+                              'flex-1 py-2 rounded-lg border text-sm font-medium transition-colors',
+                              realEstateCurrency === 'TRY'
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'bg-secondary/40 text-foreground border-border hover:bg-secondary'
+                            )}
+                          >
+                            ₺ TL
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRealEstateCurrency('USD')}
+                            className={cn(
+                              'flex-1 py-2 rounded-lg border text-sm font-medium transition-colors',
+                              realEstateCurrency === 'USD'
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'bg-secondary/40 text-foreground border-border hover:bg-secondary'
+                            )}
+                          >
+                            $ USD
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Amount */}
                     <div>
                       <label className="text-sm font-medium text-muted-foreground mb-1.5 block">
-                        {category === 'cash' && cashType === 'tl' ? 'Tutar (₺)' : 'Değer (USD)'}
+                        {category === 'cash' && cashType === 'tl'
+                          ? 'Tutar (₺)'
+                          : category === 'real_estate'
+                          ? realEstateCurrency === 'TRY' ? 'Değer (₺)' : 'Değer ($)'
+                          : 'Değer (USD)'}
                       </label>
                       <NumberInput
                         step="any"

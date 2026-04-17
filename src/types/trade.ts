@@ -92,6 +92,7 @@ export type ClosingType = 'kar_al' | 'stop';
 export interface ClosedTradeEntry {
   id: string;
   trade_id: string;
+  portfolio_id: string;
   stock_symbol: string;
   stock_name: string;
   trade_type: 'buy' | 'sell';
@@ -113,6 +114,7 @@ export interface ClosedTradeEntry {
 export interface Trade {
   id: string;
   user_id: string;
+  portfolio_id: string;
   stock_symbol: string;
   stock_name: string;
   trade_type: 'buy' | 'sell';
@@ -151,6 +153,7 @@ export const BENCHMARKS: BenchmarkData[] = [
   { id: 'bist100', name: 'BIST 100', symbol: 'XU100', color: '#E30A17' },
   { id: 'nasdaq100', name: 'NASDAQ 100', symbol: 'NDX', color: '#00AAFF' },
   { id: 'inflation_tr', name: 'Enflasyon (TR)', symbol: 'TÜFE', color: '#FF6B35' },
+  { id: 'btcusdt', name: 'Bitcoin', symbol: 'BTC', color: '#F7931A' },
 ];
 
 export type TimeRange = '1m' | '3m' | '6m' | '1y' | '3y';

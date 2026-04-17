@@ -1,15 +1,18 @@
 import { useState, useMemo } from 'react';
 import { validateDirectional, calculateRR, calculatePositionAmount } from '@/lib/tradeValidation';
-import { X, TrendingUp, TrendingDown } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NumberInput } from '@/components/ui/number-input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StockLogo } from '@/components/ui/stock-logo';
 import { Stock, TradeType, StopReason, STOP_REASONS } from '@/types/trade';
 import { cn } from '@/lib/utils';
+import { formatPrice, getCurrencySymbol } from '@/lib/currency';
 
 interface TradeFormProps {
   stock: Stock & { logoUrl?: string };
+  /** İşlem hangi portföye eklenecek — ilk zorunlu adım olarak kullanıcıya gösterilir */
+  portfolioName: string;
   onClose: () => void;
   onSave: (trade: {
     stock_symbol: string;
@@ -24,7 +27,7 @@ interface TradeFormProps {
   isSubmitting?: boolean;
 }
 
-export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: TradeFormProps) {
+export function TradeForm({ stock, portfolioName, onClose, onSave, isSubmitting = false }: TradeFormProps) {
   const [tradeType, setTradeType] = useState<TradeType | null>(null);
   const [reasons, setReasons] = useState<StopReason[]>([]);
   const [entryPrice, setEntryPrice] = useState(stock.currentPrice.toString());
@@ -131,7 +134,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
             <div className="flex items-center gap-2">
               <div className="text-right">
                 <div className="font-mono text-foreground">
-                  ₺{stock.currentPrice.toFixed(2)}
+                  {formatPrice(stock.currentPrice, (stock as any).currency ?? stock.symbol)}
                 </div>
                 <div
                   className={cn(
@@ -159,6 +162,15 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
 
         {/* Content */}
         <div className="overflow-y-auto max-h-[70vh] p-4 space-y-6">
+          {/* Portfolio context — ilk zorunlu adım */}
+          <div className="flex items-center gap-2 p-3 rounded-lg border border-border bg-secondary/50">
+            <Folder className="w-4 h-4 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-muted-foreground">Portföy</div>
+              <div className="text-sm font-semibold text-foreground truncate">{portfolioName}</div>
+            </div>
+          </div>
+
           {/* Trade Type Selection */}
           <div>
             <label className="text-sm font-medium text-muted-foreground mb-2 block">
@@ -293,7 +305,7 @@ export function TradeForm({ stock, onClose, onSave, isSubmitting = false }: Trad
                 />
                 {positionAmount !== null && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    💰 İşlem Tutarı: ₺{positionAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                    💰 İşlem Tutarı: {getCurrencySymbol((stock as any).currency ?? stock.symbol)}{positionAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
                   </p>
                 )}
               </div>

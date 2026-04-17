@@ -5,6 +5,7 @@ import { toast } from '@/hooks/use-toast';
 import { ClosingType, ClosedTradeEntry } from '@/types/trade';
 
 export interface TradeInsert {
+  portfolio_id: string;
   stock_symbol: string;
   stock_name: string;
   trade_type: 'buy' | 'sell';
@@ -70,6 +71,7 @@ export function useTrades() {
 
       const { data: tradeId, error: rpcError } = await supabase.rpc('create_trade_with_cash_check', {
         p_user_id: user.id,
+        p_portfolio_id: trade.portfolio_id,
         p_stock_symbol: trade.stock_symbol,
         p_stock_name: trade.stock_name,
         p_trade_type: trade.trade_type,
@@ -346,6 +348,7 @@ export function useTrades() {
     return {
       id: pc.id,
       trade_id: pc.trade_id,
+      portfolio_id: pc.portfolio_id ?? parentTrade?.portfolio_id ?? '',
       stock_symbol: parentTrade?.stock_symbol ?? '',
       stock_name: parentTrade?.stock_name ?? '',
       trade_type: (parentTrade?.trade_type ?? 'buy') as 'buy' | 'sell',

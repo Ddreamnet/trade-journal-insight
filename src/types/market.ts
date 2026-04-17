@@ -7,6 +7,10 @@ export interface MarketStock {
   chgPct: number;
   time: string;
   logoUrl?: string;
+  /** Para birimi: TRY = Türk lirası (BIST), USD = Dolar (kripto/emtia) */
+  currency?: 'TRY' | 'USD';
+  /** Okunabilir ad (ör. "Bitcoin", "Altın (oz/USD)") */
+  name?: string;
 }
 
 export interface MarketDataResponse {
@@ -17,7 +21,7 @@ export interface MarketDataResponse {
 }
 
 // Market Series Types for Historical Data
-export type MarketAsset = 'gold' | 'silver' | 'usd' | 'eur' | 'bist100' | 'nasdaq100' | 'inflation_tr';
+export type MarketAsset = 'gold' | 'silver' | 'usd' | 'eur' | 'bist100' | 'nasdaq100' | 'inflation_tr' | 'btcusdt';
 
 export interface MarketSeriesPoint {
   date: string; // YYYY-MM-DD
@@ -39,4 +43,5 @@ export const ASSET_LABELS: Record<MarketAsset, string> = {
   bist100: 'BIST 100',
   nasdaq100: 'NASDAQ 100',
   inflation_tr: 'Enflasyon (TR)',
+  btcusdt: 'Bitcoin',
 };

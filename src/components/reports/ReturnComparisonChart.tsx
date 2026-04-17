@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { TimeRangeSelector } from '@/components/reports/TimeRangeSelector';
 import {
   BarChart,
@@ -17,6 +17,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useEquityCurveData, ChartDataPoint, PartialCloseRecord, getTimeRangeDates } from '@/hooks/useEquityCurveData';
 import { useStockPriceSeries } from '@/hooks/useStockPriceSeries';
 import { cn } from '@/lib/utils';
+import { ShareChartButton } from '@/components/ui/ShareChartButton';
 
 interface ReturnComparisonChartProps {
   timeRange: TimeRange;
@@ -142,6 +143,7 @@ function calculateReturns(
         case 'bist100': return point.bist100;
         case 'nasdaq100': return point.nasdaq100;
         case 'inflation_tr': return point.inflation_tr;
+        case 'btcusdt': return point.btcusdt;
         default: return null;
       }
     };
@@ -177,6 +179,7 @@ export function ReturnComparisonChart({
 }: ReturnComparisonChartProps) {
   const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(!isMobile);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const { startDate, endDate } = getTimeRangeDates(timeRange, new Date());
   const { priceMap: stockPriceMap, missingSymbols } = useStockPriceSeries(allTrades, startDate, endDate);
@@ -235,7 +238,7 @@ export function ReturnComparisonChart({
   const needsScroll = returnData.length > 5;
 
   return (
-    <div className="rounded-xl bg-card border border-border p-4 mb-6">
+    <div ref={cardRef} className="rounded-xl bg-card border border-border p-4 mb-6">
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
           <CollapsibleTrigger className="flex items-center gap-2 group">
@@ -313,6 +316,9 @@ export function ReturnComparisonChart({
         </CollapsibleContent>
       </Collapsible>
       {children}
+      <div className="flex justify-center pt-3 pb-1">
+        <ShareChartButton targetRef={cardRef} filename="getiri-karsilastirma" />
+      </div>
     </div>
   );
 }

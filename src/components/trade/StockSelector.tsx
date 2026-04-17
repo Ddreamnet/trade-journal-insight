@@ -6,6 +6,7 @@ import { StockLogo } from '@/components/ui/stock-logo';
 import { Stock } from '@/types/trade';
 import { useMarketData } from '@/contexts/MarketDataContext';
 import { cn } from '@/lib/utils';
+import { formatPrice } from '@/lib/currency';
 
 interface StockSelectorProps {
   isOpen: boolean;
@@ -13,48 +14,62 @@ interface StockSelectorProps {
   onSelect: (stock: Stock & {logoUrl?: string;}) => void;
 }
 
+type StockItem = Stock & { logoUrl?: string; isIndex?: boolean; currency?: 'TRY' | 'USD'; };
+
 export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const { stocks, xu030 } = useMarketData();
 
-  // Convert MarketStock to Stock format and filter
-  const filteredStocks = useMemo(() => {
-    const stockList: (Stock & {logoUrl?: string;isIndex?: boolean;})[] = [];
+  // Kripto/emtia: currency === 'USD', BIST: geri kalan
+  const cryptoStocks = useMemo(() => stocks.filter(s => s.currency === 'USD'), [stocks]);
+  const bistStocks = useMemo(() => stocks.filter(s => s.currency !== 'USD'), [stocks]);
 
-    // Pin XU030 at top
+  const toStockItem = (s: typeof stocks[number], index: number): StockItem => ({
+    id: `${index}`,
+    symbol: s.symbol,
+    name: s.name ?? s.symbol,
+    currentPrice: s.last,
+    change: s.chg,
+    changePercent: s.chgPct,
+    logoUrl: s.logoUrl,
+    currency: s.currency,
+  });
+
+  const allItems = useMemo<StockItem[]>(() => {
+    const list: StockItem[] = [];
+
+    // 1. Kripto & Emtia (en üstte)
+    cryptoStocks.forEach((s, i) => list.push(toStockItem(s, i)));
+
+    // 2. XU030 endeksi
     if (xu030) {
-      stockList.push({
+      list.push({
         id: 'xu030',
         symbol: 'XU030',
         name: 'BIST 30 Endeksi',
         currentPrice: xu030.last,
         change: 0,
         changePercent: xu030.chgPct,
-        isIndex: true
+        isIndex: true,
+        currency: 'TRY',
       });
     }
 
-    stocks.forEach((s, index) => {
-      stockList.push({
-        id: `${index + 1}`,
-        symbol: s.symbol,
-        name: s.symbol,
-        currentPrice: s.last,
-        change: s.chg,
-        changePercent: s.chgPct,
-        logoUrl: s.logoUrl
-      });
-    });
+    // 3. BIST hisseleri
+    bistStocks.forEach((s, i) => list.push(toStockItem(s, cryptoStocks.length + 1 + i)));
 
-    if (!searchQuery) return stockList;
+    return list;
+  }, [cryptoStocks, bistStocks, xu030]);
 
+  const filteredStocks = useMemo(() => {
+    if (!searchQuery) return allItems;
     const query = searchQuery.toLowerCase();
-    return stockList.filter(
+    return allItems.filter(
       (stock) =>
-      stock.symbol.toLowerCase().includes(query) ||
-      stock.name.toLowerCase().includes(query)
+        stock.symbol.toLowerCase().includes(query) ||
+        stock.name.toLowerCase().includes(query)
     );
-  }, [stocks, xu030, searchQuery]);
+  }, [allItems, searchQuery]);
 
   const handleSelect = (stock: Stock) => {
     onSelect(stock);
@@ -96,63 +111,79 @@ export function StockSelector({ isOpen, onClose, onSelect }: StockSelectorProps)
 
         {/* Stock List */}
         <div className="overflow-y-auto max-h-[60vh] p-2">
-          {filteredStocks.length === 0 ?
-          <div className="text-center py-8 text-muted-foreground">
-              Hisse bulunamadı
-            </div> :
-
-          <div className="grid gap-1">
-              {filteredStocks.map((stock) =>
-            <button
-              key={stock.id}
-              onClick={() => handleSelect(stock)}
-              className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-secondary transition-colors text-left">
-
-                  <div className="flex items-center gap-3">
-                    <StockLogo
-                  symbol={stock.symbol}
-                  logoUrl={(stock as any).logoUrl}
-                  size="md" />
-
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">
-                          {stock.symbol}
-                        </span>
-                        {(stock as any).isIndex
-
-                    }
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {stock.name}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-mono text-foreground">
-                      ₺{stock.currentPrice.toFixed(2)}
-                    </div>
-                    <div
-                  className={cn(
-                    'flex items-center justify-end gap-1 text-sm',
-                    stock.change >= 0 ? 'text-profit' : 'text-loss'
-                  )}>
-
-                      {stock.change >= 0 ?
-                  <TrendingUp className="w-3 h-3" /> :
-
-                  <TrendingDown className="w-3 h-3" />
-                  }
-                      <span>
-                        {stock.change >= 0 ? '+' : ''}
-                        {stock.changePercent.toFixed(2)}%
-                      </span>
-                    </div>
-                  </div>
-                </button>
-            )}
+          {filteredStocks.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Varlık bulunamadı
             </div>
-          }
+          ) : (
+            <div className="grid gap-1">
+              {/* Kripto & Emtia başlığı (arama yokken göster) */}
+              {!searchQuery && cryptoStocks.length > 0 && (
+                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Kripto & Emtia
+                </div>
+              )}
+
+              {filteredStocks.map((stock, idx) => {
+                // BIST başlığını kripto bitince göster (arama yokken)
+                const showBistHeader =
+                  !searchQuery &&
+                  cryptoStocks.length > 0 &&
+                  idx === cryptoStocks.length;
+
+                return (
+                  <div key={stock.id}>
+                    {showBistHeader && (
+                      <div className="px-3 py-1.5 mt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t border-border/50">
+                        BIST Hisseleri
+                      </div>
+                    )}
+                    <button
+                      onClick={() => handleSelect(stock)}
+                      className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-secondary transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <StockLogo
+                          symbol={stock.symbol}
+                          logoUrl={stock.logoUrl}
+                          size="md"
+                        />
+                        <div>
+                          <span className="font-semibold text-foreground">
+                            {stock.symbol}
+                          </span>
+                          <div className="text-sm text-muted-foreground">
+                            {stock.name}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-mono text-foreground">
+                          {formatPrice(stock.currentPrice, stock.currency ?? stock.symbol)}
+                        </div>
+                        <div
+                          className={cn(
+                            'flex items-center justify-end gap-1 text-sm',
+                            stock.change >= 0 ? 'text-profit' : 'text-loss'
+                          )}
+                        >
+                          {stock.change >= 0 ? (
+                            <TrendingUp className="w-3 h-3" />
+                          ) : (
+                            <TrendingDown className="w-3 h-3" />
+                          )}
+                          <span>
+                            {stock.change >= 0 ? '+' : ''}
+                            {stock.changePercent.toFixed(2)}%
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>);

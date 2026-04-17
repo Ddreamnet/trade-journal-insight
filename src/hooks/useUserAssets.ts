@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from '@/hooks/use-toast';
+import { useMemo } from 'react';
 
 export type AssetCategory = 'cash' | 'real_estate' | 'commodity';
 export type AssetType =
@@ -20,6 +21,7 @@ export type QuantityUnit = 'gram' | 'btc' | 'eth' | 'unit' | 'usd' | 'eur';
 export interface UserAsset {
   id: string;
   user_id: string;
+  portfolio_id: string;
   category: AssetCategory;
   asset_type: AssetType;
   title: string | null;
@@ -33,6 +35,7 @@ export interface UserAsset {
 }
 
 export interface AddAssetInput {
+  portfolio_id: string;
   category: AssetCategory;
   asset_type: AssetType;
   title?: string;
@@ -40,6 +43,7 @@ export interface AddAssetInput {
   quantity_unit: QuantityUnit;
   amount_usd: number;
   note?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ReduceAssetInput {
@@ -48,11 +52,18 @@ export interface ReduceAssetInput {
   reduceByQuantity?: number;
 }
 
-export function useUserAssets() {
+/**
+ * useUserAssets
+ * portfolioFilter:
+ *  - undefined | null → tüm portföyler
+ *  - string           → tek portföy
+ *  - string[]         → birden fazla portföy ([] → hiç varlık)
+ */
+export function useUserAssets(portfolioFilter?: string | string[] | null) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: assets = [], isLoading } = useQuery({
+  const { data: allAssets = [], isLoading } = useQuery({
     queryKey: ['user_assets', user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -66,13 +77,25 @@ export function useUserAssets() {
     enabled: !!user,
   });
 
+  const assets = useMemo(() => {
+    if (portfolioFilter == null) return allAssets;
+    if (typeof portfolioFilter === 'string') {
+      return allAssets.filter(a => a.portfolio_id === portfolioFilter);
+    }
+    if (portfolioFilter.length === 0) return [];
+    const set = new Set(portfolioFilter);
+    return allAssets.filter(a => set.has(a.portfolio_id));
+  }, [allAssets, portfolioFilter]);
+
   const addAsset = useMutation({
     mutationFn: async (input: AddAssetInput) => {
       if (!user) throw new Error('Not authenticated');
+      if (!input.portfolio_id) throw new Error('Portföy seçilmedi');
       const { data, error } = await supabase
         .from('user_assets')
         .insert({
           user_id: user.id,
+          portfolio_id: input.portfolio_id,
           category: input.category,
           asset_type: input.asset_type,
           title: input.title || null,
@@ -80,6 +103,7 @@ export function useUserAssets() {
           quantity_unit: input.quantity_unit,
           amount_usd: input.amount_usd,
           note: input.note || null,
+          metadata: input.metadata || null,
         })
         .select()
         .single();
@@ -165,11 +189,12 @@ export function useUserAssets() {
     },
   });
 
-  // Total USD value of all assets
+  // Total USD value of (filtered) assets
   const totalAssetsUsd = assets.reduce((sum, a) => sum + a.amount_usd, 0);
 
   return {
     assets,
+    allAssets,
     isLoading,
     totalAssetsUsd,
     addAsset,

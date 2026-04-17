@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, LogOut, Menu, X, BarChart3, FileText } from 'lucide-react';
+import { Home, LogOut, Menu, X, BarChart3, FileText, LineChart } from 'lucide-react';
 import logo from '@/assets/logo.png';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -38,6 +38,7 @@ export function Header() {
 
   const navItems = [
     { path: '/', label: 'Ana Sayfa', icon: Home },
+    { path: '/islemlerim', label: 'İşlemlerim', icon: LineChart },
     { path: '/raporlarim', label: 'Raporlarım', icon: BarChart3 },
     { path: '/panel/blog', label: 'Blog', icon: FileText },
   ];

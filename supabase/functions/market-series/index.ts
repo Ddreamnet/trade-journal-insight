@@ -33,6 +33,7 @@ const YAHOO_SYMBOLS: Record<string, string> = {
   eur: "EURTRY=X",
   bist100: "XU100.IS",
   nasdaq100: "%5ENDX",
+  btcusdt: "BTC-TRY=X",  // Bitcoin/TRY doğrudan
 };
 
 function parseCSVPoints(csv: string): SeriesPoint[] {
@@ -141,6 +142,7 @@ const YAHOO_V8_SYMBOLS: Record<string, string> = {
   eur: "EURTRY=X",
   bist100: "XU100.IS",
   nasdaq100: "^NDX",
+  btcusdt: "BTC-TRY=X",  // Bitcoin/TRY
 };
 
 async function fetchSyntheticTRY(usdSymbol: string, label: string): Promise<SeriesPoint[]> {
@@ -184,7 +186,7 @@ async function fetchMarketData(asset: string): Promise<{ points: SeriesPoint[]; 
     console.warn(`[market-series] ${errors[errors.length - 1]}`);
   }
 
-  // 2. Try Yahoo v8 chart API (direct TRY pairs for usd/eur/bist100)
+  // 2. Try Yahoo v8 chart API (direct TRY pairs for usd/eur/bist100/btcusdt)
   const v8Symbol = YAHOO_V8_SYMBOLS[asset];
   if (v8Symbol && !["gold", "silver"].includes(asset)) {
     try {
@@ -196,21 +198,27 @@ async function fetchMarketData(asset: string): Promise<{ points: SeriesPoint[]; 
     }
   }
 
-  // 3. Try Stooq
-  try {
-    const points = await fetchStooqData(asset);
-    return { points, source: "Stooq" };
-  } catch (e) {
-    errors.push(`Stooq: ${e instanceof Error ? e.message : e}`);
-    console.warn(`[market-series] ${errors[errors.length - 1]}`);
+  // 3. Try Stooq (btcusdt atlanır — Stooq'ta BTC/TRY yok)
+  if (asset !== "btcusdt") {
+    try {
+      const points = await fetchStooqData(asset);
+      return { points, source: "Stooq" };
+    } catch (e) {
+      errors.push(`Stooq: ${e instanceof Error ? e.message : e}`);
+      console.warn(`[market-series] ${errors[errors.length - 1]}`);
+    }
   }
 
-  // 4. For gold/silver: synthetic USD × USDTRY via Yahoo v8
-  if (asset === "gold" || asset === "silver") {
-    const usdSymbol = asset === "gold" ? "GC=F" : "SI=F";
+  // 4. For gold/silver/btcusdt: synthetic USD × USDTRY via Yahoo v8
+  const syntheticMap: Record<string, string> = {
+    gold: "GC=F",
+    silver: "SI=F",
+    btcusdt: "BTC-USD",
+  };
+  if (asset in syntheticMap) {
     try {
       console.log(`[market-series] Synthetic fallback: ${asset}`);
-      const points = await fetchSyntheticTRY(usdSymbol, asset);
+      const points = await fetchSyntheticTRY(syntheticMap[asset], asset);
       return { points, source: "Yahoo v8 (synthetic)" };
     } catch (e) {
       errors.push(`Synthetic: ${e instanceof Error ? e.message : e}`);
@@ -375,7 +383,7 @@ serve(async (req: Request) => {
       } catch { /* ignore parse errors */ }
     }
 
-    const validAssets = [...Object.keys(STOOQ_SYMBOLS), "inflation_tr"];
+    const validAssets = [...Object.keys(STOOQ_SYMBOLS), "inflation_tr", "btcusdt"];
 
     if (!asset || !validAssets.includes(asset)) {
       return new Response(

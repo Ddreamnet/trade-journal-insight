@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   LineChart,
   Line,
@@ -18,6 +18,7 @@ import { PartialCloseRecord, calculateT0FromTrades } from '@/hooks/useEquityCurv
 import { useStockPriceSeries } from '@/hooks/useStockPriceSeries';
 import { cn } from '@/lib/utils';
 import { AlertTriangle } from 'lucide-react';
+import { ShareChartButton } from '@/components/ui/ShareChartButton';
 import { startOfDay, subYears } from 'date-fns';
 
 interface CashFlowInput {
@@ -151,6 +152,7 @@ export function PortfolioValueChart({
 }: PortfolioValueChartProps) {
   const [selectedCurrency, setSelectedCurrency] =
     useState<PortfolioCurrency>('TL');
+  const cardRef = useRef<HTMLDivElement>(null);
 
   // Calculate date range for stock price fetching (t0 → today, max 3y back)
   const { priceStartDate, priceEndDate } = useMemo(() => {
@@ -194,7 +196,7 @@ export function PortfolioValueChart({
   }
 
   return (
-    <div className="rounded-xl bg-card border border-border p-4 mb-6">
+    <div ref={cardRef} className="rounded-xl bg-card border border-border p-4 mb-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <h3 className="text-sm font-medium text-foreground">Portföy Değeri</h3>
         <div className="flex gap-1 p-1 bg-secondary rounded-lg">
@@ -267,6 +269,9 @@ export function PortfolioValueChart({
             />
           </LineChart>
         </ResponsiveContainer>
+      </div>
+      <div className="flex justify-center pt-3 pb-1">
+        <ShareChartButton targetRef={cardRef} filename="portfoy-degeri" />
       </div>
     </div>
   );

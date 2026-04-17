@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { NumberInput } from '@/components/ui/number-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useUserAssets, UserAsset } from '@/hooks/useUserAssets';
-import { usePortfolioCash } from '@/hooks/usePortfolioCash';
 import { useMarketSeries } from '@/contexts/MarketSeriesContext';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,6 +15,8 @@ import { cn } from '@/lib/utils';
 
 interface ExchangeModalProps {
   onClose: () => void;
+  portfolioId: string;
+  portfolioName: string;
 }
 
 const ASSET_LABELS: Record<string, string> = {
@@ -42,9 +43,8 @@ const ASSET_ICONS: Record<string, React.ReactNode> = {
   gumus: <Coins className="w-4 h-4" />,
 };
 
-export function ExchangeModal({ onClose }: ExchangeModalProps) {
-  const { assets, reduceAsset } = useUserAssets();
-  const { addDeposit } = usePortfolioCash();
+export function ExchangeModal({ onClose, portfolioId, portfolioName }: ExchangeModalProps) {
+  const { assets, reduceAsset } = useUserAssets(portfolioId);
   const { getSeriesData, fetchSeries, isLoading: isSeriesLoading } = useMarketSeries();
   const { user } = useAuth();
 
@@ -99,6 +99,7 @@ export function ExchangeModal({ onClose }: ExchangeModalProps) {
         .from('portfolio_cash_flows')
         .insert({
           user_id: user.id,
+          portfolio_id: portfolioId,
           flow_type: 'deposit',
           amount: tlAmount,
           note: `Exchange: ${selectedAsset.title || ASSET_LABELS[selectedAsset.asset_type]} → TL ($${sellUsd.toFixed(2)} × ${rate.toFixed(2)})`,
@@ -130,9 +131,12 @@ export function ExchangeModal({ onClose }: ExchangeModalProps) {
         {/* Header */}
         <div className="border-b border-border p-4 shrink-0">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ArrowRightLeft className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold text-foreground">Çevirici</h2>
+            <div className="flex items-center gap-2 min-w-0">
+              <ArrowRightLeft className="w-5 h-5 text-primary shrink-0" />
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-foreground leading-tight truncate">Çevirici</h2>
+                <div className="text-xs text-muted-foreground truncate">{portfolioName}</div>
+              </div>
             </div>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="w-5 h-5" />

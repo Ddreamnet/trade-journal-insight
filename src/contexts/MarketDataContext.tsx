@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { MarketStock, MarketDataResponse } from '@/types/market';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -22,43 +22,42 @@ interface MarketDataContextType {
 const MarketDataContext = createContext<MarketDataContextType | undefined>(undefined);
 
 const POLLING_INTERVAL = 60000; // 60 saniye
-const CACHE_KEY = 'bist100_cache';
+const BIST_CACHE_KEY = 'bist100_cache';
+const CRYPTO_CACHE_KEY = 'crypto_prices_cache';
 
-// LocalStorage'dan cache oku
-const getCachedData = (): { stocks: MarketStock[]; updatedAt: string } | null => {
+// LocalStorage cache yardımcıları
+const readCache = (key: string): { stocks: MarketStock[]; updatedAt: string } | null => {
   try {
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      return JSON.parse(cached);
-    }
-  } catch (e) {
-    console.error('Cache read error:', e);
-  }
-  return null;
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
 };
 
-// LocalStorage'a cache yaz
-const setCachedData = (stocks: MarketStock[], updatedAt: string) => {
+const writeCache = (key: string, stocks: MarketStock[], updatedAt: string) => {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ stocks, updatedAt }));
+    localStorage.setItem(key, JSON.stringify({ stocks, updatedAt }));
   } catch (e) {
     console.error('Cache write error:', e);
   }
 };
 
-// Hash-based comparison to prevent unnecessary re-renders
 function stocksHash(stocks: MarketStock[]): string {
   return stocks.map(s => `${s.symbol}:${s.last}:${s.chgPct}`).join('|');
 }
 
 export function MarketDataProvider({ children }: { children: React.ReactNode }) {
-  const [stocks, setStocks] = useState<MarketStock[]>(() => {
-    const cached = getCachedData();
-    return cached?.stocks || [];
+  const [bistStocks, setBistStocks] = useState<MarketStock[]>(() => {
+    return readCache(BIST_CACHE_KEY)?.stocks ?? [];
   });
+  const [cryptoStocks, setCryptoStocks] = useState<MarketStock[]>(() => {
+    return readCache(CRYPTO_CACHE_KEY)?.stocks ?? [];
+  });
+
+  // Kripto/emtia önde, BIST arkada
+  const stocks = useMemo<MarketStock[]>(() => [...cryptoStocks, ...bistStocks], [cryptoStocks, bistStocks]);
+
   const [lastUpdated, setLastUpdated] = useState<string | null>(() => {
-    const cached = getCachedData();
-    return cached?.updatedAt || null;
+    return readCache(BIST_CACHE_KEY)?.updatedAt ?? null;
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +65,8 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
   const [xu100, setXu100] = useState<IndexData | null>(null);
   const [xu030, setXu030] = useState<IndexData | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const stocksHashRef = useRef<string>('');
+  const bistHashRef = useRef<string>('');
+  const cryptoHashRef = useRef<string>('');
 
   const fetchIndices = useCallback(async () => {
     try {
@@ -79,44 +79,58 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
     }
   }, []);
 
+  const fetchCryptoPrices = useCallback(async () => {
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('crypto-prices');
+      if (fnError) throw new Error(fnError.message);
+      const response = data as MarketDataResponse;
+      if (response.items && response.items.length > 0) {
+        const newHash = stocksHash(response.items);
+        if (newHash !== cryptoHashRef.current) {
+          cryptoHashRef.current = newHash;
+          setCryptoStocks(response.items);
+          writeCache(CRYPTO_CACHE_KEY, response.items, response.updatedAt);
+        }
+      }
+    } catch (err) {
+      console.error('[crypto-prices] fetch error:', err);
+      // Eski önbelleği koru — setCryptoStocks'a dokunma
+    }
+  }, []);
+
   const fetchMarketData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('bist100');
-      
-      if (fnError) {
-        throw new Error(fnError.message);
-      }
+
+      if (fnError) throw new Error(fnError.message);
 
       const response = data as MarketDataResponse;
 
-      if (response.error) {
-        throw new Error(response.error);
-      }
+      if (response.error) throw new Error(response.error);
 
       if (response.items && response.items.length > 0) {
         const newHash = stocksHash(response.items);
-        // Only update state if data actually changed
-        if (newHash !== stocksHashRef.current) {
-          stocksHashRef.current = newHash;
-          setStocks(response.items);
+        if (newHash !== bistHashRef.current) {
+          bistHashRef.current = newHash;
+          setBistStocks(response.items);
         }
         setLastUpdated(response.updatedAt);
         setIsFallback(false);
-        setCachedData(response.items, response.updatedAt);
+        writeCache(BIST_CACHE_KEY, response.items, response.updatedAt);
       }
     } catch (err) {
       console.error('Market data fetch error:', err);
       setError(err instanceof Error ? err.message : 'Veri alınamadı');
-      
-      const cached = getCachedData();
+
+      const cached = readCache(BIST_CACHE_KEY);
       if (cached && cached.stocks.length > 0) {
         const newHash = stocksHash(cached.stocks);
-        if (newHash !== stocksHashRef.current) {
-          stocksHashRef.current = newHash;
-          setStocks(cached.stocks);
+        if (newHash !== bistHashRef.current) {
+          bistHashRef.current = newHash;
+          setBistStocks(cached.stocks);
         }
         setLastUpdated(cached.updatedAt);
         setIsFallback(true);
@@ -131,19 +145,21 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
   }, [stocks]);
 
   useEffect(() => {
+    // İlk yükleme — hepsi paralel
     fetchMarketData();
+    fetchCryptoPrices();
     fetchIndices();
+
     intervalRef.current = setInterval(() => {
       fetchMarketData();
+      fetchCryptoPrices();
       fetchIndices();
     }, POLLING_INTERVAL);
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [fetchMarketData, fetchIndices]);
+  }, [fetchMarketData, fetchCryptoPrices, fetchIndices]);
 
   const value: MarketDataContextType = {
     stocks,
@@ -154,7 +170,7 @@ export function MarketDataProvider({ children }: { children: React.ReactNode }) 
     refetch: fetchMarketData,
     getStockBySymbol,
     xu100,
-    xu030
+    xu030,
   };
 
   return (

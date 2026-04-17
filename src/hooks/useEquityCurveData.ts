@@ -32,6 +32,7 @@ export interface ChartDataPoint {
   bist100?: number | null;
   nasdaq100?: number | null;
   inflation_tr?: number | null;
+  btcusdt?: number | null;
 }
 
 export interface EquityCurveData {
@@ -484,6 +485,9 @@ export function useEquityCurveData(
             break;
           case 'inflation_tr':
             point.inflation_tr = value;
+            break;
+          case 'btcusdt':
+            point.btcusdt = value;
             break;
         }
       }
