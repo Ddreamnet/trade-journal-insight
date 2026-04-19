@@ -1,15 +1,16 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePortfolios } from '@/hooks/usePortfolios';
-import { Portfolio, PortfolioFilter, PortfolioFilterMode } from '@/types/portfolio';
+import { Portfolio } from '@/types/portfolio';
 
-// İşlemlerim sayfasında "aktif" portföy seçimi.
-// null  → kullanıcıya seçim zorunlu (create modal açılır); gerçekte seçim yapıldığında id döner.
-// 'all' → tüm portföylerin birleşik görünümü (sadece liste için)
+// Global portfolio selection used everywhere (İşlemler list filter, Ana
+// Sayfa scoping, Rapor charts, etc.).
+// - null  → user hasn't chosen yet; components may prompt via modal.
+// - 'all' → combined view across every portfolio.
+// - id    → a specific portfolio.
 export type ActivePortfolioSelection = string | 'all' | null;
 
 const ACTIVE_KEY_PREFIX = 'portfolio.active.';
-const FILTER_KEY_PREFIX = 'portfolio.filter.';
 
 interface PortfolioContextValue {
   portfolios: Portfolio[];
@@ -17,19 +18,12 @@ interface PortfolioContextValue {
   closedPortfolios: Portfolio[];
   isLoading: boolean;
 
-  /** İşlemlerim sayfası için aktif seçim (portföy id, 'all' veya null) */
+  /** Global selection controlling every portfolio-scoped surface. */
   activeSelection: ActivePortfolioSelection;
   setActiveSelection: (sel: ActivePortfolioSelection) => void;
 
-  /** Seçili tek portföy objesi ('all' veya null ise undefined) */
+  /** The resolved single portfolio object, undefined for 'all' / null. */
   activePortfolio: Portfolio | undefined;
-
-  /** Raporlar sayfası filtresi */
-  reportFilter: PortfolioFilter;
-  setReportFilter: (f: PortfolioFilter) => void;
-
-  /** Rapor filtresine göre efektif portföy ID listesi */
-  reportPortfolioIds: string[];
 }
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
@@ -57,22 +51,17 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const { portfolios, activePortfolios, closedPortfolios, isLoading } = usePortfolios();
 
   const activeKey = user ? ACTIVE_KEY_PREFIX + user.id : null;
-  const filterKey = user ? FILTER_KEY_PREFIX + user.id : null;
 
   const [activeSelection, setActiveSelectionState] = useState<ActivePortfolioSelection>(null);
-  const [reportFilter, setReportFilterState] = useState<PortfolioFilter>({
-    mode: 'all',
-    portfolioId: null,
-  });
 
-  // Kullanıcı değişince localStorage'tan seçimleri yükle
+  // Hydrate selection from localStorage when the user changes.
   useEffect(() => {
-    if (!activeKey || !filterKey) return;
+    if (!activeKey) return;
     setActiveSelectionState(readLS<ActivePortfolioSelection>(activeKey, null));
-    setReportFilterState(readLS<PortfolioFilter>(filterKey, { mode: 'all', portfolioId: null }));
-  }, [activeKey, filterKey]);
+  }, [activeKey]);
 
-  // Portföyler geldikten sonra geçerli bir seçim yoksa ilk aktif portföyü seç
+  // If the stored selection is no longer valid (portfolio deleted, etc.),
+  // fall back to the first active portfolio (or the first overall).
   useEffect(() => {
     if (isLoading || !activeKey) return;
     if (portfolios.length === 0) return;
@@ -94,31 +83,10 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     if (activeKey) writeLS(activeKey, sel);
   };
 
-  const setReportFilter = (f: PortfolioFilter) => {
-    // mode !== 'single' olduğunda portfolioId'yi temizle
-    const normalized: PortfolioFilter = f.mode === 'single' ? f : { mode: f.mode, portfolioId: null };
-    setReportFilterState(normalized);
-    if (filterKey) writeLS(filterKey, normalized);
-  };
-
   const activePortfolio = useMemo<Portfolio | undefined>(() => {
     if (typeof activeSelection !== 'string' || activeSelection === 'all') return undefined;
     return portfolios.find(p => p.id === activeSelection);
   }, [activeSelection, portfolios]);
-
-  const reportPortfolioIds = useMemo(() => {
-    switch (reportFilter.mode) {
-      case 'single':
-        return reportFilter.portfolioId ? [reportFilter.portfolioId] : [];
-      case 'active':
-        return activePortfolios.map(p => p.id);
-      case 'closed':
-        return closedPortfolios.map(p => p.id);
-      case 'all':
-      default:
-        return portfolios.map(p => p.id);
-    }
-  }, [reportFilter, portfolios, activePortfolios, closedPortfolios]);
 
   const value: PortfolioContextValue = {
     portfolios,
@@ -128,9 +96,6 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     activeSelection,
     setActiveSelection,
     activePortfolio,
-    reportFilter,
-    setReportFilter,
-    reportPortfolioIds,
   };
 
   return <PortfolioContext.Provider value={value}>{children}</PortfolioContext.Provider>;

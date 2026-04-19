@@ -1,17 +1,7 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Layers, Scissors } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Trade, ClosedTradeEntry, ClosingType } from '@/types/trade';
-import { CloseTradeModal } from './CloseTradeModal';
-import { EditTradeModal, TradeUpdateData } from './EditTradeModal';
-import { useMarketData } from '@/contexts/MarketDataContext';
-import { cn } from '@/lib/utils';
-import { formatPrice } from '@/lib/currency';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ActiveStockCell, ClosedStockCell, StaticStockCell } from './TradeStockCell';
-import { TradeNotesDialog } from './TradeNotesDialog';
-import { ClosedTradeActionDialog } from './ClosedTradeActionDialog';
-import { getReasonLabelsList, getClosedRR } from '@/lib/tradeUtils';
 import {
   Table,
   TableBody,
@@ -21,9 +11,25 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+import { Trade, ClosingType } from '@/types/trade';
+import { CloseTradeModal } from './CloseTradeModal';
+import { TradeUpdateData } from './EditTradeModal';
+import { ActiveTradeActionDialog } from './ActiveTradeActionDialog';
+import { ClosedTradeActionDialog } from './ClosedTradeActionDialog';
+import { ActivePositionCard } from './ActivePositionCard';
+import { ClosedPositionCard } from './ClosedPositionCard';
+import { ActiveStockCell, MergedClosedStockCell } from './TradeStockCell';
+import { TradeNotesDialog } from './TradeNotesDialog';
+
+import { useMarketData } from '@/contexts/MarketDataContext';
+import { cn } from '@/lib/utils';
+import { formatPrice } from '@/lib/currency';
+import { getReasonLabelsList, getClosedRR } from '@/lib/tradeUtils';
+import { MergedClosedTrade } from '@/lib/tradeMerge';
+
 interface TradeListProps {
   trades?: Trade[];
-  closedEntries?: ClosedTradeEntry[];
+  mergedClosedTrades?: MergedClosedTrade[];
   type: 'active' | 'closed';
   onCloseTrade?: (tradeId: string, exitPrice: number, closingType: ClosingType, lotQuantity: number, stopReason?: string, closingNote?: string) => void;
   onUpdateTrade?: (tradeId: string, data: TradeUpdateData) => void;
@@ -34,14 +40,31 @@ interface TradeListProps {
   isLoading?: boolean;
 }
 
-export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade, onUpdateTrade, onDeleteTrade, onRevertClose, onDeleteClosedTrade, highlightedTradeId, isLoading = false }: TradeListProps) {
+export function TradeList({
+  trades = [],
+  mergedClosedTrades = [],
+  type,
+  onCloseTrade,
+  onUpdateTrade,
+  onDeleteTrade,
+  onRevertClose,
+  onDeleteClosedTrade,
+  highlightedTradeId,
+  isLoading = false,
+}: TradeListProps) {
   const [closingTrade, setClosingTrade] = useState<Trade | null>(null);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
-  const [closedActionEntry, setClosedActionEntry] = useState<ClosedTradeEntry | null>(null);
+  const [closedActionMerged, setClosedActionMerged] = useState<MergedClosedTrade | null>(null);
   const [confirmAction, setConfirmAction] = useState<'revert' | 'delete' | null>(null);
   const { getStockBySymbol } = useMarketData();
 
-  const handleCloseConfirm = (exitPrice: number, closingType: ClosingType, lotQuantity: number, stopReason?: string, closingNote?: string) => {
+  const handleCloseConfirm = (
+    exitPrice: number,
+    closingType: ClosingType,
+    lotQuantity: number,
+    stopReason?: string,
+    closingNote?: string
+  ) => {
     if (closingTrade && onCloseTrade) {
       onCloseTrade(closingTrade.id, exitPrice, closingType, lotQuantity, stopReason, closingNote);
       setClosingTrade(null);
@@ -63,14 +86,20 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
   };
 
   const handleConfirmAction = () => {
-    if (!closedActionEntry || !confirmAction) return;
+    if (!closedActionMerged || !confirmAction) return;
+    const latestPartial = closedActionMerged.partial_closes.at(-1);
+    if (!latestPartial) {
+      setConfirmAction(null);
+      setClosedActionMerged(null);
+      return;
+    }
     if (confirmAction === 'revert' && onRevertClose) {
-      onRevertClose(closedActionEntry.id, closedActionEntry.trade_id);
+      onRevertClose(latestPartial.id, latestPartial.trade_id);
     } else if (confirmAction === 'delete' && onDeleteClosedTrade) {
-      onDeleteClosedTrade(closedActionEntry.id, closedActionEntry.trade_id);
+      onDeleteClosedTrade(latestPartial.id, latestPartial.trade_id);
     }
     setConfirmAction(null);
-    setClosedActionEntry(null);
+    setClosedActionMerged(null);
   };
 
   const getCurrentPriceInfo = (trade: Trade) => {
@@ -89,43 +118,50 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
     };
   };
 
+  // ─────── Loading / empty states ────────────────────────────────
+
   if (isLoading) {
     return (
-      <div className="rounded-xl bg-card border border-border overflow-hidden">
-        <div className="p-4 space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="flex items-center gap-4">
-              <Skeleton className="w-8 h-8 rounded-lg" />
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-4 flex-1" />
-            </div>
-          ))}
-        </div>
+      <div className="space-y-2">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-28 w-full rounded-xl" />
+        ))}
       </div>
     );
   }
 
-  const itemCount = type === 'closed' ? closedEntries.length : trades.length;
+  const itemCount = type === 'closed' ? mergedClosedTrades.length : trades.length;
 
   if (itemCount === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground rounded-xl bg-card border border-border">
-        {type === 'active' ? 'Aktif işlem bulunmuyor' : 'Kapalı işlem bulunmuyor'}
+      <div className="rounded-xl surface-1 p-8 text-center">
+        <p className="text-body text-foreground">
+          {type === 'active' ? 'Açık pozisyon yok' : 'Kapalı işlem yok'}
+        </p>
+        <p className="text-label text-muted-foreground mt-1">
+          {type === 'active'
+            ? 'Alttaki + butonuyla ilk işleminizi ekleyin.'
+            : 'Kapattığınız işlemler burada birikir.'}
+        </p>
       </div>
     );
   }
 
-  // Shared RR badge renderer
-  const RRBadge = ({ trade, compact = false }: { trade: { trade_type: string; entry_price: number; exit_price?: number | null; stop_price: number; rr_ratio?: number | null }; compact?: boolean }) => {
+  // ─────── Shared desktop-only helpers ───────────────────────────
+
+  const RRBadge = ({
+    trade,
+    compact = false,
+  }: {
+    trade: { trade_type: string; entry_price: number; exit_price?: number | null; stop_price: number; rr_ratio?: number | null };
+    compact?: boolean;
+  }) => {
     const rr = type === 'closed' ? (getClosedRR(trade) ?? trade.rr_ratio ?? 0) : (trade.rr_ratio ?? 0);
     return (
       <span
         className={cn(
-          'font-mono text-sm font-semibold px-2 py-1 rounded-md',
-          rr >= 3 ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
+          'inline-flex items-center px-2 h-6 rounded-md num-sm',
+          rr >= 3 ? 'bg-profit-soft text-profit' : 'bg-loss-soft text-loss'
         )}
       >
         {compact ? `RR ${rr.toFixed(1)}` : rr.toFixed(2)}
@@ -133,132 +169,167 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
     );
   };
 
-  // Trade type badge
   const TypeBadge = ({ tradeType }: { tradeType: string }) => (
     <span
       className={cn(
-        'text-xs font-medium px-2 py-1 rounded-full',
-        tradeType === 'buy' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss'
+        'text-caption px-1.5 py-0.5 rounded',
+        tradeType === 'buy' ? 'bg-profit-soft text-profit' : 'bg-loss-soft text-loss'
       )}
     >
       {tradeType === 'buy' ? 'ALIŞ' : 'SATIŞ'}
     </span>
   );
 
-  // Desktop table view for active trades
-  const DesktopTable = () => (
-    <div className="hidden md:block rounded-xl bg-card border border-border overflow-hidden">
+  const ClosingBadge = ({ closing }: { closing: 'kar_al' | 'stop' | 'mixed' }) => {
+    const label = closing === 'kar_al' ? 'Kâr Al' : closing === 'stop' ? 'Stop' : 'Karışık';
+    const cls =
+      closing === 'kar_al'
+        ? 'bg-profit-soft text-profit'
+        : closing === 'stop'
+        ? 'bg-loss-soft text-loss'
+        : 'bg-surface-3 text-muted-foreground';
+    return <span className={cn('text-caption px-1.5 py-0.5 rounded', cls)}>{label}</span>;
+  };
+
+  const MergedRRBadge = ({ rr, compact = false }: { rr: number | null; compact?: boolean }) => {
+    if (rr === null) return <span className="text-caption text-muted-foreground">—</span>;
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center px-2 h-6 rounded-md num-sm',
+          rr >= 3 ? 'bg-profit-soft text-profit' : 'bg-loss-soft text-loss'
+        )}
+      >
+        {compact ? `RR ${rr.toFixed(1)}` : rr.toFixed(2)}
+      </span>
+    );
+  };
+
+  const PartCountBadge = ({ count, variant }: { count: number; variant: 'parts' | 'merges' }) => (
+    <span
+      className={cn(
+        'inline-flex items-center gap-0.5 text-caption px-1.5 py-0.5 rounded bg-surface-3 text-muted-foreground'
+      )}
+      title={variant === 'parts' ? 'Parçalı kapatma sayısı' : 'Birleşmiş işlem sayısı'}
+    >
+      {variant === 'parts' ? <Scissors className="w-2.5 h-2.5" /> : <Layers className="w-2.5 h-2.5" />}
+      {count}
+    </span>
+  );
+
+  // ─────── Desktop: active ───────────────────────────────────────
+
+  const DesktopActiveTable = () => (
+    <div className="hidden md:block rounded-xl surface-1 overflow-hidden">
       <Table>
         <TableHeader>
-          <TableRow className="border-border hover:bg-transparent">
-            <TableHead className="text-muted-foreground font-medium">Hisse</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Tür</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Lot</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Giriş</TableHead>
-            {type === 'active' && (
-              <TableHead className="text-muted-foreground font-medium text-center">Anlık</TableHead>
-            )}
-            <TableHead className="text-muted-foreground font-medium text-center">Hedef</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Stop</TableHead>
-            <TableHead className="text-muted-foreground font-medium">Sebepler</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">RR</TableHead>
-            {type === 'closed' && (
-              <>
-                <TableHead className="text-muted-foreground font-medium text-center">Exit</TableHead>
-                <TableHead className="text-muted-foreground font-medium text-center">Sonuç</TableHead>
-              </>
-            )}
-            {type === 'active' && (
-              <TableHead className="text-muted-foreground font-medium text-center">İşlem</TableHead>
-            )}
-            <TableHead className="text-muted-foreground font-medium w-10 px-1"></TableHead>
+          <TableRow className="border-border-subtle hover:bg-transparent">
+            <TableHead className="text-caption text-muted-foreground">Hisse</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Tür</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Lot</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Giriş</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Anlık</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Hedef</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Stop</TableHead>
+            <TableHead className="text-caption text-muted-foreground">Sebepler</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">RR</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">İşlem</TableHead>
+            <TableHead className="w-10 px-1"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {trades.map((trade) => {
-            const priceInfo = type === 'active' ? getCurrentPriceInfo(trade) : null;
-
+            const priceInfo = getCurrentPriceInfo(trade);
             return (
               <TableRow
                 key={trade.id}
                 className={cn(
-                  'border-border transition-all',
+                  'border-border-subtle transition-colors',
                   highlightedTradeId === trade.id && 'highlight-new bg-primary/10'
                 )}
               >
                 <TableCell className="py-3">
-                  {type === 'active' ? (
-                    <ActiveStockCell trade={trade} showLotWarning onClick={setEditingTrade} />
-                  ) : (
-                    <StaticStockCell symbol={trade.stock_symbol} name={trade.stock_name} tradeType={trade.trade_type} />
-                  )}
+                  <ActiveStockCell trade={trade} showLotWarning onClick={setEditingTrade} />
                 </TableCell>
-
-                <TableCell className="text-center"><TypeBadge tradeType={trade.trade_type} /></TableCell>
-
                 <TableCell className="text-center">
-                  <span className={cn('font-mono text-sm', trade.remaining_lot < trade.lot_quantity ? 'text-warning font-semibold' : 'text-foreground')}>
+                  <TypeBadge tradeType={trade.trade_type} />
+                </TableCell>
+                <TableCell className="text-center">
+                  <span
+                    className={cn(
+                      'num',
+                      trade.remaining_lot < trade.lot_quantity
+                        ? 'text-warning font-semibold'
+                        : 'text-foreground'
+                    )}
+                  >
                     {trade.remaining_lot}
                   </span>
                 </TableCell>
-
                 <TableCell className="text-center">
-                  <span className="font-mono text-sm text-foreground">{formatPrice(trade.entry_price, trade.stock_symbol)}</span>
+                  <span className="num text-foreground">
+                    {formatPrice(trade.entry_price, trade.stock_symbol)}
+                  </span>
                 </TableCell>
-
-                {type === 'active' && (
-                  <TableCell className="text-center">
-                    {priceInfo ? (
-                      <div>
-                        <span className="font-mono text-sm text-foreground">{formatPrice(priceInfo.currentPrice, trade.stock_symbol)}</span>
-                        <div className={cn('text-xs font-medium', priceInfo.isPositive ? 'text-profit' : 'text-loss')}>
-                          {priceInfo.priceDiff >= 0 ? '+' : ''}{priceInfo.priceDiff.toFixed(2)} ({priceInfo.priceDiffPercent >= 0 ? '+' : ''}{priceInfo.priceDiffPercent.toFixed(2)}%)
-                        </div>
+                <TableCell className="text-center">
+                  {priceInfo ? (
+                    <div>
+                      <div className="num text-foreground">
+                        {formatPrice(priceInfo.currentPrice, trade.stock_symbol)}
                       </div>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">-</span>
-                    )}
-                  </TableCell>
-                )}
-
-                <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{formatPrice(trade.target_price, trade.stock_symbol)}</span></TableCell>
-                <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{formatPrice(trade.stop_price, trade.stock_symbol)}</span></TableCell>
-
+                      <div
+                        className={cn(
+                          'text-caption font-mono font-semibold',
+                          priceInfo.isPositive ? 'text-profit' : 'text-loss'
+                        )}
+                      >
+                        {priceInfo.priceDiffPercent >= 0 ? '+' : ''}
+                        {priceInfo.priceDiffPercent.toFixed(2)}%
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-label text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
+                  <span className="num text-foreground">
+                    {formatPrice(trade.target_price, trade.stock_symbol)}
+                  </span>
+                </TableCell>
+                <TableCell className="text-center">
+                  <span className="num text-foreground">
+                    {formatPrice(trade.stop_price, trade.stock_symbol)}
+                  </span>
+                </TableCell>
                 <TableCell>
                   <div className="space-y-0.5">
                     {getReasonLabelsList(trade.reasons).map((label, i) => (
-                      <div key={i} className="text-xs text-muted-foreground">{label}</div>
+                      <div key={i} className="text-label text-muted-foreground">
+                        {label}
+                      </div>
                     ))}
                   </div>
                 </TableCell>
-
-                <TableCell className="text-center"><RRBadge trade={trade} /></TableCell>
-
-                {type === 'closed' && (
-                  <>
-                    <TableCell className="text-center">
-                      <span className="font-mono text-sm text-foreground">{trade.exit_price ? formatPrice(trade.exit_price, trade.stock_symbol) : '-'}</span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className={cn('text-xs font-semibold px-2 py-1 rounded-full', trade.closing_type === 'kar_al' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
-                        {trade.closing_type === 'kar_al' ? 'Kâr Al' : 'Stop'}
-                      </span>
-                    </TableCell>
-                  </>
-                )}
-
-                {type === 'active' && (
-                  <TableCell className="text-center">
-                    <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setClosingTrade(trade)}>
-                      <X className="w-3 h-3 mr-1" /> Kapat
-                    </Button>
-                  </TableCell>
-                )}
-
+                <TableCell className="text-center">
+                  <RRBadge trade={trade} />
+                </TableCell>
+                <TableCell className="text-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => setClosingTrade(trade)}
+                  >
+                    <X className="w-3 h-3 mr-1" />
+                    Kapat
+                  </Button>
+                </TableCell>
                 <TableCell className="py-1 pl-0 pr-2 w-10">
-                  <div className="flex items-center gap-1">
-                    <TradeNotesDialog symbol={trade.stock_symbol} stopReason={trade.stop_reason} closingNote={trade.closing_note} />
-                  </div>
+                  <TradeNotesDialog
+                    symbol={trade.stock_symbol}
+                    stopReason={trade.stop_reason}
+                    closingNote={trade.closing_note}
+                  />
                 </TableCell>
               </TableRow>
             );
@@ -268,149 +339,72 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
     </div>
   );
 
-  // Mobile card-row view
-  const MobileList = () => (
+  // ─────── Mobile: active (new PositionCard) ─────────────────────
+
+  const MobileActiveList = () => (
     <div className="md:hidden space-y-2">
-      {trades.map((trade) => {
-        const priceInfo = type === 'active' ? getCurrentPriceInfo(trade) : null;
-
-        return (
-          <div
-            key={trade.id}
-            className={cn(
-              'p-3 rounded-xl bg-card border border-border transition-all',
-              highlightedTradeId === trade.id && 'highlight-new bg-primary/10'
-            )}
-          >
-            {/* Row 1: Hisse + Tür + RR + Icons */}
-            <div className="flex items-center justify-between mb-2">
-              {type === 'active' ? (
-                <ActiveStockCell trade={trade} showLotWarning onClick={setEditingTrade} />
-              ) : (
-                <StaticStockCell symbol={trade.stock_symbol} name={trade.stock_name} tradeType={trade.trade_type} />
-              )}
-              <div className="flex items-center gap-2">
-                <TypeBadge tradeType={trade.trade_type} />
-                <RRBadge trade={trade} compact />
-                <TradeNotesDialog symbol={trade.stock_symbol} stopReason={trade.stop_reason} closingNote={trade.closing_note} />
-              </div>
-            </div>
-
-            {/* Row 2: Fiyatlar grid */}
-            <div className={cn('grid gap-2 mb-2', type === 'active' ? 'grid-cols-5' : 'grid-cols-3')}>
-              <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-                <div className="text-[10px] text-muted-foreground uppercase">Giriş</div>
-                <div className="font-mono text-xs text-foreground">{formatPrice(trade.entry_price, trade.stock_symbol)}</div>
-              </div>
-              {type === 'active' && priceInfo && (
-                <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-                  <div className="text-[10px] text-muted-foreground uppercase">Anlık</div>
-                  <div className="font-mono text-xs text-foreground">{formatPrice(priceInfo.currentPrice, trade.stock_symbol)}</div>
-                  <div className={cn('text-[10px] font-medium', priceInfo.isPositive ? 'text-profit' : 'text-loss')}>
-                    {priceInfo.priceDiffPercent >= 0 ? '+' : ''}{priceInfo.priceDiffPercent.toFixed(1)}%
-                  </div>
-                </div>
-              )}
-              <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-                <div className="text-[10px] text-muted-foreground uppercase">Hedef</div>
-                <div className="font-mono text-xs text-foreground">{formatPrice(trade.target_price, trade.stock_symbol)}</div>
-              </div>
-              <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-                <div className="text-[10px] text-muted-foreground uppercase">Stop</div>
-                <div className="font-mono text-xs text-foreground">{formatPrice(trade.stop_price, trade.stock_symbol)}</div>
-              </div>
-              {type === 'active' && (
-                <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-                  <div className="text-[10px] text-muted-foreground uppercase">Lot</div>
-                  <div className={cn('font-mono text-xs', trade.remaining_lot < trade.lot_quantity ? 'text-warning font-semibold' : 'text-foreground')}>
-                    {trade.remaining_lot}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Closed trade: Exit + Sonuç */}
-            {type === 'closed' && trade.exit_price && (
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-                  <div className="text-[10px] text-muted-foreground uppercase">Exit</div>
-                  <div className="font-mono text-xs text-foreground">{formatPrice(trade.exit_price, trade.stock_symbol)}</div>
-                </div>
-                <div className={cn('text-center p-1.5 rounded-lg', trade.closing_type === 'kar_al' ? 'bg-profit/20' : 'bg-loss/20')}>
-                  <div className="text-[10px] text-muted-foreground uppercase">Sonuç</div>
-                  <span className={cn('text-xs font-semibold', trade.closing_type === 'kar_al' ? 'text-profit' : 'text-loss')}>
-                    {trade.closing_type === 'kar_al' ? 'Kâr Al' : 'Stop'}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Row 3: Sebepler */}
-            <div className="text-[10px] text-muted-foreground mb-2">
-              <span className="font-medium">Sebepler:</span>
-              {getReasonLabelsList(trade.reasons).map((label, i) => (
-                <div key={i} className="ml-1">{label}</div>
-              ))}
-            </div>
-
-            {/* Action button */}
-            {type === 'active' && (
-              <Button variant="outline" size="sm" className="w-full h-9" onClick={() => setClosingTrade(trade)}>
-                <X className="w-3 h-3 mr-1" /> İşlemi Kapat
-              </Button>
-            )}
-          </div>
-        );
-      })}
+      {trades.map((trade) => (
+        <ActivePositionCard
+          key={trade.id}
+          trade={trade}
+          onClick={setEditingTrade}
+          highlighted={highlightedTradeId === trade.id}
+        />
+      ))}
     </div>
   );
 
-  // Closed entries desktop table
-  const ClosedEntriesDesktopTable = () => (
-    <div className="hidden md:block rounded-xl bg-card border border-border overflow-hidden">
+  // ─────── Desktop: closed (merged) ──────────────────────────────
+
+  const DesktopClosedTable = () => (
+    <div className="hidden md:block rounded-xl surface-1 overflow-hidden">
       <Table>
         <TableHeader>
-          <TableRow className="border-border hover:bg-transparent">
-            <TableHead className="text-muted-foreground font-medium">Hisse</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Tür</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Giriş</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Hedef</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Stop</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Exit</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Lot</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">Sonuç</TableHead>
-            <TableHead className="text-muted-foreground font-medium">Sebepler</TableHead>
-            <TableHead className="text-muted-foreground font-medium text-center">RR</TableHead>
-            <TableHead className="text-muted-foreground font-medium w-10 px-1"></TableHead>
+          <TableRow className="border-border-subtle hover:bg-transparent">
+            <TableHead className="text-caption text-muted-foreground">Hisse</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Tür</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Top. Lot</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Ort. Giriş</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Ort. Hedef</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Ort. Stop</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Ort. Çıkış</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">Sonuç</TableHead>
+            <TableHead className="text-caption text-muted-foreground text-center">RR</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {closedEntries.map((entry) => (
-            <TableRow key={entry.id} className="border-border transition-all">
+          {mergedClosedTrades.map((m) => (
+            <TableRow key={m.key} className="border-border-subtle transition-colors hover:bg-surface-2/40">
               <TableCell className="py-3">
-                <ClosedStockCell entry={entry} onClick={setClosedActionEntry} />
+                <MergedClosedStockCell merged={m} onClick={setClosedActionMerged} />
               </TableCell>
-              <TableCell className="text-center"><TypeBadge tradeType={entry.trade_type} /></TableCell>
-              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{formatPrice(entry.entry_price, entry.stock_symbol)}</span></TableCell>
-              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{formatPrice(entry.target_price, entry.stock_symbol)}</span></TableCell>
-              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{formatPrice(entry.stop_price, entry.stock_symbol)}</span></TableCell>
-              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{formatPrice(entry.exit_price, entry.stock_symbol)}</span></TableCell>
-              <TableCell className="text-center"><span className="font-mono text-sm text-foreground">{entry.lot_quantity}</span></TableCell>
               <TableCell className="text-center">
-                <span className={cn('text-xs font-semibold px-2 py-1 rounded-full', entry.closing_type === 'kar_al' ? 'bg-profit/20 text-profit' : 'bg-loss/20 text-loss')}>
-                  {entry.closing_type === 'kar_al' ? 'Kâr Al' : 'Stop'}
-                </span>
+                <TypeBadge tradeType={m.trade_type} />
               </TableCell>
-              <TableCell>
-                <div className="space-y-0.5">
-                  {getReasonLabelsList(entry.reasons).map((label, i) => (
-                    <div key={i} className="text-xs text-muted-foreground">{label}</div>
-                  ))}
+              <TableCell className="text-center">
+                <div className="inline-flex items-center justify-center gap-1.5">
+                  <span className="num text-foreground">{m.total_lot}</span>
+                  {m.partial_closes.length > 1 && <PartCountBadge count={m.partial_closes.length} variant="parts" />}
+                  {m.source_trades.length > 1 && <PartCountBadge count={m.source_trades.length} variant="merges" />}
                 </div>
               </TableCell>
-              <TableCell className="text-center"><RRBadge trade={entry} /></TableCell>
-              <TableCell className="py-1 pl-0 pr-2 w-10">
-                <TradeNotesDialog symbol={entry.stock_symbol} stopReason={entry.stop_reason} closingNote={entry.closing_note} />
+              <TableCell className="text-center">
+                <span className="num text-foreground">{formatPrice(m.weighted_entry, m.stock_symbol)}</span>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className="num text-foreground">{formatPrice(m.weighted_target, m.stock_symbol)}</span>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className="num text-foreground">{formatPrice(m.weighted_stop, m.stock_symbol)}</span>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className="num text-foreground">{formatPrice(m.weighted_exit, m.stock_symbol)}</span>
+              </TableCell>
+              <TableCell className="text-center">
+                <ClosingBadge closing={m.closing_type_dominant} />
+              </TableCell>
+              <TableCell className="text-center">
+                <MergedRRBadge rr={m.weighted_rr} />
               </TableCell>
             </TableRow>
           ))}
@@ -419,74 +413,29 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
     </div>
   );
 
-  // Closed entries mobile list
-  const ClosedEntriesMobileList = () => (
+  // ─────── Mobile: closed (new ClosedPositionCard) ───────────────
+
+  const MobileClosedList = () => (
     <div className="md:hidden space-y-2">
-      {closedEntries.map((entry) => (
-        <div key={entry.id} className="p-3 rounded-xl bg-card border border-border transition-all">
-          <div className="flex items-center justify-between mb-2">
-            <ClosedStockCell entry={entry} onClick={setClosedActionEntry} />
-            <div className="flex items-center gap-2">
-              <TypeBadge tradeType={entry.trade_type} />
-              <RRBadge trade={entry} compact />
-              <TradeNotesDialog symbol={entry.stock_symbol} stopReason={entry.stop_reason} closingNote={entry.closing_note} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 mb-2">
-            <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-              <div className="text-[10px] text-muted-foreground uppercase">Giriş</div>
-              <div className="font-mono text-xs text-foreground">{formatPrice(entry.entry_price, entry.stock_symbol)}</div>
-            </div>
-            <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-              <div className="text-[10px] text-muted-foreground uppercase">Hedef</div>
-              <div className="font-mono text-xs text-foreground">{formatPrice(entry.target_price, entry.stock_symbol)}</div>
-            </div>
-            <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-              <div className="text-[10px] text-muted-foreground uppercase">Stop</div>
-              <div className="font-mono text-xs text-foreground">{formatPrice(entry.stop_price, entry.stock_symbol)}</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 mb-2">
-            <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-              <div className="text-[10px] text-muted-foreground uppercase">Exit</div>
-              <div className="font-mono text-xs text-foreground">{formatPrice(entry.exit_price, entry.stock_symbol)}</div>
-            </div>
-            <div className="text-center p-1.5 rounded-lg bg-secondary/50">
-              <div className="text-[10px] text-muted-foreground uppercase">Lot</div>
-              <div className="font-mono text-xs text-foreground">{entry.lot_quantity}</div>
-            </div>
-            <div className={cn('text-center p-1.5 rounded-lg', entry.closing_type === 'kar_al' ? 'bg-profit/20' : 'bg-loss/20')}>
-              <div className="text-[10px] text-muted-foreground uppercase">Sonuç</div>
-              <span className={cn('text-xs font-semibold', entry.closing_type === 'kar_al' ? 'text-profit' : 'text-loss')}>
-                {entry.closing_type === 'kar_al' ? 'Kâr Al' : 'Stop'}
-              </span>
-            </div>
-          </div>
-
-          <div className="text-[10px] text-muted-foreground">
-            <span className="font-medium">Sebepler:</span>
-            {getReasonLabelsList(entry.reasons).map((label, i) => (
-              <div key={i} className="ml-1">{label}</div>
-            ))}
-          </div>
-        </div>
+      {mergedClosedTrades.map((m) => (
+        <ClosedPositionCard key={m.key} merged={m} onClick={setClosedActionMerged} />
       ))}
     </div>
   );
 
+  // ─────── Render ────────────────────────────────────────────────
+
   return (
     <>
-      {type === 'closed' ? (
+      {type === 'active' ? (
         <>
-          <ClosedEntriesDesktopTable />
-          <ClosedEntriesMobileList />
+          <DesktopActiveTable />
+          <MobileActiveList />
         </>
       ) : (
         <>
-          <DesktopTable />
-          <MobileList />
+          <DesktopClosedTable />
+          <MobileClosedList />
         </>
       )}
 
@@ -498,21 +447,24 @@ export function TradeList({ trades = [], closedEntries = [], type, onCloseTrade,
         />
       )}
 
-      {editingTrade && (
-        <EditTradeModal
-          trade={editingTrade}
-          onClose={() => setEditingTrade(null)}
-          onSave={handleEditSave}
-          onDelete={handleDelete}
-        />
-      )}
+      <ActiveTradeActionDialog
+        trade={editingTrade}
+        onClose={() => setEditingTrade(null)}
+        onSave={handleEditSave}
+        onDelete={handleDelete}
+        hasPartialCloses={
+          editingTrade
+            ? (editingTrade.remaining_lot ?? 0) < (editingTrade.lot_quantity ?? 0)
+            : false
+        }
+      />
 
       <ClosedTradeActionDialog
-        entry={closedActionEntry}
+        merged={closedActionMerged}
         confirmAction={confirmAction}
         onAction={setConfirmAction}
         onConfirm={handleConfirmAction}
-        onClose={() => setClosedActionEntry(null)}
+        onClose={() => setClosedActionMerged(null)}
         onCancelConfirm={() => setConfirmAction(null)}
       />
     </>

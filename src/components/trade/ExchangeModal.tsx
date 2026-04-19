@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import {
-  X, ArrowRightLeft, DollarSign, ChevronRight,
+  ArrowRightLeft, DollarSign, ChevronRight,
   ChevronLeft, Loader2, Info, Building2, Coins, Wallet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NumberInput } from '@/components/ui/number-input';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  BottomSheet,
+  BottomSheetContent,
+  BottomSheetBody,
+} from '@/components/ui/bottom-sheet';
 import { useUserAssets, UserAsset } from '@/hooks/useUserAssets';
 import { useMarketSeries } from '@/contexts/MarketSeriesContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -124,42 +128,38 @@ export function ExchangeModal({ onClose, portfolioId, portfolioName }: ExchangeM
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      <div className="relative w-full max-w-md max-h-[90vh] bg-background-secondary border border-border rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col animate-fade-in">
+    <BottomSheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <BottomSheetContent size="md" className="flex flex-col">
         {/* Header */}
-        <div className="border-b border-border p-4 shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
-              <ArrowRightLeft className="w-5 h-5 text-primary shrink-0" />
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-foreground leading-tight truncate">Çevirici</h2>
-                <div className="text-xs text-muted-foreground truncate">{portfolioName}</div>
-              </div>
+        <div className="border-b border-border-subtle px-5 pt-2 pb-3 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <ArrowRightLeft className="w-5 h-5 text-primary shrink-0" />
+            <div className="min-w-0">
+              <h2 className="text-title text-foreground truncate">Çevirici</h2>
+              <div className="text-label text-muted-foreground truncate">{portfolioName}</div>
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="w-5 h-5" />
-            </Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-1.5">
+          <p className="text-caption text-muted-foreground mt-2">
             Varlıklarınızı TL'ye çevirerek kullanılabilir bakiyenize ekleyin.
           </p>
           {isSeriesLoading('usd') ? (
-            <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
-              <Loader2 className="w-3 h-3 animate-spin" /> USD/TRY kuru çekiliyor...
+            <div className="mt-1.5 text-caption text-muted-foreground flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" /> USD/TRY kuru çekiliyor…
             </div>
           ) : usdTryRate ? (
-            <div className="mt-2 text-xs text-muted-foreground">
-              Güncel kur: <span className="text-foreground font-mono font-semibold">1 USD = ₺{usdTryRate.toFixed(2)}</span>
+            <div className="mt-1.5 text-caption text-muted-foreground">
+              Güncel kur:{' '}
+              <span className="num-sm text-foreground font-semibold">
+                1 USD = ₺{usdTryRate.toFixed(2)}
+              </span>
             </div>
           ) : (
-            <div className="mt-2 text-xs text-loss">Kur verisi alınamadı.</div>
+            <div className="mt-1.5 text-caption text-loss">Kur verisi alınamadı.</div>
           )}
         </div>
 
-        <ScrollArea className="flex-1 overflow-y-auto">
-          <div className="p-4 space-y-2">
+        <BottomSheetBody>
+          <div className="space-y-2 pt-3">
             {assets.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
                 <Wallet className="w-10 h-10 mx-auto mb-3 opacity-30" />
@@ -284,8 +284,8 @@ export function ExchangeModal({ onClose, portfolioId, portfolioName }: ExchangeM
               </div>
             )}
           </div>
-        </ScrollArea>
-      </div>
-    </div>
+        </BottomSheetBody>
+      </BottomSheetContent>
+    </BottomSheet>
   );
 }

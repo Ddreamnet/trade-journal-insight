@@ -156,7 +156,7 @@ export default function PanelBlogEditor() {
         await createPost.mutateAsync(postData);
       }
 
-      toast({ title: 'Yazı yayınlandı! 🎉' });
+      toast({ title: 'Yazı yayınlandı!' });
       navigate('/panel/blog');
     } catch {
       toast({ title: 'Yayınlama başarısız', variant: 'destructive' });
@@ -187,34 +187,40 @@ export default function PanelBlogEditor() {
 
   return (
     <MainLayout>
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Top bar */}
-        <div className="flex items-center justify-between">
+      <div className="max-w-4xl mx-auto">
+        {/* Action bar */}
+        <div className="flex items-center justify-between gap-3 mb-5 pb-4 border-b border-border-subtle">
           <Button
             variant="ghost"
+            size="sm"
             onClick={() => navigate('/panel/blog')}
-            className="gap-2"
+            className="gap-2 -ml-2"
           >
             <ArrowLeft className="h-4 w-4" />
-            Geri
+            Tüm yazılar
           </Button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {lastSaved && (
-              <span className="text-xs text-muted-foreground">
-                Kaydedildi {lastSaved.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+              <span className="hidden sm:inline text-caption text-muted-foreground">
+                Kaydedildi · {lastSaved.toLocaleTimeString('tr-TR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
               </span>
             )}
             <Button
               variant="outline"
+              size="sm"
               onClick={() => handleSave(false)}
               disabled={isSaving || !title}
               className="gap-2"
             >
               <Save className="h-4 w-4" />
-              Kaydet
+              <span className="hidden sm:inline">Kaydet</span>
             </Button>
             <Button
+              size="sm"
               onClick={handlePublish}
               disabled={isSaving || !title}
               className="gap-2"
@@ -225,65 +231,71 @@ export default function PanelBlogEditor() {
           </div>
         </div>
 
-        {/* Reading time warning */}
-        <ReadingTimeWarning readingTime={readingTime} />
+        <div className="space-y-5">
+          {/* Reading time warning */}
+          <ReadingTimeWarning readingTime={readingTime} />
 
-        {/* Cover Image */}
-        <ImageUploader
-          imageUrl={coverImageUrl}
-          onUpload={handleCoverUpload}
-          onRemove={() => setCoverImageUrl(null)}
-        />
+          {/* Cover Image */}
+          <ImageUploader
+            imageUrl={coverImageUrl}
+            onUpload={handleCoverUpload}
+            onRemove={() => setCoverImageUrl(null)}
+          />
 
-        {/* Title */}
-        <div>
+          {/* Title */}
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Yazı başlığı..."
-            className="text-2xl font-bold h-14 border-none bg-transparent px-0 focus-visible:ring-0 placeholder:text-muted-foreground/50"
+            placeholder="Yazı başlığı…"
+            className="text-2xl sm:text-3xl font-bold h-14 border-none bg-transparent px-0 focus-visible:ring-0 placeholder:text-muted-foreground/40"
           />
-        </div>
 
-        {/* Slug */}
-        <div>
-          <label className="text-xs text-muted-foreground mb-1 block">
-            URL: /blog/{slug || '...'}
-          </label>
-          <Input
-            value={slug}
-            onChange={(e) => {
-              setSlugManual(true);
-              setSlug(e.target.value);
-            }}
-            placeholder="otomatik-slug"
-            className="text-sm font-mono h-9"
+          {/* Metadata card */}
+          <div className="rounded-xl border border-border-subtle bg-surface-2 p-4 space-y-3">
+            <div>
+              <label className="text-caption text-muted-foreground mb-1 block">
+                URL
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-label text-muted-foreground font-mono shrink-0">
+                  /blog/
+                </span>
+                <Input
+                  value={slug}
+                  onChange={(e) => {
+                    setSlugManual(true);
+                    setSlug(e.target.value);
+                  }}
+                  placeholder="otomatik-slug"
+                  className="text-label font-mono h-9"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-caption text-muted-foreground mb-1 block">
+                Etiketler <span className="text-muted-foreground/60">(virgülle ayırın)</span>
+              </label>
+              <Input
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="teknik analiz, borsa, strateji"
+                className="text-label h-9"
+              />
+            </div>
+          </div>
+
+          {/* Editor */}
+          <BlogEditor
+            content={content}
+            onChange={setContent}
+            onImageUpload={handleContentImageUpload}
           />
-        </div>
 
-        {/* Tags */}
-        <div>
-          <label className="text-xs text-muted-foreground mb-1 block">
-            Etiketler (virgülle ayırın)
-          </label>
-          <Input
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            placeholder="teknik analiz, borsa, strateji"
-            className="text-sm h-9"
-          />
-        </div>
-
-        {/* Editor */}
-        <BlogEditor
-          content={content}
-          onChange={setContent}
-          onImageUpload={handleContentImageUpload}
-        />
-
-        {/* Reading time info */}
-        <div className="text-xs text-muted-foreground text-right">
-          Tahmini okuma süresi: {readingTime} dakika
+          {/* Reading time info */}
+          <div className="text-caption text-muted-foreground text-right">
+            Tahmini okuma süresi: {readingTime} dakika
+          </div>
         </div>
       </div>
     </MainLayout>

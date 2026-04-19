@@ -57,9 +57,6 @@ export function calculateT0FromTrades(allTrades: Trade[]): Date | null {
   }, startOfDay(parseISO(validTrades[0].created_at)));
 }
 
-// Keep backward-compatible alias
-export const calculateT0FromClosedTrades = calculateT0FromTrades;
-
 /**
  * Calculate view window dates based on time range
  */
@@ -340,11 +337,12 @@ export function useEquityCurveData(
     [timeRange, todayKey]
   );
 
-  // effectiveStart = max(t0, viewStartDate) for normalization
-  const effectiveStart = useMemo(() => {
-    if (!t0) return startDate;
-    return t0 > startDate ? t0 : startDate;
-  }, [t0, startDate]);
+  // Always normalize against the view window's startDate. When t0 is inside
+  // the view (fresh portfolio), the raw loop fills in pre-trading days at
+  // index 100 so the day-0 jump is preserved — otherwise normalizing at t0
+  // hides any gain that happened on the very first trading day (e.g.,
+  // same-day entry + partial close + exit).
+  const effectiveStart = useMemo(() => startDate, [startDate]);
 
   // Group partial closes by trade_id for fast lookup
   const partialClosesByTrade = useMemo(
@@ -352,7 +350,14 @@ export function useEquityCurveData(
     [partialCloses]
   );
 
-  // Build RAW portfolio value from t0 to endDate using realized + unrealized PnL
+  // Build RAW portfolio value from t0 (or startDate, whichever is earlier)
+  // to endDate using realized + unrealized PnL.
+  //
+  // When startDate < t0 (fresh portfolio whose first trade falls inside the
+  // view window), iterating from startDate gives pre-trading days an
+  // explicit baseline entry at index 100 — no open trades means
+  // unrealizedPnL = 0 and cumulativeRealized = 0. This preserves the
+  // day-0 jump under normalization.
   const rawPortfolioIndexMap = useMemo(() => {
     const map = new Map<string, { index: number; tl: number }>();
     if (!t0) return map;
@@ -364,7 +369,7 @@ export function useEquityCurveData(
     const missingSet = new Set(priceDataMissing);
 
     let cumulativeRealized = 0;
-    let currentDay = t0;
+    let currentDay = t0 < startDate ? t0 : startDate;
 
     while (currentDay <= endDate) {
       const key = format(currentDay, 'yyyy-MM-dd');
@@ -389,7 +394,7 @@ export function useEquityCurveData(
     }
 
     return map;
-  }, [t0, partialCloses, startingCapital, endDate, allTrades, stockPriceMap, priceDataMissing, partialClosesByTrade]);
+  }, [t0, startDate, partialCloses, startingCapital, endDate, allTrades, stockPriceMap, priceDataMissing, partialClosesByTrade]);
 
   // Normalize portfolio from effectiveStart (effectiveStart = 100)
   const portfolioIndexMap = useMemo(() => {

@@ -5,30 +5,55 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  [
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap",
+    "rounded-md text-[0.9375rem] font-medium",
+    "ring-offset-background transition-colors duration-150",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+    "disabled:pointer-events-none disabled:opacity-50",
+    "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+    "active:scale-[0.98] active:transition-transform active:duration-75",
+  ].join(" "),
   {
     variants: {
       variant: {
-        // Modern glass-style default button
-        default: "bg-gradient-to-b from-white/15 to-white/5 text-foreground border border-white/20 hover:from-white/20 hover:to-white/10 hover:border-white/30 shadow-lg shadow-black/20 backdrop-blur-sm",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border border-border bg-transparent text-foreground hover:bg-secondary hover:border-muted-foreground/50",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "text-foreground hover:bg-secondary hover:text-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-        // Trading specific variants
-        buy: "bg-profit text-profit-foreground hover:bg-profit/90 shadow-lg shadow-profit/20",
-        sell: "bg-loss text-loss-foreground hover:bg-loss/90 shadow-lg shadow-loss/20",
-        glass: "glass-card text-foreground hover:bg-white/10 border-white/10",
-        // Premium accent button
-        accent: "bg-gradient-to-r from-white/10 via-white/5 to-white/10 text-foreground border border-white/15 hover:border-white/25 hover:from-white/15 hover:via-white/10 hover:to-white/15 shadow-md",
+        // Solid primary — confident, unambiguous primary action
+        default:
+          "bg-primary text-primary-foreground hover:bg-primary/90",
+
+        // Neutral secondary — for non-primary but still action-weighted
+        secondary:
+          "bg-secondary text-secondary-foreground hover:bg-surface-3",
+
+        // Outlined — subtle emphasis, good for lists of equal-weight actions
+        outline:
+          "border border-border bg-transparent text-foreground hover:bg-surface-2 hover:border-border-strong",
+
+        // Ghost — least visual weight, for tertiary actions and nav
+        ghost:
+          "text-foreground hover:bg-surface-2",
+
+        // Destructive
+        destructive:
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+
+        // Link-style
+        link:
+          "text-primary underline-offset-4 hover:underline",
+
+        // Trading semantics
+        buy:
+          "bg-profit text-profit-foreground hover:bg-profit/90",
+        sell:
+          "bg-loss text-loss-foreground hover:bg-loss/90",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-lg px-6",
-        xl: "h-12 rounded-lg px-8 text-base",
+        sm: "h-9 px-3",
+        default: "h-10 px-4",
+        lg: "h-11 px-5",
+        xl: "h-12 px-6 text-base",
         icon: "h-10 w-10",
+        "icon-sm": "h-9 w-9",
       },
     },
     defaultVariants: {

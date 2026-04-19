@@ -8,6 +8,8 @@ interface ShareChartButtonProps {
   targetRef: React.RefObject<HTMLElement>;
   /** Base filename for downloads (no extension) */
   filename?: string;
+  /** Compact mode renders a 32px icon-only button (for use inside card headers). */
+  compact?: boolean;
 }
 
 // ─── Capture helper ──────────────────────────────────────────────────────────
@@ -169,7 +171,11 @@ function ShareMenu({
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function ShareChartButton({ targetRef, filename = 'portfoy-grafik' }: ShareChartButtonProps) {
+export function ShareChartButton({
+  targetRef,
+  filename = 'portfoy-grafik',
+  compact = false,
+}: ShareChartButtonProps) {
   const [isCapturing, setIsCapturing] = useState(false);
   const [menuBlob, setMenuBlob] = useState<Blob | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -207,20 +213,42 @@ export function ShareChartButton({ targetRef, filename = 'portfoy-grafik' }: Sha
 
   return (
     <div ref={wrapperRef} className="relative inline-block">
-      <button
-        onClick={handleShare}
-        disabled={isCapturing}
-        className={cn(
-          'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors',
-          'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
-          isCapturing && 'opacity-60 cursor-not-allowed'
-        )}
-      >
-        {isCapturing
-          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          : <Share2 className="w-3.5 h-3.5" />}
-        {isCapturing ? 'Hazırlanıyor…' : 'Paylaş'}
-      </button>
+      {compact ? (
+        <button
+          onClick={handleShare}
+          disabled={isCapturing}
+          aria-label="Grafiği paylaş"
+          className={cn(
+            'inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
+            'text-muted-foreground hover:text-foreground hover:bg-surface-2',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            isCapturing && 'opacity-60 cursor-not-allowed'
+          )}
+        >
+          {isCapturing ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Share2 className="w-4 h-4" />
+          )}
+        </button>
+      ) : (
+        <button
+          onClick={handleShare}
+          disabled={isCapturing}
+          className={cn(
+            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors',
+            'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
+            isCapturing && 'opacity-60 cursor-not-allowed'
+          )}
+        >
+          {isCapturing ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Share2 className="w-3.5 h-3.5" />
+          )}
+          {isCapturing ? 'Hazırlanıyor…' : 'Paylaş'}
+        </button>
+      )}
 
       {menuBlob && (
         <ShareMenu

@@ -1,17 +1,29 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Eye, EyeOff, Loader2, Clock } from 'lucide-react';
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  EyeOff,
+  Loader2,
+  Clock,
+  ExternalLink,
+  FileText,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { usePanelBlogPosts, useBlogMutations } from '@/hooks/useBlogPosts';
 import { formatBlogDate } from '@/lib/blogUtils';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import type { BlogStatusFilter } from '@/types/blog';
 
-const FILTERS: { id: BlogStatusFilter; label: string }[] = [
-  { id: 'all', label: 'Tümü' },
-  { id: 'published', label: 'Yayında' },
-  { id: 'draft', label: 'Taslak' },
+const FILTERS: { value: BlogStatusFilter; label: string }[] = [
+  { value: 'all', label: 'Tümü' },
+  { value: 'published', label: 'Yayında' },
+  { value: 'draft', label: 'Taslak' },
 ];
 
 export function BlogManageList() {
@@ -41,127 +53,142 @@ export function BlogManageList() {
     }
   };
 
+  const count = posts?.length ?? 0;
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Blog Yazıları</h1>
-        <Button onClick={() => navigate('/panel/blog/new')} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Yeni Yazı
-        </Button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-1 p-1 bg-secondary rounded-lg w-fit">
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id)}
-              className={cn(
-                'px-3 py-2 rounded-md text-sm font-medium transition-all',
-                filter === f.id
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
+    <div className="space-y-5">
+      <PageHeader
+        title="Blog"
+        description={
+          <>
+            {count > 0 ? `${count} yazı` : 'Henüz yazı yok'} ·{' '}
+            <Link
+              to="/blog"
+              className="inline-flex items-center gap-1 text-foreground hover:text-primary"
             >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <Link to="/blog" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-          Blogu Görüntüle →
-        </Link>
-      </div>
+              Yayın sayfasını gör
+              <ExternalLink className="w-3 h-3" />
+            </Link>
+          </>
+        }
+        actions={
+          <Button onClick={() => navigate('/panel/blog/new')} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Yeni Yazı
+          </Button>
+        }
+      />
 
-      {/* List */}
+      <SegmentedControl
+        value={filter}
+        onChange={(v) => setFilter(v as BlogStatusFilter)}
+        options={FILTERS}
+        size="sm"
+      />
+
       {isLoading ? (
-        <div className="flex justify-center py-12">
+        <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : !posts || posts.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground mb-4">Henüz blog yazısı yok</p>
-          <Button onClick={() => navigate('/panel/blog/new')} variant="outline" className="gap-2">
+        <div className="rounded-xl border border-border-subtle bg-surface-2 px-6 py-16 text-center">
+          <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-50" />
+          <p className="text-body text-foreground mb-1">
+            {filter === 'all'
+              ? 'Henüz blog yazısı yok'
+              : filter === 'published'
+                ? 'Yayınlanmış yazı yok'
+                : 'Taslak yok'}
+          </p>
+          <p className="text-label text-muted-foreground mb-5">
+            İlk yazınızı oluşturup yayınlayın.
+          </p>
+          <Button
+            onClick={() => navigate('/panel/blog/new')}
+            variant="outline"
+            className="gap-2"
+          >
             <Plus className="h-4 w-4" />
-            İlk yazını oluştur
+            İlk yazıyı oluştur
           </Button>
         </div>
       ) : (
-        <div className="space-y-2">
-          {posts.map((post) => (
-            <div
-              key={post.id}
-              className="flex items-center justify-between p-4 rounded-lg bg-card border border-border hover:border-muted-foreground/30 transition-colors"
-            >
-              <div className="flex-1 min-w-0 mr-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Link
-                    to={`/panel/blog/edit/${post.id}`}
-                    className="font-medium text-foreground hover:text-primary truncate"
-                  >
-                    {post.title || 'Başlıksız'}
-                  </Link>
-                  <span
-                    className={cn(
-                      'px-2 py-0.5 text-xs font-medium rounded-full shrink-0',
-                      post.status === 'published'
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-yellow-500/20 text-yellow-400'
-                    )}
-                  >
-                    {post.status === 'published' ? 'Yayında' : 'Taslak'}
-                  </span>
+        <ul className="divide-y divide-border-subtle rounded-xl border border-border-subtle bg-surface-2 overflow-hidden">
+          {posts.map((post) => {
+            const isPublished = post.status === 'published';
+            return (
+              <li
+                key={post.id}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-surface-3 transition-colors"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Link
+                      to={`/panel/blog/edit/${post.id}`}
+                      className="text-body text-foreground font-medium hover:text-primary truncate"
+                    >
+                      {post.title || 'Başlıksız'}
+                    </Link>
+                    <span
+                      className={cn(
+                        'shrink-0 px-2 py-0.5 text-caption font-medium rounded-full',
+                        isPublished
+                          ? 'bg-profit/15 text-profit'
+                          : 'bg-warning/15 text-warning'
+                      )}
+                    >
+                      {isPublished ? 'Yayında' : 'Taslak'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-caption text-muted-foreground mt-1">
+                    <span>{formatBlogDate(post.updated_at)}</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {post.reading_time_minutes} dk
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span>{formatBlogDate(post.updated_at)}</span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {post.reading_time_minutes} dk
-                  </span>
-                </div>
-              </div>
 
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => handleTogglePublish(post.id, post.status)}
-                  title={post.status === 'published' ? 'Taslağa Al' : 'Yayınla'}
-                  aria-label={post.status === 'published' ? 'Taslağa Al' : 'Yayınla'}
-                >
-                  {post.status === 'published' ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => navigate(`/panel/blog/edit/${post.id}`)}
-                  title="Düzenle"
-                  aria-label="Düzenle"
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  onClick={() => handleDelete(post.id, post.title)}
-                  title="Sil"
-                  aria-label="Sil"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
+                <div className="shrink-0 flex items-center gap-0.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => handleTogglePublish(post.id, post.status)}
+                    title={isPublished ? 'Taslağa Al' : 'Yayınla'}
+                    aria-label={isPublished ? 'Taslağa Al' : 'Yayınla'}
+                  >
+                    {isPublished ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => navigate(`/panel/blog/edit/${post.id}`)}
+                    title="Düzenle"
+                    aria-label="Düzenle"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-loss"
+                    onClick={() => handleDelete(post.id, post.title)}
+                    title="Sil"
+                    aria-label="Sil"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

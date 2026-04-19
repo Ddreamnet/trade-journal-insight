@@ -110,6 +110,23 @@ export interface ClosedTradeEntry {
   created_at: string;
 }
 
+export interface TradeMergeHistoryEntry {
+  merged_at: string;
+  original_lot: number;
+  original_entry: number;
+  original_target: number;
+  original_stop: number;
+  added_lot: number;
+  added_entry: number;
+  added_target: number;
+  added_stop: number;
+  added_reasons: string[];
+  new_entry: number;
+  new_target: number;
+  new_stop: number;
+  new_lot: number;
+}
+
 // Trade interface aligned with database schema
 export interface Trade {
   id: string;
@@ -136,6 +153,8 @@ export interface Trade {
   stop_reason: string | null;
   lot_quantity: number;
   remaining_lot: number;
+  merge_count: number;
+  merge_history: TradeMergeHistoryEntry[];
 }
 
 export interface BenchmarkData {

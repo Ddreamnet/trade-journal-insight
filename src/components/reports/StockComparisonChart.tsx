@@ -85,9 +85,9 @@ function BarTooltip({
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-lg text-sm min-w-[100px]">
-      <div className="font-mono font-semibold text-foreground mb-1">{d.symbol}</div>
-      <div className={cn('font-mono font-bold text-base', d.value >= 0 ? 'text-profit' : 'text-loss')}>
+    <div className="rounded-xl border border-border-subtle bg-surface-2/95 backdrop-blur-md px-3 py-2.5 shadow-lg min-w-[120px]">
+      <div className="text-label text-foreground mb-0.5">{d.symbol}</div>
+      <div className={cn('num-lg', d.value >= 0 ? 'text-profit' : 'text-loss')}>
         {d.value >= 0 ? '+' : ''}
         {d.value.toFixed(2)}%
       </div>
@@ -244,7 +244,7 @@ export function StockComparisonChart() {
   const needsScroll = chartData.length > 6;
 
   return (
-    <div className="rounded-xl bg-card border border-border p-4 mb-6">
+    <div className="rounded-2xl bg-surface-1 border border-border-subtle overflow-hidden px-2.5 py-3 md:p-5 mb-3 md:mb-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
         <div className="flex items-center gap-2">

@@ -1,73 +1,49 @@
-# Welcome to your Lovable project
+# Trade Günlüğü
 
-## Project info
+Borsa işlemlerinizi kaydedin, portföyünüzü takip edin ve performansınızı
+analiz edin. Çoklu portföy desteği, canlı BIST/kripto fiyatları, benchmark
+karşılaştırmalı portföy eğrisi ve dağılım raporları içerir.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Yerel geliştirme
 
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+Gereksinimler: Node.js (önerilen: son LTS) ve npm.
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# Projeyi klonlayın
+git clone <repo-url>
+cd trade-journal-insight
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Bağımlılıkları kurun
+npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Dev sunucusunu başlatın
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Dev sunucusu varsayılan olarak `http://localhost:8080` üzerinde çalışır.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Teknoloji yığını
 
-**Use GitHub Codespaces**
+- Vite + React + TypeScript
+- Tailwind CSS + shadcn/ui
+- Supabase (auth, database, edge functions)
+- Recharts (grafikler)
+- TanStack Query (veri yönetimi)
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Yapı
 
-## What technologies are used for this project?
+- `src/pages/` — rota bileşenleri
+- `src/components/` — paylaşımlı UI, feature bileşenleri
+- `src/hooks/` — veri/durum hook'ları
+- `src/contexts/` — global context provider'lar (portföy, piyasa verisi)
+- `src/integrations/supabase/` — Supabase client ve tip tanımları
+- `supabase/functions/` — edge function'lar (fiyat/veri kaynakları)
 
-This project is built with:
+## Komutlar
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```sh
+npm run dev        # dev sunucusunu başlat
+npm run build      # production build
+npm run lint       # ESLint
+npm run test       # Vitest
+```

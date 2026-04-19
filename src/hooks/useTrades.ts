@@ -3,6 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from '@/hooks/use-toast';
 import { ClosingType, ClosedTradeEntry } from '@/types/trade';
+import { mergeClosedEntries, MergedClosedTrade } from '@/lib/tradeMerge';
+import type { Database } from '@/integrations/supabase/types';
+
+type PartialCloseRow = Database['public']['Tables']['trade_partial_closes']['Row'];
 
 export interface TradeInsert {
   portfolio_id: string;
@@ -29,6 +33,15 @@ export interface CloseTradeParams {
   lotQuantity: number;
 }
 
+export interface MergeIntoTradeParams {
+  targetTradeId: string;
+  addEntryPrice: number;
+  addTargetPrice: number;
+  addStopPrice: number;
+  addLotQuantity: number;
+  addReasons: string[];
+}
+
 export function useTrades() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -51,16 +64,16 @@ export function useTrades() {
 
   const { data: partialCloses = [], isLoading: isLoadingPartials } = useQuery({
     queryKey: ['trade_partial_closes', user?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<PartialCloseRow[]> => {
       if (!user) return [];
-      
+
       const { data, error } = await supabase
         .from('trade_partial_closes')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data;
+      return (data ?? []) as PartialCloseRow[];
     },
     enabled: !!user,
   });
@@ -159,6 +172,50 @@ export function useTrades() {
       toast({
         title: 'Hata',
         description: 'İşlem kapatılamadı: ' + error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const mergeIntoTrade = useMutation({
+    mutationFn: async (params: MergeIntoTradeParams) => {
+      if (!user) throw new Error('Not authenticated');
+
+      const { data: tradeId, error: rpcError } = await supabase.rpc('merge_into_trade' as never, {
+        p_user_id: user.id,
+        p_target_trade_id: params.targetTradeId,
+        p_add_entry_price: params.addEntryPrice,
+        p_add_target_price: params.addTargetPrice,
+        p_add_stop_price: params.addStopPrice,
+        p_add_lot_quantity: params.addLotQuantity,
+        p_add_reasons: params.addReasons,
+      } as never);
+
+      if (rpcError) throw rpcError;
+
+      const { data, error } = await supabase
+        .from('trades')
+        .select('*')
+        .eq('id', tradeId as string)
+        .single();
+
+      if (error) throw error;
+      return data as TradeRow;
+    },
+    onSuccess: (updatedTrade) => {
+      queryClient.setQueryData(['trades', user?.id], (old: TradeRow[] = []) =>
+        old.map((t) => (t.id === updatedTrade.id ? updatedTrade : t))
+      );
+      queryClient.invalidateQueries({ queryKey: ['portfolioCash'] });
+      toast({
+        title: 'İşlem birleştirildi',
+        description: `${updatedTrade.stock_symbol} işlemine eklendi. Toplam lot: ${updatedTrade.lot_quantity}`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Hata',
+        description: 'Birleştirme başarısız: ' + error.message,
         variant: 'destructive',
       });
     },
@@ -367,14 +424,21 @@ export function useTrades() {
     };
   });
 
+  // Aynı (portfolio_id, stock_symbol, trade_type) anahtarına göre gruplanmış merged view.
+  // UI kapalı listesinde tek satır olarak gösterilir; detay dialog tüm partial'ları listeler.
+  const mergedClosedTrades: MergedClosedTrade[] = mergeClosedEntries(closedTradeEntries, trades);
+
   return {
     trades,
     activeTrades,
     closedTrades,
     closedTradeEntries,
+    mergedClosedTrades,
+    partialCloses,
     isLoading: isLoading || isLoadingPartials,
     error,
     createTrade,
+    mergeIntoTrade,
     closeTrade,
     updateTrade,
     deleteTrade,

@@ -1,17 +1,23 @@
 import { useState, useMemo } from 'react';
-import { validateDirectional, calculateRR, calculatePositionAmount } from '@/lib/tradeValidation';
-import { X, TrendingUp, TrendingDown, Folder } from 'lucide-react';
+import { TrendingUp, TrendingDown, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NumberInput } from '@/components/ui/number-input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StockLogo } from '@/components/ui/stock-logo';
+import {
+  BottomSheet,
+  BottomSheetContent,
+  BottomSheetHeader,
+  BottomSheetBody,
+  BottomSheetFooter,
+} from '@/components/ui/bottom-sheet';
 import { Stock, TradeType, StopReason, STOP_REASONS } from '@/types/trade';
 import { cn } from '@/lib/utils';
-import { formatPrice, getCurrencySymbol } from '@/lib/currency';
+import { formatPrice, getCurrencySymbol, getSymbolCurrency } from '@/lib/currency';
+import { validateDirectional, calculateRR, calculatePositionAmount } from '@/lib/tradeValidation';
 
 interface TradeFormProps {
-  stock: Stock & { logoUrl?: string };
-  /** İşlem hangi portföye eklenecek — ilk zorunlu adım olarak kullanıcıya gösterilir */
+  stock: Stock & { logoUrl?: string; currency?: 'TRY' | 'USD' };
   portfolioName: string;
   onClose: () => void;
   onSave: (trade: {
@@ -27,7 +33,25 @@ interface TradeFormProps {
   isSubmitting?: boolean;
 }
 
-export function TradeForm({ stock, portfolioName, onClose, onSave, isSubmitting = false }: TradeFormProps) {
+/**
+ * TradeForm — bottom-sheet for creating a new position.
+ *
+ * Step ordering (progressive disclosure):
+ *   1. Trade type — AL / SAT (always visible)
+ *   2. Everything else — only after trade type is chosen, so the user
+ *      isn't overwhelmed with inputs on open.
+ *
+ * Entry / target / stop render as a 3-column row on all viewports — tight
+ * but intentional, since they're directly related and users scan them as
+ * a triad.
+ */
+export function TradeForm({
+  stock,
+  portfolioName,
+  onClose,
+  onSave,
+  isSubmitting = false,
+}: TradeFormProps) {
   const [tradeType, setTradeType] = useState<TradeType | null>(null);
   const [reasons, setReasons] = useState<StopReason[]>([]);
   const [entryPrice, setEntryPrice] = useState(stock.currentPrice.toString());
@@ -41,13 +65,11 @@ export function TradeForm({ stock, portfolioName, onClose, onSave, isSubmitting 
   const parsedStop = parseFloat(stopPrice);
   const parsedLot = parseInt(lotQuantity, 10);
 
-  // Validation checks
   const hasNegativeEntry = !isNaN(parsedEntry) && parsedEntry <= 0;
   const hasNegativeTarget = !isNaN(parsedTarget) && parsedTarget <= 0;
   const hasNegativeStop = !isNaN(parsedStop) && parsedStop <= 0;
   const hasAnyNegativeError = hasNegativeEntry || hasNegativeTarget || hasNegativeStop;
 
-  // Directional validation
   const directionalErrors = useMemo(
     () => validateDirectional(tradeType, parsedEntry, parsedTarget, parsedStop),
     [tradeType, parsedEntry, parsedTarget, parsedStop]
@@ -60,7 +82,6 @@ export function TradeForm({ stock, portfolioName, onClose, onSave, isSubmitting 
     [parsedEntry, parsedTarget, parsedStop, tradeType, hasDirectionalError]
   );
 
-  // Position amount calculation
   const positionAmount = useMemo(
     () => calculatePositionAmount(parsedEntry, parsedLot),
     [parsedEntry, parsedLot]
@@ -68,9 +89,7 @@ export function TradeForm({ stock, portfolioName, onClose, onSave, isSubmitting 
 
   const toggleReason = (reasonId: StopReason) => {
     setReasons((prev) =>
-      prev.includes(reasonId)
-        ? prev.filter((r) => r !== reasonId)
-        : [...prev, reasonId]
+      prev.includes(reasonId) ? prev.filter((r) => r !== reasonId) : [...prev, reasonId]
     );
   };
 
@@ -107,188 +126,153 @@ export function TradeForm({ stock, portfolioName, onClose, onSave, isSubmitting 
     !hasAnyNegativeError &&
     !hasDirectionalError;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
+  const currency = stock.currency ?? getSymbolCurrency(stock.symbol);
+  const currencySymbol = getCurrencySymbol(currency);
 
-      {/* Modal */}
-      <div className="relative w-full max-w-lg max-h-[90vh] bg-background-secondary border border-border rounded-t-2xl sm:rounded-2xl overflow-hidden animate-slide-in-right sm:animate-fade-in">
-        {/* Header */}
-        <div className="sticky top-0 bg-background-secondary border-b border-border p-4 z-10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <StockLogo 
-                symbol={stock.symbol} 
-                logoUrl={stock.logoUrl}
-                size="md"
-              />
-              <div>
-                <div className="font-semibold text-foreground">{stock.symbol}</div>
-                <div className="text-sm text-muted-foreground">{stock.name}</div>
+  return (
+    <BottomSheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <BottomSheetContent size="lg">
+        {/* Custom header with stock context — replaces default title slot */}
+        <div className="px-5 pt-2 pb-3 border-b border-border-subtle shrink-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <StockLogo symbol={stock.symbol} logoUrl={stock.logoUrl} size="md" />
+              <div className="min-w-0">
+                <div className="text-title text-foreground truncate">{stock.symbol}</div>
+                <div className="text-label text-muted-foreground truncate">
+                  {stock.name}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="text-right">
-                <div className="font-mono text-foreground">
-                  {formatPrice(stock.currentPrice, (stock as any).currency ?? stock.symbol)}
-                </div>
-                <div
-                  className={cn(
-                    'flex items-center justify-end gap-1 text-sm',
-                    stock.change >= 0 ? 'text-profit' : 'text-loss'
-                  )}
-                >
-                  {stock.change >= 0 ? (
-                    <TrendingUp className="w-3 h-3" />
-                  ) : (
-                    <TrendingDown className="w-3 h-3" />
-                  )}
-                  <span>
-                    {stock.change >= 0 ? '+' : ''}
-                    {stock.changePercent.toFixed(2)}%
-                  </span>
-                </div>
+            <div className="text-right shrink-0">
+              <div className="num text-foreground">
+                {formatPrice(stock.currentPrice, currency)}
               </div>
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="w-5 h-5" />
-              </Button>
+              <div
+                className={cn(
+                  'flex items-center justify-end gap-1 text-caption font-mono font-semibold',
+                  stock.change >= 0 ? 'text-profit' : 'text-loss'
+                )}
+              >
+                {stock.change >= 0 ? (
+                  <TrendingUp className="w-3 h-3" />
+                ) : (
+                  <TrendingDown className="w-3 h-3" />
+                )}
+                {stock.change >= 0 ? '+' : ''}
+                {stock.changePercent.toFixed(2)}%
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="overflow-y-auto max-h-[70vh] p-4 space-y-6">
-          {/* Portfolio context — ilk zorunlu adım */}
-          <div className="flex items-center gap-2 p-3 rounded-lg border border-border bg-secondary/50">
+        <BottomSheetBody className="space-y-5 pt-4">
+          {/* Portfolio context */}
+          <div className="flex items-center gap-2 p-3 rounded-lg surface-1">
             <Folder className="w-4 h-4 text-primary shrink-0" />
             <div className="flex-1 min-w-0">
-              <div className="text-xs text-muted-foreground">Portföy</div>
-              <div className="text-sm font-semibold text-foreground truncate">{portfolioName}</div>
+              <div className="text-caption text-muted-foreground">Portföy</div>
+              <div className="text-body font-semibold text-foreground truncate">
+                {portfolioName}
+              </div>
             </div>
           </div>
 
-          {/* Trade Type Selection */}
+          {/* Trade type */}
           <div>
-            <label className="text-sm font-medium text-muted-foreground mb-2 block">
+            <label className="text-label text-muted-foreground mb-2 block">
               İşlem Türü
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <Button
+                type="button"
                 variant={tradeType === 'buy' ? 'buy' : 'outline'}
-                className="h-12"
+                size="xl"
                 onClick={() => setTradeType('buy')}
               >
-                <TrendingUp className="w-5 h-5 mr-2" />
+                <TrendingUp className="w-5 h-5" />
                 AL
               </Button>
               <Button
+                type="button"
                 variant={tradeType === 'sell' ? 'sell' : 'outline'}
-                className="h-12"
+                size="xl"
                 onClick={() => setTradeType('sell')}
               >
-                <TrendingDown className="w-5 h-5 mr-2" />
+                <TrendingDown className="w-5 h-5" />
                 SAT
               </Button>
             </div>
           </div>
 
-          {/* Show rest only if trade type selected */}
           {tradeType && (
             <>
-              {/* Trade Reasons */}
+              {/* Reasons */}
               <div>
-                <label className="text-sm font-medium text-muted-foreground mb-3 block">
+                <label className="text-label text-muted-foreground mb-2 block">
                   İşlem Sebepleri
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-1.5">
                   {STOP_REASONS.map((reason) => (
                     <label
                       key={reason.id}
                       className={cn(
-                        'flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all',
+                        'flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors',
                         reasons.includes(reason.id)
                           ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-muted-foreground/50'
+                          : 'border-border-subtle hover:border-border'
                       )}
                     >
                       <Checkbox
                         checked={reasons.includes(reason.id)}
                         onCheckedChange={() => toggleReason(reason.id)}
                       />
-                      <span className="text-sm text-foreground">{reason.label}</span>
+                      <span className="text-label text-foreground">{reason.label}</span>
                     </label>
                   ))}
                 </div>
               </div>
 
-              {/* Price Inputs */}
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                    Alış Fiyatı (Giriş)
-                  </label>
-                  <NumberInput
-                    step="0.01"
-                    min="0.01"
-                    placeholder="0.00"
-                    value={entryPrice}
-                    onChange={(e) => setEntryPrice(e.target.value)}
-                    className={cn('font-mono', hasNegativeEntry && 'border-loss focus-visible:ring-loss')}
-                  />
-                  {hasNegativeEntry && (
-                    <p className="text-xs text-loss mt-1">⚠️ Fiyat sıfırdan büyük olmalı</p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                    Hedef Fiyatı (Hedef)
-                  </label>
-                  <NumberInput
-                    step="0.01"
-                    min="0.01"
-                    placeholder="0.00"
-                    value={targetPrice}
-                    onChange={(e) => setTargetPrice(e.target.value)}
-                    className={cn('font-mono', hasNegativeTarget && 'border-loss focus-visible:ring-loss')}
-                  />
-                  {hasNegativeTarget && (
-                    <p className="text-xs text-loss mt-1">⚠️ Fiyat sıfırdan büyük olmalı</p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                    Stop Fiyatı (Stop)
-                  </label>
-                  <NumberInput
-                    step="0.01"
-                    min="0.01"
-                    placeholder="0.00"
-                    value={stopPrice}
-                    onChange={(e) => setStopPrice(e.target.value)}
-                    className={cn('font-mono', hasNegativeStop && 'border-loss focus-visible:ring-loss')}
-                  />
-                  {hasNegativeStop && (
-                    <p className="text-xs text-loss mt-1">⚠️ Fiyat sıfırdan büyük olmalı</p>
-                  )}
-                </div>
+              {/* Price triad */}
+              <div className="grid grid-cols-3 gap-2">
+                <PriceField
+                  label="Giriş"
+                  value={entryPrice}
+                  onChange={setEntryPrice}
+                  hasError={hasNegativeEntry}
+                />
+                <PriceField
+                  label="Hedef"
+                  value={targetPrice}
+                  onChange={setTargetPrice}
+                  hasError={hasNegativeTarget}
+                />
+                <PriceField
+                  label="Stop"
+                  value={stopPrice}
+                  onChange={setStopPrice}
+                  hasError={hasNegativeStop}
+                />
               </div>
 
-              {/* Directional Errors */}
-              {directionalErrors.length > 0 && (
+              {(hasAnyNegativeError || hasDirectionalError) && (
                 <div className="space-y-1">
+                  {hasAnyNegativeError && (
+                    <p className="text-caption text-loss">
+                      Fiyatlar sıfırdan büyük olmalı
+                    </p>
+                  )}
                   {directionalErrors.map((err, i) => (
-                    <p key={i} className="text-xs text-loss">⚠️ {err}</p>
+                    <p key={i} className="text-caption text-loss">
+                      {err}
+                    </p>
                   ))}
                 </div>
               )}
 
-              {/* Lot / Kağıt Adedi */}
+              {/* Lot */}
               <div>
-                <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                <label className="text-label text-muted-foreground mb-1.5 block">
                   Lot / Kağıt Adedi
                 </label>
                 <NumberInput
@@ -297,58 +281,58 @@ export function TradeForm({ stock, portfolioName, onClose, onSave, isSubmitting 
                   placeholder="Örn: 100"
                   value={lotQuantity}
                   onChange={(e) => {
-                    // Only allow integers
                     const val = e.target.value.replace(/[^0-9]/g, '');
                     setLotQuantity(val);
                   }}
-                  className="font-mono"
+                  className="font-mono h-11"
                 />
                 {positionAmount !== null && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    💰 İşlem Tutarı: {getCurrencySymbol((stock as any).currency ?? stock.symbol)}{positionAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                  <p className="text-caption text-muted-foreground mt-1">
+                    İşlem tutarı:{' '}
+                    <span className="num-sm text-foreground">
+                      {currencySymbol}
+                      {positionAmount.toLocaleString('tr-TR', {
+                        minimumFractionDigits: 2,
+                      })}
+                    </span>
                   </p>
                 )}
               </div>
 
-              {/* RR Display */}
-              <div className="pt-2 pb-8">
-                {rrRatio !== null && (
+              {/* RR preview */}
+              {rrRatio !== null && (
+                <div
+                  className={cn(
+                    'p-3 rounded-lg text-center',
+                    rrRatio >= 3 ? 'bg-profit-soft' : 'bg-loss-soft'
+                  )}
+                >
+                  <div className="text-caption text-muted-foreground">
+                    Risk / Reward
+                  </div>
                   <div
                     className={cn(
-                      'p-4 rounded-lg border text-center mb-4',
-                      rrRatio >= 3
-                        ? 'border-profit/50 bg-profit/10'
-                        : 'border-loss/50 bg-loss/10'
+                      'num-display mt-0.5',
+                      rrRatio >= 3 ? 'text-profit' : 'text-loss'
                     )}
                   >
-                    <div className="text-sm text-muted-foreground mb-1">
-                      Risk/Reward Oranı
-                    </div>
-                    <div
-                      className={cn(
-                        'text-2xl font-bold font-mono',
-                        rrRatio >= 3 ? 'text-profit' : 'text-loss'
-                      )}
-                    >
-                      {rrRatio.toFixed(2)} RR
-                    </div>
-                    <div
-                      className={cn(
-                        'text-xs mt-1',
-                        rrRatio >= 3 ? 'text-profit' : 'text-loss'
-                      )}
-                    >
-                      {rrRatio >= 3 ? '✅ İyi oran' : '⚠️ Düşük oran'}
-                    </div>
+                    {rrRatio.toFixed(2)}
                   </div>
-                )}
-              </div>
+                  <div
+                    className={cn(
+                      'text-caption mt-0.5',
+                      rrRatio >= 3 ? 'text-profit' : 'text-loss'
+                    )}
+                  >
+                    {rrRatio >= 3 ? 'İyi oran' : 'Düşük oran'}
+                  </div>
+                </div>
+              )}
             </>
           )}
-        </div>
+        </BottomSheetBody>
 
-        {/* Footer */}
-        <div className="sticky bottom-0 bg-background-secondary border-t border-border p-4 flex gap-3">
+        <BottomSheetFooter>
           <Button variant="outline" className="flex-1" onClick={onClose}>
             İptal
           </Button>
@@ -358,10 +342,36 @@ export function TradeForm({ stock, portfolioName, onClose, onSave, isSubmitting 
             onClick={handleSave}
             disabled={!isValid || isSubmitting || isSubmittingLocal}
           >
-            {(isSubmitting || isSubmittingLocal) ? 'Kaydediliyor...' : 'Kaydet'}
+            {(isSubmitting || isSubmittingLocal) ? 'Kaydediliyor…' : 'Kaydet'}
           </Button>
-        </div>
-      </div>
+        </BottomSheetFooter>
+      </BottomSheetContent>
+    </BottomSheet>
+  );
+}
+
+function PriceField({
+  label,
+  value,
+  onChange,
+  hasError,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  hasError: boolean;
+}) {
+  return (
+    <div>
+      <label className="text-caption text-muted-foreground mb-1.5 block">{label}</label>
+      <NumberInput
+        step="0.01"
+        min="0.01"
+        placeholder="0.00"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn('font-mono h-11 text-[0.9375rem]', hasError && 'border-loss focus-visible:ring-loss')}
+      />
     </div>
   );
 }

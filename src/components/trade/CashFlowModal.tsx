@@ -1,15 +1,19 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
-  X, Plus, Minus, Wallet, ChevronLeft, Building2,
-  Coins, DollarSign, Info, Loader2
+  Plus, Minus, Wallet, ChevronLeft, Building2,
+  Coins, Info, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NumberInput } from '@/components/ui/number-input';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import {
+  BottomSheet,
+  BottomSheetContent,
+  BottomSheetBody,
+} from '@/components/ui/bottom-sheet';
 import { usePortfolioCash } from '@/hooks/usePortfolioCash';
 import { useUserAssets, AssetType, AssetCategory, QuantityUnit } from '@/hooks/useUserAssets';
 import { useMarketSeries } from '@/contexts/MarketSeriesContext';
@@ -293,34 +297,27 @@ export function CashFlowModal({ onClose, portfolioId, portfolioName }: CashFlowM
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      <div className="relative w-full max-w-md max-h-[92vh] bg-background-secondary border border-border rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col animate-fade-in">
+    <BottomSheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <BottomSheetContent size="md" className="flex flex-col">
         {/* Header */}
-        <div className="border-b border-border p-4 shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
-              <Wallet className="w-5 h-5 text-primary shrink-0" />
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-foreground leading-tight truncate">Portföy Yönetimi</h2>
-                <div className="text-xs text-muted-foreground truncate">{portfolioName}</div>
-              </div>
+        <div className="border-b border-border-subtle px-5 pt-2 pb-3 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Wallet className="w-5 h-5 text-primary shrink-0" />
+            <div className="min-w-0">
+              <h2 className="text-title text-foreground truncate">Portföy Yönetimi</h2>
+              <div className="text-label text-muted-foreground truncate">{portfolioName}</div>
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="w-5 h-5" />
-            </Button>
           </div>
-          <div className="mt-3 p-3 rounded-lg bg-secondary text-center">
-            <div className="text-xs text-muted-foreground mb-1">Kullanılabilir TL Bakiye</div>
-            <div className="font-mono text-xl font-bold text-foreground">
+          <div className="mt-3 p-3 rounded-lg bg-surface-1 text-center">
+            <div className="text-caption text-muted-foreground">Kullanılabilir TL Bakiye</div>
+            <div className="num-display mt-0.5 text-foreground">
               ₺{availableCash.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
         </div>
 
-        <ScrollArea className="flex-1 overflow-y-auto">
-          <div className="p-4">
+        <BottomSheetBody>
+          <div className="pt-4">
             <Tabs defaultValue="add">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="add" className="gap-1">
@@ -380,10 +377,10 @@ export function CashFlowModal({ onClose, portfolioId, portfolioName }: CashFlowM
                           <span className="text-2xl font-bold text-primary">{t.symbol}</span>
                           <span className="text-sm font-medium text-foreground">{t.label}</span>
                           {t.id === 'tl' && (
-                            <span className="text-[10px] text-profit bg-profit/10 rounded px-1.5 py-0.5">Bakiyeye ekler</span>
+                            <span className="text-caption text-profit bg-profit-soft rounded px-1.5 py-0.5">Bakiyeye ekler</span>
                           )}
                           {(t.id === 'usd' || t.id === 'eur') && (
-                            <span className="text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5">Sadece varlık</span>
+                            <span className="text-caption text-muted-foreground bg-surface-3 rounded px-1.5 py-0.5">Sadece varlık</span>
                           )}
                         </button>
                       ))}
@@ -422,9 +419,9 @@ export function CashFlowModal({ onClose, portfolioId, portfolioName }: CashFlowM
                           <Coins className="w-6 h-6 text-primary" />
                           <span className="text-sm font-medium text-foreground">{t.label}</span>
                           {t.apiSupported ? (
-                            <span className="text-[10px] text-profit bg-profit/10 rounded px-1.5 py-0.5">Otomatik fiyat</span>
+                            <span className="text-caption text-profit bg-profit-soft rounded px-1.5 py-0.5">Otomatik fiyat</span>
                           ) : (
-                            <span className="text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5">Manuel giriş</span>
+                            <span className="text-caption text-muted-foreground bg-surface-3 rounded px-1.5 py-0.5">Manuel giriş</span>
                           )}
                         </button>
                       ))}
@@ -668,8 +665,8 @@ export function CashFlowModal({ onClose, portfolioId, portfolioName }: CashFlowM
               </div>
             )}
           </div>
-        </ScrollArea>
-      </div>
-    </div>
+        </BottomSheetBody>
+      </BottomSheetContent>
+    </BottomSheet>
   );
 }

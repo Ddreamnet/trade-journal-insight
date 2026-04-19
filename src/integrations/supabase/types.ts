@@ -100,36 +100,6 @@ export type Database = {
           },
         ]
       }
-      portfolios: {
-        Row: {
-          closed_at: string | null
-          created_at: string
-          id: string
-          name: string
-          status: Database["public"]["Enums"]["portfolio_status"]
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          closed_at?: string | null
-          created_at?: string
-          id?: string
-          name: string
-          status?: Database["public"]["Enums"]["portfolio_status"]
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          closed_at?: string | null
-          created_at?: string
-          id?: string
-          name?: string
-          status?: Database["public"]["Enums"]["portfolio_status"]
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       portfolio_events: {
         Row: {
           amount_tl: number
@@ -247,6 +217,36 @@ export type Database = {
           },
         ]
       }
+      portfolios: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          id: string
+          name: string
+          status: Database["public"]["Enums"]["portfolio_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          status?: Database["public"]["Enums"]["portfolio_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          status?: Database["public"]["Enums"]["portfolio_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       trade_partial_closes: {
         Row: {
           closing_note: string | null
@@ -289,17 +289,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "trade_partial_closes_trade_id_fkey"
-            columns: ["trade_id"]
-            isOneToOne: false
-            referencedRelation: "trades"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "trade_partial_closes_portfolio_id_fkey"
             columns: ["portfolio_id"]
             isOneToOne: false
             referencedRelation: "portfolios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_partial_closes_trade_id_fkey"
+            columns: ["trade_id"]
+            isOneToOne: false
+            referencedRelation: "trades"
             referencedColumns: ["id"]
           },
         ]
@@ -315,6 +315,8 @@ export type Database = {
           id: string
           is_successful: boolean | null
           lot_quantity: number
+          merge_count: number
+          merge_history: Json
           portfolio_id: string
           position_amount: number | null
           progress_percent: number | null
@@ -341,6 +343,8 @@ export type Database = {
           id?: string
           is_successful?: boolean | null
           lot_quantity?: number
+          merge_count?: number
+          merge_history?: Json
           portfolio_id: string
           position_amount?: number | null
           progress_percent?: number | null
@@ -367,6 +371,8 @@ export type Database = {
           id?: string
           is_successful?: boolean | null
           lot_quantity?: number
+          merge_count?: number
+          merge_history?: Json
           portfolio_id?: string
           position_amount?: number | null
           progress_percent?: number | null
@@ -454,10 +460,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      calculate_available_cash: {
-        Args: { p_user_id: string; p_portfolio_id?: string | null }
-        Returns: number
-      }
+      calculate_available_cash:
+        | { Args: { p_user_id: string }; Returns: number }
+        | {
+            Args: { p_portfolio_id?: string; p_user_id: string }
+            Returns: number
+          }
       calculate_progress_percent: {
         Args: {
           p_entry_price: number
@@ -504,8 +512,34 @@ export type Database = {
         Returns: string
       }
       create_withdraw_with_check: {
-        Args: { p_amount: number; p_note?: string; p_portfolio_id: string; p_user_id: string }
+        Args: {
+          p_amount: number
+          p_note?: string
+          p_portfolio_id: string
+          p_user_id: string
+        }
         Returns: string
+      }
+      merge_into_trade: {
+        Args: {
+          p_add_entry_price: number
+          p_add_lot_quantity: number
+          p_add_reasons?: string[]
+          p_add_stop_price: number
+          p_add_target_price: number
+          p_target_trade_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      transfer_portfolio_items: {
+        Args: {
+          p_from_portfolio_id: string
+          p_items: Json
+          p_to_portfolio_id: string
+          p_user_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {

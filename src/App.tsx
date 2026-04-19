@@ -15,6 +15,7 @@ import BlogPost from './pages/BlogPost';
 import PanelBlog from './pages/PanelBlog';
 import PanelBlogEditor from './pages/PanelBlogEditor';
 import Islemlerim from './pages/Islemlerim';
+import Grafik from './pages/Grafik';
 import NotFound from './pages/NotFound';
 
 const queryClient = new QueryClient();
@@ -44,6 +45,7 @@ function AppRoutes() {
       <Route path="/login" element={<RouteGuard mode="public"><Login /></RouteGuard>} />
       <Route path="/" element={<RouteGuard mode="protected"><Index /></RouteGuard>} />
       <Route path="/islemlerim" element={<RouteGuard mode="protected"><Islemlerim /></RouteGuard>} />
+      <Route path="/grafik" element={<RouteGuard mode="protected"><Grafik /></RouteGuard>} />
       <Route path="/raporlarim" element={<RouteGuard mode="protected"><Reports /></RouteGuard>} />
       {/* Public Blog Routes */}
       <Route path="/blog" element={<Blog />} />

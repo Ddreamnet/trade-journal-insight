@@ -1,32 +1,40 @@
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Sector, Customized,
-  LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, Area, AreaChart,
+  PieChart, Pie, Cell, ResponsiveContainer, Sector,
 } from 'recharts';
+import { Loader2, PieChart as PieIcon, TrendingUp } from 'lucide-react';
+
 import { useUserAssets } from '@/hooks/useUserAssets';
 import { usePortfolioCash } from '@/hooks/usePortfolioCash';
 import { useMarketSeries } from '@/contexts/MarketSeriesContext';
 import { useMarketData } from '@/contexts/MarketDataContext';
 import { useTrades } from '@/hooks/useTrades';
-import { usePortfolioValueSnapshots, SnapshotRange } from '@/hooks/usePortfolioValueSnapshots';
+import {
+  usePortfolioValueSnapshots,
+  SnapshotRange,
+} from '@/hooks/usePortfolioValueSnapshots';
 import { getSymbolCurrency } from '@/lib/currency';
-import { Loader2, PieChart as PieIcon, TrendingUp } from 'lucide-react';
+
 import { ShareChartButton } from '@/components/ui/ShareChartButton';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { cn } from '@/lib/utils';
-import { format, parseISO } from 'date-fns';
-import { tr } from 'date-fns/locale';
+
+import { AssetsSeruvenChart } from './AssetsSeruvenChart';
+
+// ─── Types & config ──────────────────────────────────────────────────────────
 
 type DisplayMode = 'native' | 'TRY' | 'USD';
 type NativeCurrency = 'TRY' | 'USD' | 'EUR';
 
-export const ASSET_LABELS: Record<string, string> = {
+const ASSET_LABELS: Record<string, string> = {
   tl_cash: 'TL Nakit', usd: 'USD', eur: 'EUR',
   konut: 'Konut', isyeri: 'İşyeri', arsa: 'Arsa',
   bitcoin: 'Bitcoin', ethereum: 'Ethereum', altin: 'Altın', gumus: 'Gümüş',
   hisselerim: 'Hisselerim',
 };
 
-export const ASSET_COLORS: Record<string, [string, string]> = {
+/** Per-asset color pair: [top stop, bottom stop] — drives radial gradient slices. */
+const ASSET_COLORS: Record<string, [string, string]> = {
   tl_cash:    ['hsl(142,76%,36%)', 'hsl(142,76%,26%)'],
   usd:        ['hsl(152,60%,50%)', 'hsl(152,60%,35%)'],
   eur:        ['hsl(217,91%,65%)', 'hsl(217,91%,45%)'],
@@ -40,11 +48,12 @@ export const ASSET_COLORS: Record<string, [string, string]> = {
   hisselerim: ['hsl(196,86%,50%)', 'hsl(196,86%,32%)'],
 };
 
-const DEFAULT_GRADIENT: [string, string] = ['hsl(200,70%,55%)', 'hsl(200,70%,35%)'];
+const DEFAULT_COLORS: [string, string] = ['hsl(200,70%,55%)', 'hsl(200,70%,35%)'];
 
-const CATEGORY_ORDER = ['stocks', 'cash', 'real_estate', 'commodity'];
+const CATEGORY_ORDER = ['stocks', 'cash', 'real_estate', 'commodity'] as const;
+type Category = typeof CATEGORY_ORDER[number];
 
-const CATEGORY_META: Record<string, { label: string; color: string }> = {
+const CATEGORY_META: Record<Category, { label: string; color: string }> = {
   stocks:      { label: 'Hisseler',    color: 'hsl(196,70%,42%)' },
   cash:        { label: 'Nakit',       color: 'hsl(142,60%,36%)' },
   real_estate: { label: 'Gayrimenkul', color: 'hsl(38,85%,48%)'  },
@@ -53,346 +62,187 @@ const CATEGORY_META: Record<string, { label: string; color: string }> = {
 
 const PIE_START = 90;
 const PIE_PADDING = 3;
-const OUTER_INNER_R = 119;
-const OUTER_OUTER_R = 126;
 
-const RANGE_OPTIONS: { label: string; value: SnapshotRange }[] = [
-  { label: '1A', value: '1M' },
-  { label: '3A', value: '3M' },
-  { label: '6A', value: '6M' },
-  { label: '1Y', value: '1Y' },
-  { label: '3Y', value: '3Y' },
-];
-
-export interface ChartEntry {
+interface ChartEntry {
   key: string;
   name: string;
+  /** Value expressed in USD — single unit for all slices' proportions. */
   value: number;
   colors: [string, string];
   pct: number;
   category?: string;
-  assetType?: string;
   nativeAmount: number;
   nativeCurrency: NativeCurrency;
 }
 
-function formatAmount(amount: number, currency: NativeCurrency): string {
+// ─── Display helpers ─────────────────────────────────────────────────────────
+
+function formatDisplay(item: ChartEntry, mode: DisplayMode, usdTryRate: number | null): string {
+  if (mode === 'TRY' && usdTryRate) {
+    return '₺' + (item.value * usdTryRate).toLocaleString('tr-TR', { maximumFractionDigits: 0 });
+  }
+  if (mode === 'USD') {
+    return '$' + item.value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  }
+  // 'native' — show each slice in the currency it was entered in
+  const { nativeAmount, nativeCurrency } = item;
+  if (nativeCurrency === 'TRY') return '₺' + nativeAmount.toLocaleString('tr-TR', { maximumFractionDigits: 0 });
+  if (nativeCurrency === 'EUR') return '€' + nativeAmount.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return '$' + nativeAmount.toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+
+function formatTotal(totalUsd: number, mode: DisplayMode, usdTryRate: number | null): string {
+  if (mode === 'TRY' && usdTryRate) {
+    return '₺' + (totalUsd * usdTryRate).toLocaleString('tr-TR', { maximumFractionDigits: 0 });
+  }
+  return '$' + totalUsd.toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+
+/**
+ * Break total into its literal native-currency buckets. "Ham" display mode
+ * shows *what the user actually has in each currency*, not a converted total.
+ * Returns one entry per currency that has a non-zero value.
+ */
+function nativeBreakdown(data: ChartEntry[]): Array<{ currency: NativeCurrency; amount: number }> {
+  const groups: Record<NativeCurrency, number> = { TRY: 0, USD: 0, EUR: 0 };
+  for (const item of data) {
+    groups[item.nativeCurrency] += item.nativeAmount;
+  }
+  const out: Array<{ currency: NativeCurrency; amount: number }> = [];
+  // Order: TRY, USD, EUR — keeps the output stable and predictable.
+  if (groups.TRY > 0) out.push({ currency: 'TRY', amount: groups.TRY });
+  if (groups.USD > 0) out.push({ currency: 'USD', amount: groups.USD });
+  if (groups.EUR > 0) out.push({ currency: 'EUR', amount: groups.EUR });
+  return out;
+}
+
+function formatNativeAmount({ currency, amount }: { currency: NativeCurrency; amount: number }): string {
   if (currency === 'TRY') return '₺' + amount.toLocaleString('tr-TR', { maximumFractionDigits: 0 });
   if (currency === 'EUR') return '€' + amount.toLocaleString('en-US', { maximumFractionDigits: 0 });
   return '$' + amount.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
-function getDisplayValue(item: ChartEntry, displayMode: DisplayMode, usdTryRate: number | null): string {
-  if (displayMode === 'TRY' && usdTryRate)
-    return '₺' + (item.value * usdTryRate).toLocaleString('tr-TR', { maximumFractionDigits: 0 });
-  if (displayMode === 'USD')
-    return '$' + item.value.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  return formatAmount(item.nativeAmount, item.nativeCurrency);
-}
-
-// ─── Active shape ────────────────────────────────────────────────────────────
-const renderActiveShape = (props: any) => {
-  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+// ─── Active slice shape ──────────────────────────────────────────────────────
+// The selected slice thickens and grows, with a separate outer halo arc in its
+// own color that advertises selection at a glance.
+function ActiveShape(props: Record<string, unknown>) {
+  const cx = props.cx as number;
+  const cy = props.cy as number;
+  const innerRadius = props.innerRadius as number;
+  const outerRadius = props.outerRadius as number;
+  const startAngle = props.startAngle as number;
+  const endAngle = props.endAngle as number;
+  const fill = props.fill as string;
   return (
     <g>
-      <Sector cx={cx} cy={cy} innerRadius={innerRadius - 3} outerRadius={outerRadius + 6}
-        startAngle={startAngle} endAngle={endAngle} fill={fill}
-        style={{ filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.15))' }} />
-    </g>
-  );
-};
-
-// ─── Outer category ring ──────────────────────────────────────────────────────
-function OuterCategoryRing({ width, height, sortedData }: { width?: number; height?: number; sortedData: ChartEntry[] }) {
-  if (!width || !height || sortedData.length === 0) return null;
-  const cx = width / 2;
-  const cy = height / 2;
-  const total = sortedData.reduce((s, d) => s + d.value, 0);
-  if (total === 0) return null;
-
-  const N = sortedData.length;
-  const totalDataAngle = 360 - N * PIE_PADDING;
-  const groups: { category: string; startA: number; endA: number }[] = [];
-  let angle = PIE_START;
-  let currentCat: string | null = null;
-
-  for (let i = 0; i < N; i++) {
-    const slice = sortedData[i];
-    const cat = slice.category || 'other';
-    const sliceAngle = (slice.value / total) * totalDataAngle;
-    const sliceEnd = angle - sliceAngle;
-    if (cat !== currentCat) {
-      currentCat = cat;
-      groups.push({ category: cat, startA: angle, endA: sliceEnd });
-    } else {
-      groups[groups.length - 1].endA = sliceEnd;
-    }
-    angle = sliceEnd;
-    if (i < N - 1) angle -= PIE_PADDING;
-  }
-
-  if (groups.length <= 1) return null;
-
-  return (
-    <g>
-      {groups.map(g => {
-        const meta = CATEGORY_META[g.category];
-        if (!meta) return null;
-        const arcSpan = Math.abs(g.startA - g.endA);
-        const midA = (g.startA + g.endA) / 2;
-        const rad = (midA * Math.PI) / 180;
-        const labelR = OUTER_OUTER_R + 18;
-        const lx = cx + labelR * Math.cos(rad);
-        const ly = cy - labelR * Math.sin(rad);
-        const anchor = Math.abs(lx - cx) < 8 ? 'middle' : lx > cx ? 'start' : 'end';
-        return (
-          <g key={g.category}>
-            <Sector cx={cx} cy={cy} innerRadius={OUTER_INNER_R} outerRadius={OUTER_OUTER_R}
-              startAngle={g.startA} endAngle={g.endA} fill={meta.color} opacity={0.88} />
-            {arcSpan >= 22 && (
-              <text x={lx} y={ly} textAnchor={anchor} dominantBaseline="central"
-                fill={meta.color} style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.03em' }}>
-                {meta.label}
-              </text>
-            )}
-          </g>
-        );
-      })}
+      <Sector
+        cx={cx} cy={cy}
+        innerRadius={innerRadius - 4}
+        outerRadius={outerRadius + 12}
+        startAngle={startAngle} endAngle={endAngle}
+        fill={fill}
+        stroke="hsl(var(--background))"
+        strokeWidth={3}
+      />
+      <Sector
+        cx={cx} cy={cy}
+        innerRadius={outerRadius + 16}
+        outerRadius={outerRadius + 19}
+        startAngle={startAngle} endAngle={endAngle}
+        fill={fill}
+        opacity={0.55}
+      />
     </g>
   );
 }
 
-// ─── Pie tooltip ──────────────────────────────────────────────────────────────
-interface TooltipPayload { name: string; value: number; payload: ChartEntry }
+// (Slice tooltip removed — the dynamic hero readout in the donut hole
+// already shows name/value/percentage when a slice is active. A second
+// pop-up box was redundant.)
 
-function GlassTooltip({ active, payload, displayMode, usdTryRate }:
-  { active?: boolean; payload?: TooltipPayload[]; displayMode: DisplayMode; usdTryRate: number | null }) {
-  if (!active || !payload?.length) return null;
-  const entry = payload[0];
-  const color = entry.payload.colors?.[0] ?? '#888';
-  return (
-    <div className="rounded-lg px-3.5 py-2.5 shadow-xl border border-white/10"
-      style={{ background: 'rgba(20,20,30,0.80)', backdropFilter: 'blur(12px)' }}>
-      <div className="flex items-center gap-2 mb-1">
-        <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: color }} />
-        <span className="font-semibold text-sm text-white">{entry.name}</span>
-      </div>
-      <div className="font-mono text-sm text-white/90">
-        {getDisplayValue(entry.payload, displayMode, usdTryRate)}
-      </div>
-      <div className="text-xs text-white/50 mt-0.5">{entry.payload.pct.toFixed(1)}%</div>
-    </div>
-  );
-}
+// (Category pills removed — the grouped legend below the donut already
+// carries the category-grouped breakdown with percentages, so a second
+// summary row above the donut was duplicate information.)
 
-// ─── Serüven (line chart) tooltip ─────────────────────────────────────────────
-function LineTooltip({ active, payload, label, useTry }:
-  { active?: boolean; payload?: any[]; label?: string; useTry: boolean }) {
-  if (!active || !payload?.length) return null;
-  const val: number = payload[0]?.value ?? 0;
-  const formatted = useTry
-    ? '₺' + val.toLocaleString('tr-TR', { maximumFractionDigits: 0 })
-    : '$' + val.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  return (
-    <div className="rounded-lg px-3 py-2 shadow-xl border border-white/10"
-      style={{ background: 'rgba(20,20,30,0.85)', backdropFilter: 'blur(12px)' }}>
-      <div className="text-xs text-white/50 mb-0.5">{label}</div>
-      <div className="font-mono text-sm font-semibold text-white">{formatted}</div>
-    </div>
-  );
-}
-
-// ─── Grouped legend ───────────────────────────────────────────────────────────
-function CustomLegend({ data, displayMode, usdTryRate }:
-  { data: ChartEntry[]; displayMode: DisplayMode; usdTryRate: number | null }) {
+// ─── Interactive legend ──────────────────────────────────────────────────────
+function Legend({
+  data, displayMode, usdTryRate, activeIndex, onActiveChange,
+}: {
+  data: ChartEntry[];
+  displayMode: DisplayMode;
+  usdTryRate: number | null;
+  activeIndex: number | undefined;
+  onActiveChange: (index: number | undefined) => void;
+}) {
   const grouped = CATEGORY_ORDER
-    .map(cat => ({ cat, meta: CATEGORY_META[cat], items: data.filter(d => d.category === cat) }))
-    .filter(g => g.items.length > 0);
-  const ungrouped = data.filter(d => !CATEGORY_ORDER.includes(d.category || ''));
+    .map((cat) => ({ cat, meta: CATEGORY_META[cat], items: data.filter((d) => d.category === cat) }))
+    .filter((g) => g.items.length > 0);
+  const ungrouped = data.filter((d) => !CATEGORY_ORDER.includes((d.category ?? '') as Category));
+
+  const renderRow = (item: ChartEntry) => {
+    const idx = data.findIndex((d) => d.key === item.key);
+    const isActive = activeIndex === idx;
+    return (
+      <button
+        key={item.key}
+        type="button"
+        onMouseEnter={() => onActiveChange(idx)}
+        onMouseLeave={() => onActiveChange(undefined)}
+        onClick={() => onActiveChange(isActive ? undefined : idx)}
+        className={cn(
+          'flex items-center gap-2 min-w-0 w-full text-left rounded-lg px-2 py-1.5',
+          'transition-colors duration-150',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+          isActive ? 'bg-surface-3' : 'hover:bg-surface-2'
+        )}
+      >
+        <span
+          className={cn(
+            'rounded-full flex-shrink-0 transition-all duration-150',
+            isActive ? 'w-3 h-3' : 'w-2.5 h-2.5'
+          )}
+          style={{
+            background: `linear-gradient(135deg, ${item.colors[0]}, ${item.colors[1]})`,
+            boxShadow: isActive ? `0 0 0 2px hsl(var(--surface-1)), 0 0 0 3.5px ${item.colors[0]}` : undefined,
+          }}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="text-label text-foreground truncate">{item.name}</div>
+          <div className="text-caption text-muted-foreground font-mono">
+            {formatDisplay(item, displayMode, usdTryRate)} · %{item.pct.toFixed(1)}
+          </div>
+        </div>
+      </button>
+    );
+  };
 
   return (
     <div className="mt-4 px-2 space-y-3">
       {grouped.map(({ cat, meta, items }) => (
         <div key={cat}>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: meta?.color }} />
-            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: meta?.color }}>
-              {meta?.label}
-            </span>
+          <div className="flex items-center gap-1.5 mb-1 px-2">
+            <div className="w-1.5 h-1.5 rounded-full" style={{ background: meta.color }} />
+            <span className="text-caption" style={{ color: meta.color }}>{meta.label}</span>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 pl-3.5 border-l-2"
-            style={{ borderColor: (meta?.color ?? '#888') + '55' }}>
-            {items.map(item => (
-              <div key={item.key} className="flex items-center gap-2 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                  style={{ background: `linear-gradient(135deg, ${item.colors[0]}, ${item.colors[1]})` }} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs text-foreground truncate">{item.name}</div>
-                  <div className="text-[10px] text-muted-foreground font-mono">
-                    {getDisplayValue(item, displayMode, usdTryRate)} · {item.pct.toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-0.5">{items.map(renderRow)}</div>
         </div>
       ))}
       {ungrouped.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5">
-          {ungrouped.map(item => (
-            <div key={item.key} className="flex items-center gap-2 min-w-0">
-              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                style={{ background: `linear-gradient(135deg, ${item.colors[0]}, ${item.colors[1]})` }} />
-              <div className="min-w-0 flex-1">
-                <div className="text-xs text-foreground truncate">{item.name}</div>
-                <div className="text-[10px] text-muted-foreground font-mono">
-                  {getDisplayValue(item, displayMode, usdTryRate)} · {item.pct.toFixed(1)}%
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-0.5">{ungrouped.map(renderRow)}</div>
       )}
     </div>
   );
 }
 
-// ─── Serüven line chart ───────────────────────────────────────────────────────
-function SeruvenChart({
-  range, setRange, displayMode, usdTryRate, todayUsd, todayTry,
-}: {
-  range: SnapshotRange;
-  setRange: (r: SnapshotRange) => void;
-  displayMode: DisplayMode;
-  usdTryRate: number | null;
-  todayUsd: number;
-  todayTry: number | null;
-}) {
-  const { snapshots, isLoading } = usePortfolioValueSnapshots(range);
-  const useTry = displayMode === 'TRY';
-
-  // Merge snapshots with today's live value
-  const chartPoints = useMemo(() => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const pts = snapshots.map(s => ({
-      date: s.snapshot_date,
-      label: format(parseISO(s.snapshot_date), 'd MMM', { locale: tr }),
-      value: useTry ? (s.value_try ?? s.value_usd * (usdTryRate ?? 1)) : s.value_usd,
-    }));
-    // Ensure today's current value is present (as last point)
-    const todayVal = useTry ? (todayTry ?? (usdTryRate ? todayUsd * usdTryRate : 0)) : todayUsd;
-    if (pts.length === 0 || pts[pts.length - 1].date !== todayStr) {
-      pts.push({ date: todayStr, label: 'Bugün', value: todayVal });
-    } else {
-      pts[pts.length - 1].value = todayVal;
-      pts[pts.length - 1].label = 'Bugün';
-    }
-    return pts;
-  }, [snapshots, useTry, usdTryRate, todayUsd, todayTry]);
-
-  const minVal = Math.min(...chartPoints.map(p => p.value));
-  const maxVal = Math.max(...chartPoints.map(p => p.value));
-  const padding = (maxVal - minVal) * 0.15 || maxVal * 0.1 || 100;
-  const yMin = Math.max(0, minVal - padding);
-  const yMax = maxVal + padding;
-
-  const formatY = (v: number) =>
-    useTry ? '₺' + (v / 1000).toFixed(0) + 'K' : '$' + (v / 1000).toFixed(1) + 'K';
-
-  const gradId = 'seruven-grad';
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-[280px] text-muted-foreground gap-2">
-        <Loader2 className="w-4 h-4 animate-spin" />
-        <span className="text-sm">Yükleniyor...</span>
-      </div>
-    );
-  }
-
-  if (chartPoints.length <= 1) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[280px] text-muted-foreground px-6 text-center">
-        <TrendingUp className="w-10 h-10 mb-3 opacity-25" />
-        <p className="text-sm font-medium">Henüz yeterli veri yok</p>
-        <p className="text-xs mt-1 opacity-70">
-          Portföyünüzü ziyaret ettikçe her gün otomatik kayıt alınır.<br />
-          Birkaç gün içinde grafiğiniz oluşmaya başlayacak.
-        </p>
-      </div>
-    );
-  }
-
-  // Tick reduction for readability
-  const tickInterval = Math.max(1, Math.floor(chartPoints.length / 6));
-
-  return (
-    <div>
-      {/* Time range selector */}
-      <div className="flex gap-1 mb-3">
-        {RANGE_OPTIONS.map(opt => (
-          <button key={opt.value} onClick={() => setRange(opt.value)}
-            className={cn(
-              'px-2.5 py-1 text-xs font-medium rounded-md border transition-colors',
-              range === opt.value
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-transparent text-muted-foreground border-border hover:border-primary/40 hover:text-foreground'
-            )}>
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
-      <ResponsiveContainer width="100%" height={260}>
-        <AreaChart data={chartPoints} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
-          <defs>
-            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} />
-          <XAxis
-            dataKey="label"
-            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            interval={tickInterval}
-          />
-          <YAxis
-            domain={[yMin, yMax]}
-            tickFormatter={formatY}
-            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            width={52}
-          />
-          <Tooltip content={(props: any) => <LineTooltip {...props} useTry={useTry} />} />
-          <Area
-            type="monotone"
-            dataKey="value"
-            stroke="hsl(var(--primary))"
-            strokeWidth={2}
-            fill={`url(#${gradId})`}
-            dot={false}
-            activeDot={{ r: 4, fill: 'hsl(var(--primary))', strokeWidth: 0 }}
-            isAnimationActive
-            animationDuration={600}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
+// ─── Main component ──────────────────────────────────────────────────────────
 
 interface AssetsChartProps {
-  /** Rapor filtresine göre dahil edilecek portföy id'leri. undefined → tüm kullanıcı */
+  /** Portfolio ids to include; undefined = all user portfolios. */
   portfolioIds?: string[];
-  /** Günlük snapshot yazarken kullanılacak varsayılan portföy. undefined ise kaydetme atlanır */
+  /** Default portfolio for daily-snapshot writes. Undefined disables auto-save. */
   snapshotPortfolioId?: string;
 }
 
-// ─── Main component ────────────────────────────────────────────────────────────
 export function AssetsChart({ portfolioIds, snapshotPortfolioId }: AssetsChartProps = {}) {
   const { assets, isLoading: assetsLoading } = useUserAssets(portfolioIds);
   const { availableCash } = usePortfolioCash(portfolioIds);
@@ -400,19 +250,12 @@ export function AssetsChart({ portfolioIds, snapshotPortfolioId }: AssetsChartPr
   const { trades, isLoading: tradesLoading } = useTrades();
   const { getStockBySymbol } = useMarketData();
 
-  const filteredTrades = useMemo(() => {
-    if (!portfolioIds) return trades;
-    const set = new Set(portfolioIds);
-    return trades.filter(t => set.has(t.portfolio_id));
-  }, [trades, portfolioIds]);
-
   const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('native');
   const [seruvenMode, setSeruvenMode] = useState(false);
   const [snapshotRange, setSnapshotRange] = useState<SnapshotRange>('1M');
 
   const cardRef = useRef<HTMLDivElement>(null);
-  // Use a ref to track if we've already saved today's snapshot this session
   const snapshotSavedRef = useRef(false);
   const { saveSnapshot } = usePortfolioValueSnapshots(snapshotRange, portfolioIds);
 
@@ -423,6 +266,15 @@ export function AssetsChart({ portfolioIds, snapshotPortfolioId }: AssetsChartPr
     return d?.points?.length ? d.points[d.points.length - 1].value : null;
   }, [getSeriesData]);
 
+  // ─── Data assembly ─────────────────────────────────────────────────────────
+
+  const filteredTrades = useMemo(() => {
+    if (!portfolioIds) return trades;
+    const set = new Set(portfolioIds);
+    return trades.filter((t) => set.has(t.portfolio_id));
+  }, [trades, portfolioIds]);
+
+  /** USD value of all active open positions across filtered trades. */
   const openPositionsUsd = useMemo(() => {
     let total = 0;
     for (const trade of filteredTrades) {
@@ -438,72 +290,100 @@ export function AssetsChart({ portfolioIds, snapshotPortfolioId }: AssetsChartPr
     return total;
   }, [filteredTrades, getStockBySymbol, usdTryRate]);
 
-  const chartData = useMemo(() => {
+  const chartData = useMemo<ChartEntry[]>(() => {
     const slices: Omit<ChartEntry, 'pct'>[] = [];
 
     if (openPositionsUsd > 0) {
-      slices.push({ key: 'hisselerim', name: 'Hisselerim', value: openPositionsUsd,
-        colors: ASSET_COLORS['hisselerim'], category: 'stocks', assetType: 'hisselerim',
-        nativeAmount: openPositionsUsd, nativeCurrency: 'USD' });
+      slices.push({
+        key: 'hisselerim',
+        name: 'Hisselerim',
+        value: openPositionsUsd,
+        colors: ASSET_COLORS.hisselerim,
+        category: 'stocks',
+        nativeAmount: openPositionsUsd,
+        nativeCurrency: 'USD',
+      });
     }
 
     if (availableCash > 0 && usdTryRate) {
-      slices.push({ key: 'tl_cash', name: 'TL Nakit', value: availableCash / usdTryRate,
-        colors: ASSET_COLORS['tl_cash'], category: 'cash', assetType: 'tl_cash',
-        nativeAmount: availableCash, nativeCurrency: 'TRY' });
+      slices.push({
+        key: 'tl_cash',
+        name: 'TL Nakit',
+        value: availableCash / usdTryRate,
+        colors: ASSET_COLORS.tl_cash,
+        category: 'cash',
+        nativeAmount: availableCash,
+        nativeCurrency: 'TRY',
+      });
     }
 
     for (const asset of assets) {
       if (asset.amount_usd <= 0) continue;
-      const meta = asset.metadata as { native_currency?: string; native_amount?: number } | null;
-      let valueUsd: number, nativeAmount: number, nativeCurrency: NativeCurrency;
 
-      if (asset.asset_type === 'usd') {
-        valueUsd = asset.amount_usd; nativeAmount = asset.amount_usd; nativeCurrency = 'USD';
-      } else if (asset.asset_type === 'eur') {
-        valueUsd = asset.amount_usd; nativeAmount = asset.quantity; nativeCurrency = 'EUR';
-      } else if (asset.category === 'real_estate') {
-        if (meta?.native_currency === 'TRY' && meta.native_amount != null) {
-          valueUsd = asset.amount_usd; nativeAmount = meta.native_amount; nativeCurrency = 'TRY';
-        } else if (meta?.native_currency === 'USD' && meta.native_amount != null) {
-          valueUsd = asset.amount_usd; nativeAmount = meta.native_amount; nativeCurrency = 'USD';
-        } else {
-          valueUsd = asset.amount_usd; nativeAmount = asset.amount_usd; nativeCurrency = 'USD';
-        }
-      } else {
-        valueUsd = asset.amount_usd; nativeAmount = asset.amount_usd; nativeCurrency = 'USD';
+      // Figure out how to display this slice in 'native' mode. Real estate
+      // assets remember the original currency in their metadata; USD/EUR cash
+      // assets keep their own currency; everything else is USD-denominated.
+      const meta = asset.metadata as { native_currency?: string; native_amount?: number } | null;
+      let nativeAmount = asset.amount_usd;
+      let nativeCurrency: NativeCurrency = 'USD';
+
+      if (asset.asset_type === 'eur') {
+        nativeAmount = asset.quantity;
+        nativeCurrency = 'EUR';
+      } else if (asset.category === 'real_estate' && meta?.native_amount != null) {
+        nativeAmount = meta.native_amount;
+        nativeCurrency = meta.native_currency === 'TRY' ? 'TRY' : 'USD';
       }
 
-      const key = asset.category === 'real_estate' && asset.title ? `re_${asset.id}` : asset.asset_type;
-      const label = ASSET_LABELS[asset.asset_type] || asset.asset_type;
-      const existing = slices.find(s => s.key === key);
-      if (existing) { existing.value += valueUsd; existing.nativeAmount += nativeAmount; }
-      else {
-        slices.push({ key, name: label, value: valueUsd,
-          colors: ASSET_COLORS[asset.asset_type] || DEFAULT_GRADIENT,
-          category: asset.category, assetType: asset.asset_type, nativeAmount, nativeCurrency });
+      // Real estate items keep their own identity via asset.id so two "Konut"
+      // entries don't collapse into one slice. Everything else groups by type.
+      const key = asset.category === 'real_estate' && asset.title
+        ? `re_${asset.id}`
+        : asset.asset_type;
+      const label = ASSET_LABELS[asset.asset_type] ?? asset.asset_type;
+      const colors = ASSET_COLORS[asset.asset_type] ?? DEFAULT_COLORS;
+
+      const existing = slices.find((s) => s.key === key);
+      if (existing) {
+        existing.value += asset.amount_usd;
+        existing.nativeAmount += nativeAmount;
+      } else {
+        slices.push({
+          key,
+          name: label,
+          value: asset.amount_usd,
+          colors,
+          category: asset.category,
+          nativeAmount,
+          nativeCurrency,
+        });
       }
     }
 
     const total = slices.reduce((s, d) => s + d.value, 0);
-    return slices.map(s => ({ ...s, pct: total > 0 ? (s.value / total) * 100 : 0 }));
+    return slices.map((s) => ({ ...s, pct: total > 0 ? (s.value / total) * 100 : 0 }));
   }, [assets, availableCash, usdTryRate, openPositionsUsd]);
 
-  const sortedChartData = useMemo(() =>
-    [...chartData].sort((a, b) => {
-      const ai = CATEGORY_ORDER.indexOf(a.category || '');
-      const bi = CATEGORY_ORDER.indexOf(b.category || '');
-      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-    }), [chartData]);
+  const sortedData = useMemo(() => [...chartData].sort((a, b) => {
+    const ai = CATEGORY_ORDER.indexOf((a.category ?? '') as Category);
+    const bi = CATEGORY_ORDER.indexOf((b.category ?? '') as Category);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  }), [chartData]);
+
+  // Reset activeIndex whenever the slice list changes so we never point at a
+  // slice that no longer exists.
+  useEffect(() => {
+    setActiveIndex(undefined);
+  }, [sortedData.length]);
 
   const isLoading = assetsLoading || tradesLoading || isSeriesLoading('usd');
-  const totalUsd = sortedChartData.reduce((s, d) => s + d.value, 0);
+  const totalUsd = sortedData.reduce((s, d) => s + d.value, 0);
   const totalTry = usdTryRate ? totalUsd * usdTryRate : null;
 
-  // Auto-save today's snapshot once per session when data is ready
+  // Auto-save today's snapshot once per session when data is ready.
   useEffect(() => {
     if (isLoading || snapshotSavedRef.current || totalUsd <= 0) return;
-    if (!snapshotPortfolioId) return; // Filtre bazlı görünümde otomatik yazma yapma
+    if (!snapshotPortfolioId) return;
     snapshotSavedRef.current = true;
     saveSnapshot.mutate({
       portfolioId: snapshotPortfolioId,
@@ -512,144 +392,226 @@ export function AssetsChart({ portfolioIds, snapshotPortfolioId }: AssetsChartPr
     });
   }, [isLoading, totalUsd, totalTry, snapshotPortfolioId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const centerText = useMemo(() => {
-    if (displayMode === 'TRY' && usdTryRate)
-      return '₺' + (totalUsd * usdTryRate).toLocaleString('tr-TR', { maximumFractionDigits: 0 });
-    return '$' + totalUsd.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  }, [displayMode, totalUsd, usdTryRate]);
+  // ─── Interaction ───────────────────────────────────────────────────────────
+  // Click-to-toggle only on the Pie itself. Hover handlers used to flicker
+  // on mobile — taps would fire onMouseEnter immediately followed by
+  // onMouseLeave, clearing the active index. Pure onClick is reliable on
+  // both platforms. Desktop users still get hover previews via the legend.
+  const onPieClick = useCallback(
+    (_: unknown, i: number) =>
+      setActiveIndex((current) => (current === i ? undefined : i)),
+    []
+  );
 
-  const handleToggle = (mode: DisplayMode) => {
-    setDisplayMode(prev => (prev === mode && mode !== 'native') ? 'native' : mode);
-  };
+  const activeSlice = activeIndex !== undefined ? sortedData[activeIndex] ?? null : null;
 
-  const onPieEnter = useCallback((_: any, index: number) => setActiveIndex(index), []);
-  const onPieLeave = useCallback(() => setActiveIndex(undefined), []);
+  // ─── Center hero readout ───────────────────────────────────────────────────
+  // The hero in the donut hole reacts to both the active slice and the
+  // display-mode toggle. Three shapes it can take:
+  //   1. A slice is active → name + its value in the current display mode + %
+  //   2. Native (Ham) mode, no active slice → a *stacked breakdown* of the
+  //      user's literal holdings, one line per currency (₺, $, €).
+  //   3. TRY / USD mode, no active slice → a single converted total, with
+  //      the opposite currency's equivalent as a small sub-line.
+  const centerLabel = activeSlice?.name ?? 'Toplam Varlık';
+  const breakdown = !activeSlice && displayMode === 'native'
+    ? nativeBreakdown(sortedData)
+    : null;
+  const centerValue = activeSlice
+    ? formatDisplay(activeSlice, displayMode, usdTryRate)
+    : displayMode === 'native'
+      ? null  // rendered separately as stacked multi-currency
+      : formatTotal(totalUsd, displayMode, usdTryRate);
+  const centerMeta = activeSlice
+    ? `%${activeSlice.pct.toFixed(1)}`
+    : displayMode === 'USD' && usdTryRate
+      ? '₺' + (totalUsd * usdTryRate).toLocaleString('tr-TR', { maximumFractionDigits: 0 })
+      : null;
+
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div ref={cardRef} className="rounded-xl bg-card border border-border p-4 mt-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 mb-4">
-        <div className="flex items-center gap-2">
-          <PieIcon className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold text-foreground">Varlıklarım</h2>
+    <div
+      ref={cardRef}
+      className="rounded-2xl bg-surface-1 border border-border-subtle overflow-hidden mt-3 md:mt-4 mb-3 md:mb-4"
+    >
+      {/* Header: title + Serüven toggle + Share (all compact, never wraps) */}
+      <div className="px-4 md:px-5 pt-4 pb-2 md:pb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <PieIcon className="w-4 h-4 text-primary shrink-0" />
+          <h2 className="text-title text-foreground truncate">Varlıklarım</h2>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Currency toggles */}
-          <div className="flex gap-1">
-            {(['native', 'TRY', 'USD'] as DisplayMode[]).map(mode => (
-              <button key={mode} onClick={() => handleToggle(mode)}
-                className={cn(
-                  'px-2.5 py-1 text-xs font-medium rounded-md border transition-colors',
-                  displayMode === mode
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-transparent text-muted-foreground border-border hover:border-primary/40 hover:text-foreground'
-                )}>
-                {mode === 'native' ? 'Ham' : mode === 'TRY' ? '₺ TL' : '$ USD'}
-              </button>
-            ))}
-          </div>
-
-          {/* Serüven button */}
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
-            onClick={() => setSeruvenMode(v => !v)}
+            type="button"
+            onClick={() => setSeruvenMode((v) => !v)}
+            aria-pressed={seruvenMode}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md border transition-all',
+              'inline-flex items-center gap-1.5 h-8 px-3 rounded-full border transition-colors',
+              'text-label',
               seruvenMode
-                ? 'bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/30'
-                : 'bg-transparent text-muted-foreground border-border hover:border-primary/50 hover:text-foreground'
-            )}>
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-surface-2 text-muted-foreground border-border-subtle hover:text-foreground'
+            )}
+          >
             <TrendingUp className="w-3.5 h-3.5" />
             Serüven
           </button>
+          <ShareChartButton targetRef={cardRef} filename="varliklarim" compact />
         </div>
+      </div>
+
+      {/* Display mode (Ham / ₺ / $) */}
+      <div className="px-4 md:px-5 pb-3">
+        <SegmentedControl
+          value={displayMode}
+          onChange={(v) => setDisplayMode(v as DisplayMode)}
+          options={[
+            { value: 'native', label: 'Ham' },
+            { value: 'TRY', label: '₺ TL' },
+            { value: 'USD', label: '$ USD' },
+          ]}
+          size="sm"
+          stretch
+        />
       </div>
 
       {/* Loading */}
       {isLoading && (
         <div className="flex items-center justify-center h-48 text-muted-foreground gap-2">
           <Loader2 className="w-5 h-5 animate-spin" />
-          <span className="text-sm">Yükleniyor...</span>
+          <span className="text-label">Yükleniyor…</span>
         </div>
       )}
 
       {/* Empty */}
-      {!isLoading && sortedChartData.length === 0 && (
-        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+      {!isLoading && sortedData.length === 0 && (
+        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground px-4 text-center">
           <PieIcon className="w-10 h-10 mb-3 opacity-30" />
-          <p className="text-sm">Henüz varlık kaydı yok.</p>
-          <p className="text-xs mt-1">Anasayfadan "Portföy Ekle" ile varlık ekleyin.</p>
+          <p className="text-body text-foreground">Henüz varlık kaydı yok.</p>
+          <p className="text-label text-muted-foreground mt-1">
+            "Portföy Ekle" ile varlık kaydedin.
+          </p>
         </div>
       )}
 
       {/* Charts */}
-      {!isLoading && sortedChartData.length > 0 && (
+      {!isLoading && sortedData.length > 0 && (seruvenMode ? (
+        <AssetsSeruvenChart
+          range={snapshotRange}
+          setRange={setSnapshotRange}
+          displayMode={displayMode}
+          usdTryRate={usdTryRate}
+          todayUsd={totalUsd}
+          todayTry={totalTry}
+        />
+      ) : (
         <>
-          {/* ── Serüven mode: area chart ── */}
-          {seruvenMode && (
-            <SeruvenChart
-              range={snapshotRange}
-              setRange={setSnapshotRange}
-              displayMode={displayMode}
-              usdTryRate={usdTryRate}
-              todayUsd={totalUsd}
-              todayTry={totalTry}
-            />
-          )}
+          <div className="relative select-none">
+            <ResponsiveContainer width="100%" height={320}>
+              <PieChart>
+                <defs>
+                  {sortedData.map((entry, i) => (
+                    <radialGradient key={entry.key} id={`slice-${i}`} cx="30%" cy="30%" r="78%">
+                      <stop offset="0%"   stopColor={entry.colors[0]} stopOpacity={1} />
+                      <stop offset="100%" stopColor={entry.colors[1]} stopOpacity={1} />
+                    </radialGradient>
+                  ))}
+                </defs>
+                <Pie
+                  data={sortedData}
+                  cx="50%" cy="50%"
+                  innerRadius={74} outerRadius={118}
+                  paddingAngle={PIE_PADDING}
+                  dataKey="value" nameKey="name"
+                  startAngle={PIE_START} endAngle={PIE_START - 360}
+                  isAnimationActive
+                  animationBegin={0}
+                  animationDuration={600}
+                  animationEasing="ease-out"
+                  activeIndex={activeIndex}
+                  activeShape={ActiveShape}
+                  onClick={onPieClick}
+                >
+                  {sortedData.map((entry, i) => {
+                    // Dim inactive slices via SVG `opacity` — cheap, no paint
+                    // stalls unlike the CSS `filter` approach we used before.
+                    const otherActive =
+                      activeIndex !== undefined && activeIndex !== i;
+                    return (
+                      <Cell
+                        key={entry.key}
+                        fill={`url(#slice-${i})`}
+                        stroke="hsl(var(--background))"
+                        strokeWidth={2}
+                        opacity={otherActive ? 0.35 : 1}
+                        style={{ cursor: 'pointer', outline: 'none' }}
+                      />
+                    );
+                  })}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
 
-          {/* ── Normal mode: donut pie ── */}
-          {!seruvenMode && (
-            <>
-              <ResponsiveContainer width="100%" height={310}>
-                <PieChart>
-                  <defs>
-                    {sortedChartData.map((entry, i) => (
-                      <radialGradient key={entry.key} id={`grad-${i}`} cx="30%" cy="30%" r="70%">
-                        <stop offset="0%" stopColor={entry.colors[0]} stopOpacity={1} />
-                        <stop offset="100%" stopColor={entry.colors[1]} stopOpacity={1} />
-                      </radialGradient>
+            {/* Hero readout over the donut hole. Re-keys on active change
+                to replay the fade-in animation. */}
+            <div
+              className="absolute inset-0 flex items-center justify-center pointer-events-none"
+              aria-live="polite"
+            >
+              <div
+                key={activeSlice?.key ?? `total-${displayMode}`}
+                className="flex flex-col items-center px-4 text-center"
+                style={{ animation: 'fade-in 200ms ease-out' }}
+              >
+                <div
+                  className="text-caption"
+                  style={{
+                    color: activeSlice
+                      ? activeSlice.colors[0]
+                      : 'hsl(var(--muted-foreground))',
+                  }}
+                >
+                  {centerLabel}
+                </div>
+
+                {/* Ham (native) total, idle → stacked breakdown per currency.
+                    `num-lg` for multi-line; single-line still reads big enough. */}
+                {breakdown && breakdown.length > 0 && (
+                  <div className="mt-0.5 flex flex-col items-center gap-0.5">
+                    {breakdown.map((g) => (
+                      <span key={g.currency} className="num-lg text-foreground">
+                        {formatNativeAmount(g)}
+                      </span>
                     ))}
-                    <filter id="donut-glow">
-                      <feGaussianBlur stdDeviation="3" result="blur" />
-                      <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                    </filter>
-                  </defs>
-                  <Pie data={sortedChartData} cx="50%" cy="50%"
-                    innerRadius={70} outerRadius={115}
-                    paddingAngle={PIE_PADDING} dataKey="value" nameKey="name"
-                    startAngle={PIE_START} endAngle={PIE_START - 360}
-                    isAnimationActive animationBegin={0} animationDuration={700} animationEasing="ease-out"
-                    activeIndex={activeIndex} activeShape={renderActiveShape}
-                    onMouseEnter={onPieEnter} onMouseLeave={onPieLeave}
-                    style={{ filter: 'url(#donut-glow)' }}>
-                    {sortedChartData.map((entry, i) => (
-                      <Cell key={entry.key} fill={`url(#grad-${i})`}
-                        stroke="hsl(var(--card))" strokeWidth={2} />
-                    ))}
-                  </Pie>
-                  <Customized component={(props: any) => (
-                    <OuterCategoryRing width={props.width} height={props.height} sortedData={sortedChartData} />
-                  )} />
-                  <Tooltip content={(props: any) => (
-                    <GlassTooltip {...props} displayMode={displayMode} usdTryRate={usdTryRate} />
-                  )} />
-                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="central"
-                    fill="hsl(var(--foreground))" style={{ fontSize: 18, fontWeight: 700 }}>
-                    {centerText}
-                  </text>
-                  <text x="50%" y="55%" textAnchor="middle" dominantBaseline="central"
-                    fill="hsl(var(--muted-foreground))" style={{ fontSize: 11 }}>
-                    Toplam Varlık
-                  </text>
-                </PieChart>
-              </ResponsiveContainer>
-              <CustomLegend data={sortedChartData} displayMode={displayMode} usdTryRate={usdTryRate} />
-            </>
-          )}
+                  </div>
+                )}
+
+                {/* Active slice OR converted total (TRY/USD) → single big value. */}
+                {centerValue && (
+                  <div className="num-display text-foreground mt-0.5">
+                    {centerValue}
+                  </div>
+                )}
+
+                {centerMeta && (
+                  <div className="text-label text-muted-foreground mt-0.5 font-mono">
+                    {centerMeta}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <Legend
+            data={sortedData}
+            displayMode={displayMode}
+            usdTryRate={usdTryRate}
+            activeIndex={activeIndex}
+            onActiveChange={setActiveIndex}
+          />
         </>
-      )}
-      <div className="flex justify-center pt-3 pb-1">
-        <ShareChartButton targetRef={cardRef} filename="varliklarim" />
-      </div>
+      ))}
     </div>
   );
 }
